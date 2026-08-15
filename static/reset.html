@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeCloud Reset</title>
+<style>
+body {
+  font-family: -apple-system, system-ui, sans-serif;
+  background: #0a0a0f;
+  color: #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  margin: 0;
+  padding: 24px;
+  text-align: center;
+}
+button {
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 14px;
+  padding: 16px 32px;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 8px;
+}
+button:active { transform: scale(0.96); }
+p { color: #9ca3af; font-size: 14px; max-width: 300px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<h2>DeCloud Cache Reset</h2>
+<p id="status">Tap the button to clear cached files and reload the app.</p>
+<button onclick="reset()">Clear Cache & Reload</button>
+<script>
+async function reset() {
+  document.getElementById('status').textContent = 'Clearing...';
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) await reg.unregister();
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      for (const k of keys) await caches.delete(k);
+    }
+    document.getElementById('status').textContent = 'Done! Redirecting...';
+    setTimeout(() => location.href = '/', 800);
+  } catch (e) {
+    document.getElementById('status').textContent = 'Error: ' + e.message;
+  }
+}
+</script>
+</body>
+</html>

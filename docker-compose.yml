@@ -1,0 +1,23 @@
+services:
+  decloud:
+    build: .
+    ports:
+      - "8899:8899"
+    volumes:
+      # Mount your actual directories here
+      - ./data/books:/data/books
+      - ./data/files:/data/files
+      - ./data/music:/data/music
+      - decloud-cache:/data/cache
+    environment:
+      - DECLOUD_PORT=8899
+      - DECLOUD_HOST=0.0.0.0
+      - DECLOUD_BOOKS_DIR=/data/books
+      - DECLOUD_FILES_DIR=/data/files
+      - DECLOUD_MUSIC_DIR=/data/music
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - SECRET_KEY=${SECRET_KEY:-change-me}
+    restart: unless-stopped
+
+volumes:
+  decloud-cache:

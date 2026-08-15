@@ -1,0 +1,269 @@
+#!/bin/bash
+# DeCloud wrapper — starts app + tunnel together, manages lifecycle
+# Usage: ./decloud start|stop|restart|qr|status
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$APP_DIR"
+
+PORT=${DECLOUD_PORT:-8899}
+TUNNEL_LOG="$APP_DIR/tunnel.log"
+TUNNEL_URL_FILE="$APP_DIR/tunnel.url"
+TUNNEL_PID_FILE="$APP_DIR/tunnel.pid"
+APP_PID_FILE="$APP_DIR/app.pid"
+
+# ─── Version ──────────────────────────────────────────────────────
+VERSION="0.0.1"
+
+# ─── Helpers ────────────────────────────────────────────────────
+
+get_tunnel_url() {
+    # First check cached URL file
+    if [ -f "$TUNNEL_URL_FILE" ]; then
+        cat "$TUNNEL_URL_FILE"
+        return 0
+    fi
+    
+    # Check for Tailscale funnel
+    if command -v tailscale &>/dev/null && tailscale status &>/dev/null; then
+        URL=$(tailscale funnel status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
+        if [ -n "$URL" ]; then
+            echo "$URL" > "$TUNNEL_URL_FILE"
+            echo "$URL"
+            return 0
+        fi
+    fi
+    
+    # Otherwise parse from log (localhost.run)
+    if [ ! -f "$TUNNEL_LOG" ]; then
+        echo ""
+        return 1
+    fi
+    URL=$(sed 's/\x1b\[[0-9;]*m//g' "$TUNNEL_LOG" 2>/dev/null | grep -oP 'https://[a-z0-9]+\.lhr\.life' | head -1)
+    if [ -n "$URL" ]; then
+        echo "$URL" > "$TUNNEL_URL_FILE"
+    fi
+    echo "$URL"
+}
+
+start_app() {
+    if [ -f "$APP_PID_FILE" ] && kill -0 $(cat "$APP_PID_FILE") 2>/dev/null; then
+        echo "App already running (PID: $(cat $APP_PID_FILE))"
+        return 0
+    fi
+    echo "Starting DeCloud app on port $PORT..."
+    source .venv/bin/activate 2>/dev/null || true
+    # Use setsid to fully detach from this shell
+    setsid nohup python app.py > app.log 2>&1 < /dev/null &
+    echo $! > "$APP_PID_FILE"
+    disown
+    sleep 2
+    if curl -s http://localhost:$PORT/ > /dev/null 2>&1; then
+        echo "✓ App running at http://localhost:$PORT"
+    else
+        echo "✗ App failed to start — check app.log"
+        return 1
+    fi
+}
+
+stop_app() {
+    if [ -f "$APP_PID_FILE" ]; then
+        kill $(cat "$APP_PID_FILE") 2>/dev/null || true
+        rm -f "$APP_PID_FILE"
+        echo "App stopped"
+    fi
+}
+
+start_tunnel() {
+    # Kill existing tunnel
+    stop_tunnel
+    
+    echo "Starting Tailscale Funnel..."
+    # Check if tailscale is available
+    if ! command -v tailscale &>/dev/null; then
+        echo "⚠ Tailscale not installed — falling back to localhost.run"
+        start_tunnel_localhost
+        return $?
+    fi
+    
+    # Check if tailscale is running
+    if ! tailscale status &>/dev/null; then
+        echo "⚠ Tailscale not running — falling back to localhost.run"
+        start_tunnel_localhost
+        return $?
+    fi
+    
+    # Start funnel in background
+    setsid nohup tailscale funnel --bg --https=443 http://localhost:$PORT \
+        > "$TUNNEL_LOG" 2>&1 < /dev/null &
+    echo $! > "$TUNNEL_PID_FILE"
+    disown
+    
+    echo "Waiting for funnel..."
+    sleep 3
+    
+    # Get the funnel URL
+    URL=$(tailscale funnel status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
+    if [ -n "$URL" ]; then
+        echo "$URL" > "$TUNNEL_URL_FILE"
+        echo "✓ Funnel active: $URL"
+        return 0
+    fi
+    
+    # Fallback: try to get from tailscale status
+    HOSTNAME=$(tailscale status --json 2>/dev/null | grep -oP '"HostName":\s*"[^"]+"' | head -1 | cut -d'"' -f4)
+    TAILNET=$(tailscale status --json 2>/dev/null | grep -oP '"MagicDNSSuffix":\s*"[^"]+"' | cut -d'"' -f4)
+    if [ -n "$HOSTNAME" ] && [ -n "$TAILNET" ]; then
+        URL="https://${HOSTNAME}.${TAILNET}"
+        echo "$URL" > "$TUNNEL_URL_FILE"
+        echo "✓ Funnel active: $URL"
+        return 0
+    fi
+    
+    echo "⚠ Funnel failed — check tunnel.log"
+    return 1
+}
+
+start_tunnel_localhost() {
+    echo "Starting localhost.run tunnel..."
+    setsid nohup ssh -R 80:localhost:$PORT nokey@localhost.run \
+        -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+        -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+        > "$TUNNEL_LOG" 2>&1 < /dev/null &
+    echo $! > "$TUNNEL_PID_FILE"
+    disown
+    
+    echo "Waiting for tunnel..."
+    for i in $(seq 1 20); do
+        URL=$(get_tunnel_url)
+        if [ -n "$URL" ]; then
+            echo "✓ Tunnel active: $URL"
+            return 0
+        fi
+        sleep 1
+    done
+    echo "⚠ Tunnel failed — check tunnel.log"
+    return 1
+}
+
+stop_tunnel() {
+    # Stop Tailscale funnel if running
+    if command -v tailscale &>/dev/null; then
+        tailscale funnel --https=443 off 2>/dev/null || true
+    fi
+    
+    # Kill SSH tunnel
+    if [ -f "$TUNNEL_PID_FILE" ]; then
+        kill $(cat "$TUNNEL_PID_FILE") 2>/dev/null || true
+        rm -f "$TUNNEL_PID_FILE"
+    fi
+    pkill -f "localhost.run" 2>/dev/null || true
+    rm -f "$TUNNEL_URL_FILE"  # Clear cached URL
+}
+
+show_qr() {
+    URL=$(get_tunnel_url)
+    if [ -z "$URL" ]; then
+        echo "No tunnel URL found."
+        echo ""
+        echo "Debug info:"
+        echo "  TUNNEL_LOG: $TUNNEL_LOG"
+        echo "  Log exists: $(test -f "$TUNNEL_LOG" && echo yes || echo no)"
+        echo "  Tunnel PID file: $(test -f "$TUNNEL_PID_FILE" && echo yes || echo no)"
+        if [ -f "$TUNNEL_LOG" ]; then
+            echo ""
+            echo "Last 5 lines of tunnel.log:"
+            tail -5 "$TUNNEL_LOG" | cat -v
+        fi
+        echo ""
+        echo "Try: ./decloud restart"
+        return 1
+    fi
+    
+    PIN=$(grep DECLOUD_PIN .env 2>/dev/null | cut -d= -f2 || echo "not set")
+    
+    echo ""
+    echo "📱 DeCloud Tunnel"
+    echo "════════════════════════════════════════"
+    echo "URL: $URL"
+    echo "PIN: $PIN"
+    echo ""
+    
+    if command -v qrencode &>/dev/null; then
+        qrencode -t ANSIUTF8 "$URL" 2>/dev/null || qrencode -t ANSI "$URL" 2>/dev/null
+        echo ""
+    else
+        echo "(Install qrencode for QR code: sudo apt install qrencode)"
+    fi
+    
+    echo ""
+    echo "⚠️  This is a TEMPORARY tunnel (changes every few hours)"
+    echo "   For permanent access, see: PERMANENT_TUNNEL.md"
+    echo ""
+}
+
+status() {
+    echo "DeCloud Status"
+    echo "══════════════"
+    
+    # App status
+    if [ -f "$APP_PID_FILE" ] && kill -0 $(cat "$APP_PID_FILE") 2>/dev/null; then
+        echo "App:     ✓ running (PID: $(cat $APP_PID_FILE))"
+    else
+        echo "App:     ✗ not running"
+    fi
+    
+    # Tunnel status
+    if [ -f "$TUNNEL_PID_FILE" ] && kill -0 $(cat "$TUNNEL_PID_FILE") 2>/dev/null; then
+        URL=$(get_tunnel_url)
+        echo "Tunnel:  ✓ active"
+        echo "URL:     ${URL:-pending}"
+    else
+        echo "Tunnel:  ✗ not running"
+    fi
+    
+    # Port check
+    if curl -s http://localhost:$PORT/ > /dev/null 2>&1; then
+        echo "Local:   ✓ http://localhost:$PORT"
+    else
+        echo "Local:   ✗ port $PORT not responding"
+    fi
+}
+
+# ─── Main ───────────────────────────────────────────────────────
+
+case "${1:-}" in
+    -v|--version|version)
+        echo "DeCloud $VERSION"
+        ;;
+    start)
+        start_app && start_tunnel
+        ;;
+    stop)
+        stop_app
+        stop_tunnel
+        echo "All stopped"
+        ;;
+    restart)
+        stop_app
+        stop_tunnel
+        sleep 1
+        start_app && start_tunnel
+        ;;
+    qr|url)
+        show_qr
+        ;;
+    status)
+        status
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|qr|status|version}"
+        echo ""
+        echo "  start   — Start app + tunnel"
+        echo "  stop    — Stop everything"
+        echo "  restart — Restart app + tunnel"
+        echo "  qr      — Show current tunnel URL + QR code"
+        echo "  status  — Show what's running"
+        echo "  version — Show DeCloud version"
+        exit 1
+        ;;
+esac
