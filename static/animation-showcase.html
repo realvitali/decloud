@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>DeCloud — Animation Showcase</title>
+<style>
+/* ═══ LIQUID GLASS DESIGN SYSTEM ═══ */
+:root {
+  --bg: #ffffff;
+  --bg-gradient: linear-gradient(180deg, #ffffff 0%, #f0f2f5 100%);
+  --glass: rgba(255, 255, 255, 0.7);
+  --glass-hover: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.95);
+  --glass-shadow: 0 2px 16px rgba(0, 0, 0, 0.04), 0 0 1px rgba(0, 0, 0, 0.03);
+  --glass-shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.06), 0 0 1px rgba(0, 0, 0, 0.04);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 1);
+  --card: rgba(255, 255, 255, 0.65);
+  --accent: #6366f1;
+  --accent-soft: rgba(99, 102, 241, 0.1);
+  --accent-glow: rgba(99, 102, 241, 0.2);
+  --accent-text: #4f46e5;
+  --text: #1a1a2e;
+  --text-dim: #6b7280;
+  --text-faint: #9ca3af;
+  --radius: 22px;
+  --blur: 24px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a0a0f;
+    --bg-gradient: linear-gradient(180deg, #0a0a0f 0%, #12121a 100%);
+    --glass: rgba(30, 30, 42, 0.55);
+    --glass-hover: rgba(40, 40, 55, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --glass-shadow: 0 2px 16px rgba(0, 0, 0, 0.3), 0 0 1px rgba(0, 0, 0, 0.2);
+    --glass-shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.4), 0 0 1px rgba(0, 0, 0, 0.3);
+    --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    --card: rgba(30, 30, 42, 0.5);
+    --accent: #818cf8;
+    --accent-soft: rgba(129, 140, 248, 0.15);
+    --accent-glow: rgba(129, 140, 248, 0.3);
+    --accent-text: #a5b4fc;
+    --text: #e5e7eb;
+    --text-dim: #9ca3af;
+  }
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 24px 16px 80px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+.subtitle { color: var(--text-dim); font-size: 15px; margin-bottom: 32px; }
+.section-title {
+  font-size: 13px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.8px; color: var(--text-dim);
+  margin: 36px 0 16px; padding-left: 4px;
+}
+
+/* ─── Card grid ─────────────────────────────────────────── */
+.demos {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.demo-card {
+  background: var(--card);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 24px 16px 16px;
+  box-shadow: var(--glass-shadow), var(--glass-inset);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.demo-card h3 { font-size: 13px; font-weight: 600; }
+.demo-card .desc { font-size: 11px; color: var(--text-faint); line-height: 1.4; }
+
+/* ─── App tile mockup ───────────────────────────────────── */
+.app-tile {
+  width: 56px; height: 56px;
+  border-radius: 16px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 24px;
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+.replay-btn {
+  position: absolute;
+  top: 8px; right: 8px;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.demo-card:hover .replay-btn { opacity: 1; }
+
+/* ═══════════════════════════════════════════════════════════════
+   1. FADE UP  — subtle, professional
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.anim-fade-up { animation: fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ═══════════════════════════════════════════════════════════════
+   2. SCALE BLOOM  — material-style grow
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes scale-bloom {
+  0%   { opacity: 0; transform: scale(0.7); }
+  60%  { opacity: 1; transform: scale(1.06); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.anim-scale-bloom { animation: scale-bloom 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* ═══════════════════════════════════════════════════════════════
+   3. SLIDE SPRING  — slides in from left with spring bounce
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes slide-spring {
+  0%   { opacity: 0; transform: translateX(-40px) scale(0.9); }
+  60%  { opacity: 1; transform: translateX(4px) scale(1); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+.anim-slide-spring { animation: slide-spring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* ═══════════════════════════════════════════════════════════════
+   4. LIQUID GLASS  — blur + scale like glass materializing
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes liquid-glass {
+  0%   { opacity: 0; transform: scale(0.85); filter: blur(8px); }
+  50%  { opacity: 0.8; filter: blur(3px); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+.anim-liquid-glass { animation: liquid-glass 0.5s ease-out both; }
+
+/* ═══════════════════════════════════════════════════════════════
+   5. STAGGER TILES  — cascade entrance for grids
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes stagger-in {
+  from { opacity: 0; transform: translateY(20px) scale(0.92); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.stagger-group { display: flex; gap: 6px; }
+.stagger-group .app-tile {
+  width: 32px; height: 32px; border-radius: 10px; font-size: 14px;
+  animation: stagger-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.stagger-group .app-tile:nth-child(1) { animation-delay: 0ms; }
+.stagger-group .app-tile:nth-child(2) { animation-delay: 60ms; }
+.stagger-group .app-tile:nth-child(3) { animation-delay: 120ms; }
+.stagger-group .app-tile:nth-child(4) { animation-delay: 180ms; }
+.stagger-group .app-tile:nth-child(5) { animation-delay: 240ms; }
+
+/* ═══════════════════════════════════════════════════════════════
+   6. IRIS REVEAL  — circular clip reveal
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes iris-reveal {
+  from { opacity: 0; clip-path: circle(0% at 50% 50%); transform: scale(0.8); }
+  to   { opacity: 1; clip-path: circle(75% at 50% 50%); transform: scale(1); }
+}
+.anim-iris-reveal { animation: iris-reveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ═══════════════════════════════════════════════════════════════
+   7. FLIP IN 3D  — card flip on Y axis
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes flip-3d {
+  from { opacity: 0; transform: perspective(400px) rotateY(80deg); }
+  to   { opacity: 1; transform: perspective(400px) rotateY(0); }
+}
+.anim-flip-3d { animation: flip-3d 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ═══════════════════════════════════════════════════════════════
+   8. CONTENT SLIDE UP  — for screen content (not tiles)
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes content-rise {
+  from { opacity: 0; transform: translateY(30px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.anim-content-rise { animation: content-rise 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ═══════════════════════════════════════════════════════════════
+   9. SHIMMER PLACEHOLDER  — skeleton loading shimmer
+   ═══════════════════════════════════════════════════════════════ */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer-bar {
+  width: 100px; height: 8px; border-radius: 4px;
+  background: linear-gradient(90deg,
+    var(--accent-soft) 0%,
+    var(--accent-glow) 50%,
+    var(--accent-soft) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+}
+
+/* ═════ LOADING SPINNERS ═════ */
+
+/* A. ORBIT DOTS  — three dots orbiting */
+@keyframes orbit-dot {
+  0%, 100% { transform: translate(0, 0); opacity: 0.4; }
+  25% { transform: translate(8px, -8px); opacity: 1; }
+  50% { transform: translate(0, -12px); opacity: 0.6; }
+  75% { transform: translate(-8px, -8px); opacity: 0.8; }
+}
+.spinner-orbit { position: relative; width: 40px; height: 40px; }
+.spinner-orbit span {
+  position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+  top: 16px; left: 16px;
+  animation: orbit-dot 1.2s infinite ease-in-out;
+}
+.spinner-orbit span:nth-child(2) { animation-delay: -0.4s; }
+.spinner-orbit span:nth-child(3) { animation-delay: -0.8s; }
+
+/* B. LIQUID RING  — gradient ring that morphs */
+@keyframes liquid-ring {
+  0%   { transform: rotate(0deg); border-radius: 50%; }
+  50%  { transform: rotate(180deg); border-radius: 40%; }
+  100% { transform: rotate(360deg); border-radius: 50%; }
+}
+.spinner-liquid-ring {
+  width: 36px; height: 36px;
+  border: 3px solid transparent;
+  border-top-color: var(--accent);
+  border-right-color: var(--accent-glow);
+  animation: liquid-ring 1s infinite linear;
+}
+
+/* C. PULSE GLOW  — gentle breathing glow */
+@keyframes pulse-glow {
+  0%, 100% { transform: scale(1); opacity: 0.6; box-shadow: 0 0 0 0 var(--accent-glow); }
+  50% { transform: scale(1.15); opacity: 1; box-shadow: 0 0 0 8px transparent; }
+}
+.spinner-pulse {
+  width: 20px; height: 20px; border-radius: 50%; background: var(--accent);
+  animation: pulse-glow 1.4s infinite ease-in-out;
+}
+
+/* D. WAVE BARS  — audio-equalizer style bars */
+@keyframes wave-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+.spinner-wave { display: flex; gap: 3px; align-items: center; height: 30px; }
+.spinner-wave span {
+  width: 4px; height: 100%; border-radius: 2px; background: var(--accent);
+  transform-origin: center;
+  animation: wave-bar 0.8s infinite ease-in-out;
+}
+.spinner-wave span:nth-child(2) { animation-delay: 0.1s; }
+.spinner-wave span:nth-child(3) { animation-delay: 0.2s; }
+.spinner-wave span:nth-child(4) { animation-delay: 0.3s; }
+.spinner-wave span:nth-child(5) { animation-delay: 0.4s; }
+
+/* E. GRADIENT SPINNER  — conic gradient spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner-conic {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0%, var(--accent) 100%);
+  -webkit-mask: radial-gradient(circle, transparent 55%, black 56%);
+  mask: radial-gradient(circle, transparent 55%, black 56%);
+  animation: spin 0.9s infinite linear;
+}
+
+/* F. TYPING DOTS  — chat typing indicator */
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-8px); opacity: 1; }
+}
+.spinner-typing { display: flex; gap: 5px; }
+.spinner-typing span {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+.spinner-typing span:nth-child(2) { animation-delay: 0.15s; }
+.spinner-typing span:nth-child(3) { animation-delay: 0.3s; }
+
+/* G. INDETERMINATE BAR  — material-style progress bar */
+@keyframes indeterminate {
+  0%   { left: -40%; width: 40%; }
+  50%  { left: 30%; width: 50%; }
+  100% { left: 100%; width: 40%; }
+}
+.spinner-bar-track {
+  width: 100px; height: 4px; border-radius: 2px;
+  background: var(--accent-soft); overflow: hidden; position: relative;
+}
+.spinner-bar-track::after {
+  content: ''; position: absolute; top: 0; bottom: 0;
+  background: var(--accent); border-radius: 2px;
+  animation: indeterminate 1.4s infinite ease-in-out;
+}
+
+/* H. PIXEL FLIP  — tiny grid of pixels flipping colors */
+@keyframes pixel-flip {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+.spinner-pixel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; width: 30px; }
+.spinner-pixel span {
+  width: 8px; height: 8px; border-radius: 2px; background: var(--accent);
+  animation: pixel-flip 0.9s infinite ease-in-out;
+}
+.spinner-pixel span:nth-child(1) { animation-delay: 0s; }
+.spinner-pixel span:nth-child(2) { animation-delay: 0.1s; }
+.spinner-pixel span:nth-child(3) { animation-delay: 0.2s; }
+.spinner-pixel span:nth-child(4) { animation-delay: 0.3s; }
+.spinner-pixel span:nth-child(5) { animation-delay: 0.4s; }
+.spinner-pixel span:nth-child(6) { animation-delay: 0.5s; }
+.spinner-pixel span:nth-child(7) { animation-delay: 0.6s; }
+.spinner-pixel span:nth-child(8) { animation-delay: 0.7s; }
+.spinner-pixel span:nth-child(9) { animation-delay: 0.8s; }
+
+/* ─── Button animations ─────────────────────────────────── */
+.section-title.mt { margin-top: 44px; }
+.btn-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.glass-btn {
+  background: var(--glass);
+  backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 12px 24px;
+  color: var(--text);
+  font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--glass-shadow);
+  transition: transform 0.15s, background 0.2s;
+}
+.glass-btn:active { transform: scale(0.95); }
+.glass-btn:hover { background: var(--glass-hover); }
+.glass-btn.primary { background: var(--accent); color: white; border: none; }
+
+@keyframes btn-pop {
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.anim-btn-pop { animation: btn-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+@keyframes btn-shine {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.anim-btn-shine { animation: btn-shine 0.3s ease-out both; }
+
+/* full-width card */
+.full { grid-column: 1 / -1; }
+
+/* ─── Screen transition preview ─────────────────────────── */
+.screen-preview {
+  position: relative;
+  height: 120px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--accent-soft), transparent);
+  border: 1px solid var(--glass-border);
+}
+.screen-preview .mock-screen {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px; flex-direction: column;
+}
+.screen-preview .mock-line {
+  width: 70%; height: 12px; border-radius: 6px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+}
+.screen-preview .mock-line.short { width: 45%; }
+</style>
+</head>
+<body>
+
+<h1>Animation Showcase</h1>
+<p class="subtitle">Tap any replay button to see the animation again. Pick your favorites~</p>
+
+<div class="section-title">App Tile Entrance Animations</div>
+<div class="demos">
+
+  <!-- 1. Fade Up -->
+  <div class="demo-card">
+    <button class="replay-btn" onclick="replay(this,'fade-up')">↻</button>
+    <div class="app-tile anim-fade-up" data-anim="fade-up">📚</div>
+    <h3>Fade Up</h3>
+    <div class="desc">Subtle rise + fade. Clean and professional.</div>
+  </div>
+
+  <!-- 2. Scale Bloom -->
+  <div class="demo-card">
+    <button class="replay-btn" onclick="replay(this,'scale-bloom')">↻</button>
+    <div class="app-tile anim-scale-bloom" data-anim="scale-bloom">💬</div>
+    <h3>Scale Bloom</h3>
+    <div class="desc">Material-style grow with slight overshoot.</div>
+  </div>
+
+  <!-- 3. Slide Spring -->
+  <div class="demo-card">
+    <button class="replay-btn" onclick="replay(this,'slide-spring')">↻</button>
+    <div class="app-tile anim-slide-spring" data-anim="slide-spring">📁</div>
+    <h3>Slide Spring</h3>
+    <div class="desc">Slides from left with a springy bounce.</div>
+  </div>
+
+  <!-- 4. Liquid Glass -->
+  <div class="demo-card">
+    <button class="replay-btn" onclick="replay(this,'liquid-glass')">↻</button>
+    <div class="app-tile anim-liquid-glass" data-anim="liquid-glass">📊</div>
+    <h3>Liquid Glass</h3>
+    <div class="desc">Materializes from blur. Matches glass aesthetic.</div>
+  </div>
+
+  <!-- 5. Iris Reveal -->
+  <div class="demo-card">
+    <button class="replay-btn" onclick="replay(this,'iris-reveal')">↻</button>
+    <div class="app-tile anim-iris-reveal" data-anim="iris-reveal">🎨</div>
+    <h3>Iris Reveal</h3>
+    <div class="desc">Circular clip-path wipe. Feels premium.</div>
+  </div>
+
+  <!-- 6. Flip 3D -->
+  <div class="demo-card">
+    <button class="replay-btn" onclick="replay(this,'flip-3d')">↻</button>
+    <div class="app-tile anim-flip-3d" data-anim="flip-3d">🖥️</div>
+    <h3>Flip 3D</h3>
+    <div class="desc">Card flip on Y axis. Playful.</div>
+  </div>
+</div>
+
+<div class="section-title">Grid Stagger (cascade entrance)</div>
+<div class="demos">
+  <div class="demo-card full">
+    <button class="replay-btn" onclick="replayStagger(this)">↻</button>
+    <div class="stagger-group" id="stagger-demo">
+      <div class="app-tile">📚</div>
+      <div class="app-tile">💬</div>
+      <div class="app-tile">📁</div>
+      <div class="app-tile">📊</div>
+      <div class="app-tile">🎨</div>
+    </div>
+    <h3>Stagger Cascade</h3>
+    <div class="desc">Each tile animates in sequence (60ms delay). Best for the home grid.</div>
+  </div>
+</div>
+
+<div class="section-title">Screen Content Transitions</div>
+<div class="demos">
+  <div class="demo-card">
+    <button class="replay-btn" onclick="replayScreen(this,'content-rise')">↻</button>
+    <div class="screen-preview" style="width:100%">
+      <div class="mock-screen anim-content-rise" data-anim="content-rise">
+        <div class="mock-line"></div>
+        <div class="mock-line short"></div>
+      </div>
+    </div>
+    <h3>Content Rise</h3>
+    <div class="desc">Screen content slides up smoothly.</div>
+  </div>
+  <div class="demo-card">
+    <button class="replay-btn" onclick="replayScreen(this,'liquid-glass')">↻</button>
+    <div class="screen-preview" style="width:100%">
+      <div class="mock-screen anim-liquid-glass" data-anim="liquid-glass">
+        <div class="mock-line"></div>
+        <div class="mock-line short"></div>
+      </div>
+    </div>
+    <h3>Liquid Screen</h3>
+    <div class="desc">Screen materializes from blur.</div>
+  </div>
+</div>
+
+<div class="section-title">Loading Spinners</div>
+<div class="demos">
+
+  <div class="demo-card">
+    <div class="spinner-orbit"><span></span><span></span><span></span></div>
+    <h3>Orbit Dots</h3>
+    <div class="desc">Three dots orbiting. Smooth and light.</div>
+  </div>
+
+  <div class="demo-card">
+    <div class="spinner-liquid-ring"></div>
+    <h3>Liquid Ring</h3>
+    <div class="desc">Morphing ring that breathes. On-brand.</div>
+  </div>
+
+  <div class="demo-card">
+    <div class="spinner-pulse"></div>
+    <h3>Pulse Glow</h3>
+    <div class="desc">Gentle breathing glow. Good for status.</div>
+  </div>
+
+  <div class="demo-card">
+    <div class="spinner-wave"><span></span><span></span><span></span><span></span><span></span></div>
+    <h3>Wave Bars</h3>
+    <div class="desc">Equalizer style. Great for audio apps.</div>
+  </div>
+
+  <div class="demo-card">
+    <div class="spinner-conic"></div>
+    <h3>Conic Spinner</h3>
+    <div class="desc">Clean gradient ring. Modern.</div>
+  </div>
+
+  <div class="demo-card">
+    <div class="spinner-typing"><span></span><span></span><span></span></div>
+    <h3>Typing Dots</h3>
+    <div class="desc">Chat typing indicator.</div>
+  </div>
+
+  <div class="demo-card">
+    <div class="spinner-bar-track"></div>
+    <h3>Indeterminate Bar</h3>
+    <div class="desc">Material progress bar. Good for loads.</div>
+  </div>
+
+  <div class="demo-card">
+    <div class="spinner-pixel">
+      <span></span><span></span><span></span>
+      <span></span><span></span><span></span>
+      <span></span><span></span><span></span>
+    </div>
+    <h3>Pixel Grid</h3>
+    <div class="desc">Retro grid flip. Fun and unique.</div>
+  </div>
+
+  <div class="demo-card full">
+    <div class="shimmer-bar" style="width:140px;height:12px"></div>
+    <h3>Shimmer Skeleton</h3>
+    <div class="desc">Skeleton loading with shimmer sweep. Use for content placeholders.</div>
+  </div>
+</div>
+
+<div class="section-title mt">Button Animations</div>
+<div class="btn-row" style="margin-bottom:16px">
+  <button class="glass-btn primary anim-btn-pop" data-anim="btn-pop" onclick="replayBtn(this)">Primary Button</button>
+  <button class="glass-btn anim-btn-shine" data-anim="btn-shine" onclick="replayBtn(this)">Glass Button</button>
+</div>
+<p class="desc" style="font-size:12px;color:var(--text-faint)">Buttons use tap scale feedback (0.95) on press + entrance animation on first show.</p>
+
+<div class="section-title">My Recommendations</div>
+<div style="background:var(--card);backdrop-filter:blur(var(--blur));border:1px solid var(--glass-border);border-radius:var(--radius);padding:20px;font-size:14px;line-height:1.6;color:var(--text-dim)">
+  <p style="margin-bottom:10px"><strong style="color:var(--text)">For app tiles (home grid):</strong> Stagger Cascade — it gives each tile a slight delay so the grid feels alive as it fills in.</p>
+  <p style="margin-bottom:10px"><strong style="color:var(--text)">For screen transitions:</strong> Content Rise — clean and fast, doesn't fight with the content.</p>
+  <p style="margin-bottom:10px"><strong style="color:var(--text)">For loading:</strong> Liquid Ring (on-brand) or Conic Spinner (cleanest).</p>
+  <p><strong style="color:var(--text)">For chat typing:</strong> Typing Dots — universally understood.</p>
+</div>
+
+<script>
+function replay(btn, animClass) {
+  const tile = btn.parentElement.querySelector('.app-tile');
+  tile.style.animation = 'none';
+  void tile.offsetWidth; // reflow
+  tile.style.animation = '';
+  tile.className = 'app-tile anim-' + animClass;
+}
+function replayStagger(btn) {
+  const group = document.getElementById('stagger-demo');
+  group.querySelectorAll('.app-tile').forEach((t, i) => {
+    t.style.animation = 'none';
+    void t.offsetWidth;
+    t.style.animation = '';
+    t.style.animationDelay = (i * 60) + 'ms';
+  });
+}
+function replayScreen(btn, animClass) {
+  const screen = btn.parentElement.querySelector('.mock-screen');
+  screen.style.animation = 'none';
+  void screen.offsetWidth;
+  screen.style.animation = '';
+  screen.className = 'mock-screen anim-' + animClass;
+}
+function replayBtn(btn) {
+  const anim = btn.dataset.anim;
+  btn.style.animation = 'none';
+  void btn.offsetWidth;
+  btn.style.animation = '';
+  btn.className = btn.className.replace(/anim-\S+/, '') + ' anim-' + anim;
+}
+</script>
+</body>
+</html>
