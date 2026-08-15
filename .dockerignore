@@ -1,0 +1,7 @@
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Test data
+tests/
