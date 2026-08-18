@@ -25,18 +25,27 @@ def _artwork_cache_path(filename):
 
 @bp.route('/api/music/list')
 def music_list():
-    """List all music files in the music directory."""
+    """List all music files in the music directory (recursive)."""
     songs = []
     if MUSIC_DIR.exists():
-        for f in sorted(MUSIC_DIR.iterdir()):
-            if f.suffix.lower() in MUSIC_EXTS:
-                size_mb = f.stat().st_size / (1024 * 1024)
-                songs.append({
-                    'name': f.stem,
-                    'filename': f.name,
-                    'ext': f.suffix.lower().lstrip('.'),
-                    'size_mb': round(size_mb, 1),
-                })
+        for f in sorted(MUSIC_DIR.rglob('*')):
+            # Skip hidden dirs (e.g. .artwork_cache)
+            if any(part.startswith('.') for part in f.relative_to(MUSIC_DIR).parts[:-1]):
+                continue
+            if not f.is_file():
+                continue
+            if f.suffix.lower() not in MUSIC_EXTS:
+                continue
+            rel = f.relative_to(MUSIC_DIR)
+            # Song name shows subfolder/song format
+            display_name = '/'.join(rel.with_suffix('').parts) if len(rel.parts) > 1 else f.stem
+            size_mb = f.stat().st_size / (1024 * 1024)
+            songs.append({
+                'name': display_name,
+                'filename': str(rel),
+                'ext': f.suffix.lower().lstrip('.'),
+                'size_mb': round(size_mb, 1),
+            })
     return jsonify(songs)
 
 

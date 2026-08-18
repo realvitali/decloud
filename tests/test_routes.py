@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 os.environ.setdefault('DECLOUD_PORT', '8899')
 os.environ.setdefault('DECLOUD_BOOKS_DIR', '/tmp/test-books')
 os.environ.setdefault('DECLOUD_FILES_DIR', '/tmp/test-files')
-os.environ.setdefault('SECRET_KEY', 'test-secret-key-for-pytest')
+os.environ.setdefault('SECRET_KEY', os.urandom(32).hex())
 
 # Create test dirs
 Path('/tmp/test-books').mkdir(exist_ok=True)

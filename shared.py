@@ -580,3 +580,7 @@ def _read_logs(limit=100):
 # ─── Music ──────────────────────────────────────────────────────
 MUSIC_DIR = _env_path('DECLOUD_MUSIC_DIR', Path.home() / 'Music' / 'decloud-music')
 MUSIC_EXTS = {'.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac'}
+
+# ─── Chats ──────────────────────────────────────────────────────
+CHATS_DIR = _env_path('DECLOUD_CHATS_DIR', BASE_DIR / 'data' / 'chats')
+CHATS_DIR.mkdir(parents=True, exist_ok=True)

@@ -636,14 +636,26 @@
 
 <!-- ═══ OLLAMA CHAT ═══ -->
 <div id="ollama-screen" class="screen">
-  <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
-    <h2 id="screen-title-ollama" class="screen-title"><span class="screen-title-icon"></span> AI Chat</h2>
-  </div>
-  <div class="ollama-model-bar">
+  <!-- Top bar: hamburger, model select, new chat -->
+  <div class="ollama-topbar">
+    <button class="ollama-icon-btn" id="ollama-drawer-btn" onclick="openOllamaDrawer()" aria-label="Chat list"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+    <button class="back-btn" onclick="goHome()" style="margin-left:4px">&#8249;</button>
     <select id="ollama-model-select" onchange="onOllamaModelChange(this.value)"></select>
     <span id="ollama-model-info" class="ollama-model-info"></span>
+    <button class="ollama-icon-btn" onclick="newChat()" aria-label="New chat"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
   </div>
+
+  <!-- Chat drawer (slide-in) -->
+  <div class="ollama-drawer-overlay" id="ollama-drawer-overlay" onclick="closeOllamaDrawer()"></div>
+  <div class="ollama-drawer" id="ollama-drawer">
+    <div class="ollama-drawer-header">
+      <span>Chats</span>
+      <button class="ollama-icon-btn" onclick="closeOllamaDrawer()" aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="ollama-chat-list" id="ollama-chat-list"></div>
+  </div>
+
+  <!-- Messages -->
   <div class="ollama-chat" id="ollama-chat">
     <div class="ollama-messages" id="ollama-messages">
       <div class="ollama-welcome">Pick a model and start chatting</div>
@@ -654,6 +666,12 @@
       <button class="ollama-stop-btn" id="ollama-stop-btn" onclick="stopOllama()" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
     </div>
   </div>
+
+  <!-- Message menu popup -->
+  <div class="ollama-msg-menu-popup" id="ollama-msg-menu" style="display:none"></div>
+
+  <!-- Copied toast -->
+  <div class="ollama-copied-toast" id="ollama-copied-toast">Copied</div>
 </div>
 
 <!-- ═══ COMFYUI GENERATE ═══ -->
@@ -995,6 +1013,7 @@ window.CANNON = CANNON;
 <script src="/static/js/modules/settings.js?v=91"></script>
 <script src="/static/js/modules/telemetry.js?v=91"></script>
 <script src="/static/js/modules/desktop.js?v=91"></script>
+<script src="/static/js/modules/bots.js?v=91"></script>
 <script src="/static/js/modules/music.js?v=91"></script>
 
 <!-- ═══ ONBOARDING OVERLAY ═══ -->
