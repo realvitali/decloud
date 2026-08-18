@@ -109,11 +109,20 @@ function playMusic(idx) {
   musicCurrentIdx = idx;
   var song = musicPlaylist[idx];
   if (!musicAudio) musicAudio = document.getElementById('music-audio');
-  musicAudio.src = '/api/music/stream/' + encodeURIComponent(song.filename);
-  musicAudio.play();
 
+  // Parse meta and artUrl BEFORE setting audio.src / play
   var meta = parseSongMeta(song.name);
   var artUrl = '/api/music/artwork/' + encodeURIComponent(song.filename);
+
+  // Register Media Session BEFORE audio.play() (iOS Safari needs this)
+  if (typeof updateMediaSessionMusic === 'function') {
+    updateMediaSessionMusic(meta.title, meta.artist || 'DeCloud Music', artUrl);
+    setMediaSessionPlaying(true);
+  }
+
+  // Now set src and play
+  musicAudio.src = '/api/music/stream/' + encodeURIComponent(song.filename);
+  musicAudio.play();
 
   // Show player bar and fill it
   var player = document.getElementById('music-player');
@@ -127,12 +136,6 @@ function playMusic(idx) {
     if (artImg.naturalWidth > 1) artImg.style.display = '';
   };
   artImg.onerror = function() { artImg.style.display = 'none'; };
-
-  // Media Session for lock screen
-  if (typeof updateMediaSessionMusic === 'function') {
-    updateMediaSessionMusic(meta.title, meta.artist || 'DeCloud Music', artUrl);
-    setMediaSessionPlaying(true);
-  }
 
   musicAudio.onloadedmetadata = function() {
     document.getElementById('music-duration').textContent = formatMusicTime(musicAudio.duration);

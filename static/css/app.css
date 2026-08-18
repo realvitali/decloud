@@ -2708,6 +2708,272 @@ body {
   background: var(--red, #ef4444);
 }
 
+/* ─── Ollama topbar (v91) ─── */
+.ollama-topbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--glass);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border-bottom: 1px solid var(--hairline);
+  min-height: 48px;
+}
+.ollama-topbar select {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--hairline);
+  background: var(--glass);
+  color: var(--text);
+  font-size: 13px;
+  min-height: 44px;
+}
+.ollama-icon-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.ollama-icon-btn:active {
+  background: var(--accent-soft);
+}
+
+/* ─── Ollama drawer (slide-in) ─── */
+.ollama-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 280px;
+  max-width: 85vw;
+  background: var(--glass);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border-right: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow-lg);
+  z-index: 9999;
+  transform: translateX(-100%);
+  transition: transform 0.25s ease-out;
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--safe-top);
+}
+.ollama-drawer.open {
+  transform: translateX(0);
+}
+.ollama-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--hairline);
+  font-weight: 600;
+  font-size: 15px;
+}
+.ollama-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9998;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease-out;
+}
+.ollama-drawer-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.ollama-chat-list {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ─── Chat items ─── */
+.ollama-chat-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--hairline);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ollama-chat-item:active {
+  background: var(--accent-soft);
+}
+.ollama-chat-item.active {
+  background: var(--accent-soft);
+}
+.ollama-chat-item-info {
+  flex: 1;
+  min-width: 0;
+}
+.ollama-chat-item-title {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ollama-chat-item-time {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+.ollama-chat-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.ollama-chat-item-actions button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.ollama-chat-item-actions button:active {
+  color: var(--text);
+  background: var(--hairline);
+}
+
+/* ─── Message meta ─── */
+.ollama-msg-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.ollama-msg:hover .ollama-msg-meta,
+.ollama-msg.assistant:last-child .ollama-msg-meta {
+  opacity: 1;
+}
+
+/* ─── Message menu button ─── */
+.ollama-msg-menu-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.ollama-msg:hover .ollama-msg-menu-btn,
+.ollama-msg.assistant:last-child .ollama-msg-menu-btn {
+  opacity: 1;
+}
+.ollama-msg-menu-btn:active {
+  color: var(--text);
+  background: var(--hairline);
+}
+
+/* ─── Message menu popup ─── */
+.ollama-msg-menu-popup {
+  position: fixed;
+  z-index: 10001;
+  background: var(--glass);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  box-shadow: var(--glass-shadow-lg);
+  padding: 12px;
+  min-width: 160px;
+  max-width: 200px;
+}
+.ollama-msg-menu-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.ollama-msg-menu-stats > div {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.ollama-msg-menu-stats span {
+  color: var(--text-dim);
+}
+.ollama-msg-menu-stats b {
+  color: var(--text);
+  font-weight: 600;
+}
+.ollama-msg-menu-copy {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: var(--glass);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.ollama-msg-menu-copy:active {
+  background: var(--accent-soft);
+}
+
+/* ─── Copied toast ─── */
+.ollama-copied-toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-solid);
+  color: var(--text);
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--glass-shadow-lg);
+  z-index: 10002;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+}
+.ollama-copied-toast.show {
+  opacity: 1;
+}
+
+/* ─── Mobile: drawer 85vw, messages max-width 85% ─── */
+@media (max-width: 600px) {
+  .ollama-drawer {
+    width: 85vw;
+  }
+  .ollama-msg-content {
+    max-width: 85%;
+  }
+}
+
 /* ─── ComfyUI ─── */
 .comfy-content {
   padding: 16px;

@@ -64,3 +64,4 @@ __pycache__/
 settings.json
 run_tts.sh
 .update_meta.json
+data/

@@ -154,6 +154,17 @@ ollama pull llama3.2
 
 Liquid glass aesthetic: frosted glass cards, rounded corners (22px), indigo accent (#6366f1). Light mode default with auto dark mode. Mobile-first responsive layout.
 
+### Docker
+
+```bash
+# Set your PIN and secret key before building
+echo "DECLOUD_PIN=your-pin-here" >> .env
+echo "SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))')" >> .env
+docker compose up -d
+```
+
+**Note:** Docker binds `0.0.0.0` by default (required for container networking). Make sure you set a strong `DECLOUD_PIN` before exposing the port, or use Tailscale to restrict access.
+
 ## Service Management
 
 ```bash
