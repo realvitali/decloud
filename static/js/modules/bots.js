@@ -227,7 +227,11 @@ async function botsCreate() {
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    botsState.rosterHTML = null;
+    // Restore roster markup before reloading, else botsLoad early-returns
+    if (botsState.rosterHTML) {
+      const screen = document.getElementById('agents-content-inner') || document.querySelector('.agents-content');
+      screen.innerHTML = botsState.rosterHTML;
+    }
     await botsLoad();
     botsOpen(name);
   } catch (e) {

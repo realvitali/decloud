@@ -177,7 +177,7 @@ def delete_bot(name):
     reg = _load_registry()
     if name not in reg:
         return jsonify({'error': 'Not found'}), 404
-    _run_hermes(['profile', 'delete', name], timeout=60)
+    _run_hermes(['profile', 'delete', name, '-y'], timeout=60)
     reg.pop(name, None)
     _save_registry(reg)
     try:
