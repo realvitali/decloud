@@ -511,6 +511,7 @@ function showScreen(id) {
   if (id === 'osint-screen') loadOsintProfiles();
   if (id === 'journal-screen') loadUniverse();
   if (id === 'legos-screen') initLegos3D();
+  if (id === 'agents-screen') botsLoad();
   // Initialize xterm when opening terminal screen
   if (id === 'terminal-screen') {
     setTimeout(() => {

@@ -258,10 +258,14 @@
     <button class="back-btn" onclick="goHome()">&#8249; Home</button>
     <h2 id="screen-title-agents" class="screen-title"><span class="screen-title-icon"></span> Agents</h2>
   </div>
-  <div class="agents-content">
+  <div class="agents-content" id="agents-content-inner">
 
-    <!-- Recent Activity -->
-    <div class="agent-section-title">Recent Activity</div>
+    <!-- Bots roster (Bot Mode) -->
+    <div class="agent-section-title">Bots</div>
+    <div id="bots-roster"><span class="text-dim">Loading...</span></div>
+    <button class="bot-new-btn" onclick="botsShowCreate()">＋ New Bot</button>
+
+    <div class="agent-section-title" style="margin-top:18px">Recent Activity</div>
     <div class="agent-activity-card">
       <div class="activity-list" id="activity-list"><span class="text-dim">Loading...</span></div>
     </div>
@@ -272,46 +276,13 @@
         <div class="agent-avatar nika">N</div>
         <div class="agent-info">
           <div class="agent-name">Nika <span class="agent-tag">Signal</span></div>
-          <div class="agent-platform">Hermes · agent2 · minimax-m2.7</div>
+          <div class="agent-platform">Hermes · agent2 · this chat</div>
         </div>
         <div class="agent-status" id="status-nika">●</div>
         <div class="agent-expand" id="expand-nika">▼</div>
       </div>
       <div class="agent-detail" id="agent-nika">
         <div class="agent-jobs" id="jobs-nika">Loading...</div>
-      </div>
-    </div>
-
-    <!-- Hermy -->
-    <div class="agent-card" onclick="toggleAgentDetail('hermy')">
-      <div class="agent-header">
-        <div class="agent-avatar hermy">H</div>
-        <div class="agent-info">
-          <div class="agent-name">Hermy <span class="agent-tag">Telegram</span></div>
-          <div class="agent-platform">Hermes · agent2</div>
-        </div>
-        <div class="agent-status" id="status-hermy">●</div>
-        <div class="agent-expand" id="expand-hermy">▼</div>
-      </div>
-      <div class="agent-detail" id="agent-hermy">
-        <div class="agent-note">Same agent as Nika, different channel</div>
-        <div class="agent-jobs" id="jobs-hermy"></div>
-      </div>
-    </div>
-
-    <!-- DeCloud (OpenClaw) -->
-    <div class="agent-card" onclick="toggleAgentDetail('decloud')">
-      <div class="agent-header">
-        <div class="agent-avatar decloud">C</div>
-        <div class="agent-info">
-          <div class="agent-name">DeCloud <span class="agent-tag">OpenClaw</span></div>
-          <div class="agent-platform">OpenClaw · this machine</div>
-        </div>
-        <div class="agent-status ready">●</div>
-        <div class="agent-expand" id="expand-decloud">▼</div>
-      </div>
-      <div class="agent-detail" id="agent-decloud">
-        <div class="agent-note">This workstation — always on</div>
       </div>
     </div>
 
