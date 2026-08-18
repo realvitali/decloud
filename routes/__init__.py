@@ -20,6 +20,9 @@ def register_blueprints(app, sock):
     from .agents import bp as agents_bp
     app.register_blueprint(agents_bp)
 
+    from .bots import bp as bots_bp
+    app.register_blueprint(bots_bp)
+
     from .lego import bp as lego_bp
     app.register_blueprint(lego_bp)
 
