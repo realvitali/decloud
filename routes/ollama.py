@@ -1,7 +1,7 @@
 """Ollama model management and chat routes."""
 from flask import Blueprint, jsonify, request, Response, stream_with_context
 import json
-from shared import _requests, OLLAMA_URL
+from shared import _requests, OLLAMA_URL, LLM_MODEL
 
 bp = Blueprint('ollama', __name__)
 
@@ -34,11 +34,25 @@ def _format_model_size(size):
 def ollama_chat():
     """Stream chat completion from Ollama. Supports SSE-style streaming."""
     data = request.get_json(silent=True) or {}
-    model = data.get('model', 'qwen2.5:14b-instruct')
+    model = str(data.get('model') or LLM_MODEL)
     messages = data.get('messages', [])
     temperature = data.get('temperature', 0.7)
     top_p = data.get('top_p', 0.9)
     max_tokens = data.get('max_tokens', 0)  # 0 = unlimited
+
+    # Input caps — this endpoint is exposed over the tunnel; without caps
+    # a client could push unbounded payloads into a local LLM.
+    if not isinstance(messages, list) or not messages:
+        return jsonify({'error': 'messages must be a non-empty list'}), 400
+    if len(messages) > 40:
+        return jsonify({'error': 'too many messages (max 40)'}), 400
+    total_chars = sum(len(str(m.get('content', ''))) for m in messages if isinstance(m, dict))
+    if total_chars > 120_000:
+        return jsonify({'error': 'conversation too long (max 120k chars)'}), 400
+    if not (0 <= float(temperature) <= 2) or not (0 <= float(top_p) <= 1):
+        return jsonify({'error': 'temperature (0-2) or top_p (0-1) out of range'}), 400
+    if not (0 <= int(max_tokens) <= 32768):
+        return jsonify({'error': 'max_tokens out of range (0-32768)'}), 400
 
     def generate():
         try:

@@ -59,6 +59,21 @@ let bookmarks = [];
 let fontSizeLevel = 1;
 let bookmarkPanelOpen = false;
 
+// ─── Server position sync (cross-device resume) ───────────────
+let _posPushAt = 0;  // epoch ms of last server push (10s throttle)
+
+function pushServerPosition(section) {
+  if (!currentBook) return;
+  const now = Date.now();
+  if (now - _posPushAt < 10000) return;
+  _posPushAt = now;
+  fetch(`/api/book/${currentBook}/position`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(section)
+  }).catch(() => {});
+}
+
 // Audio state (from audio JSON — generated TTS chapters)
 let audioData = null;
 let player = null;
@@ -127,6 +142,31 @@ async function openBook(bookId, title) {
 
   var savedReaderBookmark = bookmarks.find(function(b) { return b.isResume; });
   var lastMode = localStorage.getItem('mode_' + bookId) || 'reader';
+
+  // ── Cross-device resume: server position wins if newer than local ──
+  // (so a phone and laptop continue from the same spot)
+  var localTs = 0;
+  if (savedAudio && savedAudio.ts) localTs = savedAudio.ts;
+  if (savedReaderBookmark && savedReaderBookmark.ts > localTs) localTs = savedReaderBookmark.ts;
+  var serverPos = null;
+  try {
+    const posRes = await fetch(`/api/book/${bookId}/position`);
+    if (posRes.ok) serverPos = await posRes.json();
+  } catch {}
+  if (serverPos && serverPos.updated && (serverPos.updated * 1000) > localTs) {
+    if (serverPos.audio && serverPos.audio.chapter !== undefined && serverPos.audio.time > 5) {
+      savedAudio = { chapter: serverPos.audio.chapter, time: serverPos.audio.time, ts: serverPos.updated * 1000 };
+      lastMode = serverPos.mode || lastMode;
+    }
+    if (serverPos.reader && serverPos.reader.chapter !== undefined) {
+      savedReaderBookmark = {
+        chapter: serverPos.reader.chapter,
+        wordIndex: serverPos.reader.word_index || 0,
+        isResume: true,
+        ts: serverPos.updated * 1000,
+      };
+    }
+  }
 
   if (hasAudio && savedAudio && savedAudio.chapter !== undefined && savedAudio.time > 5) {
     // Resume audio
@@ -242,6 +282,8 @@ function saveReaderPosition() {
   if (existing >= 0) bookmarks[existing] = entry;
   else bookmarks.push(entry);
   saveBookmarks();
+  // Cross-device resume (throttled to one push per 10s)
+  pushServerPosition({ mode: 'reader', reader: { chapter: readerChapterIdx, word_index: wordIndex } });
 }
 
 function handleWordTap(span, wordIndex) {
@@ -528,8 +570,11 @@ function onTimeUpdate() {
   if (Math.floor(t) % 5 === 0 && Math.floor(t) > 0) {
     localStorage.setItem(`playback_${currentBook}`, JSON.stringify({
       chapter: audioChapterIdx,
-      time: t
+      time: t,
+      ts: Date.now()
     }));
+    // Cross-device resume (throttled to one push per 10s)
+    pushServerPosition({ mode: 'audio', audio: { chapter: audioChapterIdx, time: Math.round(t) } });
     // Update lock screen progress bar
     if (typeof updateMediaSessionPosition === 'function') updateMediaSessionPosition();
   }
