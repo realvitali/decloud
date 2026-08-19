@@ -13,7 +13,7 @@ Thanks for your interest in making DeCloud better! This is an open-source projec
 ## Development Setup
 
 ```bash
-git clone https://github.com/<org>/decloud ~/decloud
+git clone https://github.com/realvitali/decloud ~/decloud
 cd ~/decloud
 ./install.sh  # sets up venv + deps
 source .venv/bin/activate

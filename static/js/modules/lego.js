@@ -174,7 +174,6 @@ async function loadLego(path = '', page = 1) {
       doneBtn.innerHTML = 'Mark folder as done';
       doneBtn.onclick = markFolderDone;
       list.appendChild(doneBtn);
-      console.log('[Lego] Mark-done button added for:', legoCurrentPath);
     }
 
     // Lazy load visible thumbnails
