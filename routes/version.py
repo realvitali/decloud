@@ -37,7 +37,7 @@ CHANGELOG = [
         "date": "2026-08-14",
         "changes": [
             "First public release — experimental alpha",
-            "Things might break or be buggy. Report to mrvitali@pm.me",
+            "Report issues on GitHub",
             ".env now loaded on manual start (not just systemd)",
             "Settings: library paths save to .env for real",
             "AI chat surfaces model errors instead of hanging",
