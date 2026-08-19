@@ -12,7 +12,7 @@ TUNNEL_PID_FILE="$APP_DIR/tunnel.pid"
 APP_PID_FILE="$APP_DIR/app.pid"
 
 # ─── Version ──────────────────────────────────────────────────────
-VERSION="0.0.1"
+VERSION="0.0.2"
 
 # ─── Helpers ────────────────────────────────────────────────────
 

@@ -33,7 +33,7 @@ Your URL: `https://your-machine-name.tail1234.ts.net`
 
 They **don't need Tailscale installed**. Just send them:
 1. The URL: `https://your-machine.tail1234.ts.net`
-2. Your DeCloud PIN
+2. Your DeCloud passcode
 
 They can add it to their phone home screen like any app.
 
@@ -83,5 +83,5 @@ If you don't want any public access:
 
 **"Friends can't access"**
 - Make sure you gave them the full URL (including `https://`)
-- Check your PIN is correct
+- Check your passcode is correct
 - Verify funnel is on: `tailscale funnel status`
