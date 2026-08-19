@@ -48,31 +48,116 @@ def _load_env_file():
 _load_env_file()
 
 # ─── Authentication ─────────────────────────────────────────────
-# DeCloud requires a PIN to access all API endpoints. The PIN is set in .env
-# as DECLOUD_PIN (6-digit code). If not set, the app runs in open mode
-# (for local-only development). In open mode, a warning is printed.
+# DeCloud requires a passcode (DECLOUD_PIN) to access the app. If not
+# set, the app runs in open mode (for local-only development).
+#
+# Security model:
+#   - The passcode is the *credential* — only used during /api/auth/login.
+#   - On successful login the server mints a random opaque session token,
+#     stores it in the in-memory SESSIONS map with an expiry, and sets it
+#     as the `decloud_session` cookie. The passcode itself is NEVER sent
+#     back to the browser and never accepted as a Bearer credential.
+#   - All subsequent requests are authenticated by the session token.
+#   - Sessions are scoped to a single process (in-memory) and expire
+#     after 30 days. A restart invalidates all sessions, forcing
+#     re-login — acceptable for a personal self-hosted app.
 DECLOUD_PIN = os.environ.get('DECLOUD_PIN', '')
-SECRET_KEY = os.environ.get('SECRET_KEY', 'change-me-to-a-random-string')
+if DECLOUD_PIN:
+    if len(DECLOUD_PIN) > 64:
+        raise SystemExit('[decloud] DECLOUD_PIN is longer than 64 characters.')
+    if len(DECLOUD_PIN) < 8:
+        print('[decloud] WARNING: DECLOUD_PIN is short. Use at least 8 '
+              'characters (a passphrase, not just digits) — the install '
+              'default is now 8 digits.', flush=True)
+
+# Refuse to start with the placeholder SECRET_KEY. Generate one if missing.
+_env_secret = os.environ.get('SECRET_KEY', '')
+if _env_secret and _env_secret != 'change-me-to-a-random-string':
+    SECRET_KEY = _env_secret
+else:
+    SECRET_KEY = secrets.token_hex(32)
+    print('[decloud] WARNING: SECRET_KEY not set in .env — generated an ephemeral '
+          'one for this run. Sessions will not survive a restart. '
+          'Set SECRET_KEY in .env to persist sessions.', flush=True)
 app.secret_key = SECRET_KEY
 
-# Endpoints that don't require auth
-_PUBLIC_ENDPOINTS = {'pwa.index', 'pwa.manifest', 'pwa.sw', 'pwa.icons', 'pwa.kill_cache', 'auth.login', 'auth.check', 'static'}
+# In-memory session store: token -> expiry epoch seconds
+SESSIONS: dict[str, float] = {}
+SESSION_TTL_SECONDS = 30 * 24 * 60 * 60  # 30 days
+MAX_SESSIONS = 50
+
+# Failed-login tracking: remote address -> [attempt timestamps]
+_LOGIN_ATTEMPTS: dict[str, list[float]] = {}
+_LOGIN_BACKOFF_WINDOW = 60.0  # seconds of history kept per address
+_LOGIN_BACKOFF_MAX = 10       # failures before a hard cooldown applies
+
+def _purge_expired_sessions():
+    """Drop expired tokens. Called on every authenticated request — cheap
+    because the dict stays small (a handful of devices per install)."""
+    now = time.time()
+    for t in [t for t, exp in SESSIONS.items() if exp <= now]:
+        SESSIONS.pop(t, None)
+
+def _csrf_for_token(token: str) -> str:
+    """CSRF token derived from a session token and the app secret."""
+    return hmac.new(SECRET_KEY.encode(), token.encode(), hashlib.sha256).hexdigest()
+
+def _extract_session_token():
+    """Return the session token from cookie or Authorization header, or None."""
+    token = request.cookies.get('decloud_session')
+    if not token:
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:].strip()
+    return token or None
 
 def _is_authenticated():
-    """Check if the current request is authenticated via PIN cookie."""
+    """Check if the current request carries a valid session token."""
     if not DECLOUD_PIN:
-        return True  # Open mode (no PIN set)
-    session_pin = request.cookies.get('decloud_pin')
-    if session_pin and hmac.compare_digest(session_pin, DECLOUD_PIN):
-        return True
-    auth_header = request.headers.get('Authorization', '')
-    if auth_header.startswith('Bearer ') and hmac.compare_digest(auth_header[7:], DECLOUD_PIN):
-        return True
-    return False
+        return True  # Open mode (no passcode set)
+    token = _extract_session_token()
+    if not token:
+        return False
+    _purge_expired_sessions()
+    return token in SESSIONS
+
+def _authed_by_bearer() -> bool:
+    """True when auth came from an Authorization header (CSRF-safe)."""
+    return bool(request.headers.get('Authorization', '').startswith('Bearer '))
+
+def ws_is_authenticated(environ: dict) -> bool:
+    """Check a WebSocket handshake for a valid session.
+
+    Flask's before_request hooks do NOT run for WebSocket upgrades, so
+    every WebSocket handler must call this itself. Accepts the session
+    token via cookie, Authorization header, or ?token= query parameter
+    (the query parameter is the cross-origin tunnel fallback).
+    """
+    if not DECLOUD_PIN:
+        return True  # Open mode
+    token = ''
+    auth = environ.get('HTTP_AUTHORIZATION', '')
+    if auth.startswith('Bearer '):
+        token = auth[7:].strip()
+    if not token:
+        cookie = environ.get('HTTP_COOKIE', '')
+        for part in cookie.split(';'):
+            key, _, val = part.strip().partition('=')
+            if key == 'decloud_session':
+                token = val
+                break
+    if not token:
+        from urllib.parse import parse_qs
+        qs = parse_qs(environ.get('QUERY_STRING', ''))
+        token = (qs.get('token') or [''])[0]
+    if not token:
+        return False
+    _purge_expired_sessions()
+    return token in SESSIONS
 
 @app.before_request
 def _require_auth():
-    """Gate all API endpoints behind PIN authentication."""
+    """Gate all API endpoints behind session-token authentication."""
     from flask import request as req
     if not DECLOUD_PIN:
         return  # Open mode, no auth needed
@@ -87,6 +172,56 @@ def _require_auth():
         if req.path.startswith('/api/'):
             return jsonify({'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}), 401
         # For non-API requests, serve the page (frontend will redirect to login)
+
+    # CSRF defense for state-changing requests authenticated only by
+    # cookie. Bearer-header auth is CSRF-safe (cross-origin callers
+    # cannot set custom headers without a CORS preflight).
+    if (req.method in ('POST', 'PUT', 'PATCH', 'DELETE')
+            and req.path.startswith('/api/')
+            and not _authed_by_bearer()):
+        token = _extract_session_token()
+        if not token:
+            return jsonify({'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}), 401
+        provided = req.headers.get('X-CSRF-Token', '')
+        if not provided or not hmac.compare_digest(provided, _csrf_for_token(token)):
+            return jsonify({'error': 'Invalid CSRF token', 'code': 'CSRF_REQUIRED'}), 403
+
+# ─── OS detection (cross-platform: Debian/Ubuntu, Fedora, macOS, Windows) ──
+@lru_cache(maxsize=1)
+def detect_os() -> dict:
+    """Return {name, version, kernel} for the host OS.
+
+    Reads /etc/os-release on Linux (works across Debian/Ubuntu/Fedora/
+    Arch/etc.), falls back to platform.* for macOS/Windows/BSD.
+    """
+    system = platform.system()
+    name = system or 'Unknown'
+    version = platform.release() or ''
+    kernel = platform.version() or ''
+
+    if system == 'Linux':
+        try:
+            info = {}
+            for raw in Path('/etc/os-release').read_text(errors='replace').splitlines():
+                if '=' in raw:
+                    key, _, val = raw.partition('=')
+                    info[key] = val.strip().strip('"')
+            pretty = info.get('PRETTY_NAME') or info.get('NAME') or 'Linux'
+            version = info.get('VERSION') or info.get('VERSION_ID') or ''
+            name = pretty
+            if version and version not in pretty:
+                name = f'{pretty} {version}'
+        except OSError:
+            pass
+    elif system == 'Darwin':
+        mac_ver = platform.mac_ver()[0] or ''
+        name = f'macOS {mac_ver}'.strip()
+        version = mac_ver
+    elif system == 'Windows':
+        win_ver = platform.win32_ver()
+        name = f'Windows {win_ver[0]} {win_ver[1]}'.strip()
+        version = win_ver[1] or ''
+    return {'name': name, 'version': version, 'kernel': kernel, 'system': system}
 
 # ─── Config: all paths are env-configurable ─────────────────────
 BASE_DIR = Path(__file__).parent
@@ -103,7 +238,35 @@ _req_logger.addHandler(_req_handler)
 _req_logger.setLevel(_logging.INFO)
 
 @app.after_request
-def _log_request(resp):
+def _harden_response(resp):
+    """Security headers + request logging on every response."""
+    # Security headers
+    resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resp.headers.setdefault('X-Frame-Options', 'DENY')
+    resp.headers.setdefault('Referrer-Policy', 'no-referrer')
+    resp.headers.setdefault(
+        'Permissions-Policy',
+        'camera=(), geolocation=(), microphone=(self)',
+    )
+    # CSP: script-src needs 'unsafe-inline' because the SPA uses inline
+    # onclick handlers; everything else is locked down. jsdelivr hosts
+    # the xterm terminal assets.
+    resp.headers.setdefault(
+        'Content-Security-Policy',
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "img-src 'self' data: blob:; "
+        "media-src 'self' blob:; "
+        "connect-src 'self' ws: wss:; "
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; "
+        "form-action 'self'",
+    )
+    # Never cache API responses — they can contain personal data
+    if request.path.startswith('/api/'):
+        resp.headers.setdefault('Cache-Control', 'no-store')
+
+    # Request log
     try:
         if not (resp.status_code == 200 and request.path.startswith('/static/')):
             _req_logger.info(f'{request.method} {request.path} {resp.status_code}')

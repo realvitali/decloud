@@ -58,8 +58,14 @@ function initXterm() {
 
   // Connect WebSocket to PTY backend
   // Use wss:// when page is served over https (e.g. through a tunnel)
+  // Browsers cannot set auth headers on WebSocket connections and
+  // SameSite cookies are not sent cross-origin, so pass the session
+  // token as a query parameter for tunnel scenarios. Same-origin
+  // connections still send the cookie automatically.
   const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${wsProto}//${location.host}/api/terminal/ws`;
+  const sess = sessionStorage.getItem('decloud_session') || '';
+  const wsUrl = `${wsProto}//${location.host}/api/terminal/ws` +
+    (sess ? `?token=${encodeURIComponent(sess)}` : '');
   xtermWs = new WebSocket(wsUrl);
 
   xtermWs.binaryType = 'arraybuffer';

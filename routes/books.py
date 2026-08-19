@@ -399,12 +399,13 @@ def tts_start(book_id):
     if settings_file.exists():
         voice_id = json.loads(settings_file.read_text()).get('voice', 'kathleen-low')
 
-    # Launch TTS conversion in background
+    # Launch TTS conversion in background. sys.executable works on
+    # Linux, macOS, and Windows alike (python3 does not exist on Windows).
     lock_file = AUDIO_DIR / f'{book_id}.tts_lock'
     lock_file.write_text('0')
-
+    import sys as _sys
     subprocess.Popen(
-        ['python3', str(worker_script), str(source_path), str(AUDIO_DIR), book_id, voice_id],
+        [_sys.executable, str(worker_script), str(source_path), str(AUDIO_DIR), book_id, voice_id],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
     )
@@ -417,8 +418,12 @@ def tts_stop(book_id):
     if lock_file.exists():
         # Write -1 to signal error stop
         lock_file.write_text('-1')
-    # Kill any running tts_worker processes for this book
-    subprocess.run(['pkill', '-f', f'tts_worker.*{book_id}'], capture_output=True)
+    # Kill any running tts_worker processes for this book.
+    # pkill is POSIX-only — Windows relies on the lock file (the worker
+    # checks it between chapters), which is written just above.
+    import platform as _platform
+    if _platform.system() != 'Windows':
+        subprocess.run(['pkill', '-f', f'tts_worker.*{book_id}'], capture_output=True)
     return jsonify({'status': 'stopped'})
 
 # ─── API: Summarize & Q&A (uses local LLM) ────────────────────

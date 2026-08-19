@@ -21,7 +21,11 @@ RUN mkdir -p /data/books /data/files /data/music /data/cache
 
 # Env defaults
 ENV DECLOUD_PORT=8899
-ENV DECLOUD_HOST=0.0.0.0
+# Bind localhost by default — in containers this means only the container
+# itself can reach the app. Override (e.g. -e DECLOUD_HOST=0.0.0.0) when
+# fronting it with a sidecar tunnel or reverse proxy, and always set
+# DECLOUD_PIN in that case.
+ENV DECLOUD_HOST=127.0.0.1
 ENV DECLOUD_BOOKS_DIR=/data/books
 ENV DECLOUD_FILES_DIR=/data/files
 ENV DECLOUD_MUSIC_DIR=/data/music

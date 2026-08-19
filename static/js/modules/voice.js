@@ -613,9 +613,14 @@ async function startVuiStreaming() {
       sessionStorage.setItem('vui_cid', vuiClientId);
     }
 
-    // Connect WebSocket to Vui through Flask proxy
+    // Connect WebSocket to Vui through Flask proxy.
+    // Pass the session token as a query parameter — browsers cannot set
+    // auth headers on WebSocket connections and SameSite cookies are not
+    // sent cross-origin (tunnel URLs).
     const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
-    vuiWS = new WebSocket(`${wsProto}://${location.host}/api/voice/vui/ws?cid=${encodeURIComponent(vuiClientId)}`);
+    const sess = sessionStorage.getItem('decloud_session') || '';
+    vuiWS = new WebSocket(`${wsProto}://${location.host}/api/voice/vui/ws?cid=${encodeURIComponent(vuiClientId)}` +
+      (sess ? `&token=${encodeURIComponent(sess)}` : ''));
 
     vuiWS.onopen = async () => {
       console.log('[Vui] WS connected, setting up WebRTC...');
