@@ -103,12 +103,16 @@ def _csrf_for_token(token: str) -> str:
     return hmac.new(SECRET_KEY.encode(), token.encode(), hashlib.sha256).hexdigest()
 
 def _extract_session_token():
-    """Return the session token from cookie or Authorization header, or None."""
+    """Return the session token from cookie, Authorization header, or the
+    ?token= query parameter (the cross-origin tunnel fallback for
+    WebSocket handshakes, where browsers cannot set headers)."""
     token = request.cookies.get('decloud_session')
     if not token:
         auth_header = request.headers.get('Authorization', '')
         if auth_header.startswith('Bearer '):
             token = auth_header[7:].strip()
+    if not token:
+        token = request.args.get('token', '') or ''
     return token or None
 
 def _is_authenticated():
