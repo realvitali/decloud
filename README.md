@@ -163,6 +163,22 @@ systemctl --user stop decloud        # Stop
 journalctl --user -u decloud -f      # View live logs
 ```
 
+## Updates
+
+Settings → About → **Check for updates**. The self-updater is designed to
+never break your machine:
+
+- Updates are **explicit** — you see the exact version and confirm first
+- Refuses to touch a tree with your own local edits
+- The new version is **test-booted on a scratch port before anything
+  restarts**; failures roll back automatically and your current version
+  keeps running
+- If the new version still crashes on startup, DeCloud detects it and
+  **reverts to the last working version by itself**
+- A "Revert last update" button returns you to the previous release
+- Requires a git install (see Quick Start); `.env`, books, and settings
+  are never touched
+
 ## Security
 
 - **Passcode authentication** — the app is locked behind `DECLOUD_PIN`
