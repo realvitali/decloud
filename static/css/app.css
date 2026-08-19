@@ -4839,3 +4839,211 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
 }
 .onboarding-banner .btn:active { transform: scale(0.96); }
 .settings-btn:hover { background: var(--accent-soft); }
+.lego-image-action {
+  position: absolute;
+  bottom: 20px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  z-index: 210;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s;
+}
+.lego-image-action:active { transform: scale(0.9); }
+
+.lego-image-shred {
+  right: 20px;
+  background: rgba(239, 68, 68, 0.8);
+}
+
+.lego-image-poof {
+  right: 78px;
+  background: rgba(99, 102, 241, 0.8);
+}
+
+.lego-image-save {
+  left: 20px;
+  background: rgba(34, 197, 94, 0.8);
+}
+
+/* ─── Ollama Chat ─── */
+
+.lego-swipe {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+}
+
+.lego-swipe-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: var(--safe-top) 16px 12px;
+  background: var(--glass);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border-bottom: 1px solid var(--hairline);
+}
+
+.lego-swipe-close {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.lego-swipe-info {
+  font-size: 14px;
+  color: var(--text-dim);
+  flex: 1;
+}
+
+.lego-swipe-card-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow: hidden;
+  position: relative;
+}
+
+.lego-swipe-card {
+  position: relative;
+  max-width: 420px;
+  width: 100%;
+  max-height: 100%;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  background: rgba(0,0,0,0.06);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+}
+
+.lego-swipe-card.swiping {
+  transition: none;
+}
+
+.lego-swipe-card.fly-left {
+  transform: translateX(-150vw) rotate(-30deg);
+  opacity: 0;
+  transition: transform 0.4s ease-out, opacity 0.4s;
+}
+
+.lego-swipe-card.fly-right {
+  transform: translateX(150vw) rotate(30deg);
+  opacity: 0;
+  transition: transform 0.4s ease-out, opacity 0.4s;
+}
+
+.lego-swipe-card.fly-up {
+  transform: translateY(-150vh) scale(0.5);
+  opacity: 0;
+  transition: transform 0.4s ease-out, opacity 0.4s;
+}
+
+.lego-swipe-card img {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
+.lego-swipe-card-name {
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--glass);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+}
+
+.lego-swipe-hint {
+  position: absolute;
+  top: 20px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 8px 16px;
+  border-radius: 12px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+.lego-swipe-hint-left {
+  left: 20px;
+  background: rgba(239, 68, 68, 0.9);
+  color: white;
+  transform: rotate(-15deg);
+}
+
+.lego-swipe-hint-right {
+  right: 20px;
+  background: rgba(99, 102, 241, 0.9);
+  color: white;
+  transform: rotate(15deg);
+}
+
+.lego-swipe-empty {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 18px;
+  padding: 40px;
+}
+
+.lego-swipe-actions {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  padding: 16px 20px calc(var(--safe-bottom) + 20px);
+}
+
+.lego-swipe-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid var(--glass-border);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s;
+}
+
+.lego-swipe-btn:active { transform: scale(0.85); }
+
+.lego-swipe-btn-trash {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.lego-swipe-btn-shred {
+  background: rgba(239, 68, 68, 0.3);
+  width: 56px;
+  height: 56px;
+}
+
+.lego-swipe-btn-poof {
+  background: rgba(99, 102, 241, 0.15);
+}
+

@@ -139,6 +139,9 @@ if [ ! -f .env ]; then
     echo "✓ .env created (edit it to customize paths)"
 fi
 
+# Lock down .env — contains PIN, SECRET_KEY, and any user-supplied tokens.
+chmod 600 .env 2>/dev/null || true
+
 # ─── SSL certs not needed — tunnel handles HTTPS ────────────────
 # The app runs HTTP on localhost only (not exposed). The cloudflared
 # tunnel provides trusted HTTPS externally. No local certs needed.

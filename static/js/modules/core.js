@@ -1,23 +1,25 @@
 // ===== Module: core =====
 // ═══ DeCloud ═══
 
-// ─── Auth: wrap all fetch calls with PIN cookie/header ────────
-// The login cookie (decloud_pin) is set by /api/auth/login and sent
-// automatically with same-origin requests. But we also add a Bearer
-// header as a fallback for cross-origin (tunnel) scenarios.
+// ─── Auth: wrap all fetch calls with session-token header ────────
+// The session cookie (decloud_session) is set by /api/auth/login and
+// sent automatically with same-origin requests. We also add a Bearer
+// header carrying the opaque session token as a fallback for
+// cross-origin (tunnel) scenarios. The PIN itself never lives in
+// browser storage.
 const _originalFetch = window.fetch;
 window.fetch = function(input, init) {
   init = init || {};
   // Don't modify if already has Authorization header
   if (!init.headers || (init.headers instanceof Headers && !init.headers.has('Authorization'))) {
-    // Add auth header from sessionStorage if we have a PIN
-    const pin = sessionStorage.getItem('decloud_pin');
-    if (pin) {
+    // Add auth header from sessionStorage if we have a session token
+    const token = sessionStorage.getItem('decloud_session');
+    if (token) {
       init.headers = init.headers || {};
       if (init.headers instanceof Headers) {
-        init.headers.set('Authorization', 'Bearer ' + pin);
+        init.headers.set('Authorization', 'Bearer ' + token);
       } else {
-        init.headers['Authorization'] = 'Bearer ' + pin;
+        init.headers['Authorization'] = 'Bearer ' + token;
       }
     }
   }
