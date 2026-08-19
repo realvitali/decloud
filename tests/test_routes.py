@@ -25,9 +25,10 @@ from app import app
 
 @pytest.fixture
 def client():
-    """Flask test client."""
+    """Flask test client, authenticated with the test passcode."""
     app.config['TESTING'] = True
     with app.test_client() as client:
+        client.post('/api/auth/login', json={'pin': os.environ.get('DECLOUD_PIN', '')})
         yield client
 
 
@@ -98,17 +99,25 @@ class TestBooks:
 
 
 class TestAuth:
-    """Authentication endpoints."""
+    """Authentication endpoints (open-mode behavior via monkeypatch)."""
 
-    def test_check_auth_open_mode(self, client):
+    def test_check_auth_open_mode(self, client, monkeypatch):
         """In open mode (no DECLOUD_PIN), auth check should pass."""
+        import shared
+        import routes.auth as auth_module
+        monkeypatch.setattr(shared, 'DECLOUD_PIN', '')
+        monkeypatch.setattr(auth_module, 'DECLOUD_PIN', '')
         resp = client.get('/api/auth/check')
         assert resp.status_code == 200
         data = resp.get_json()
-        assert data['authenticated'] == True
-        assert data['open_mode'] == True
+        assert data['authenticated'] is True
+        assert data['open_mode'] is True
 
-    def test_login_open_mode(self, client):
-        """In open mode, login should succeed without PIN."""
+    def test_login_open_mode(self, client, monkeypatch):
+        """In open mode, login should succeed without a passcode."""
+        import shared
+        import routes.auth as auth_module
+        monkeypatch.setattr(shared, 'DECLOUD_PIN', '')
+        monkeypatch.setattr(auth_module, 'DECLOUD_PIN', '')
         resp = client.post('/api/auth/login', json={'pin': ''})
         assert resp.status_code == 200
