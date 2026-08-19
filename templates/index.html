@@ -548,6 +548,15 @@
         <button class="settings-export-btn" onclick="forceRefresh()">Clear Cache &amp; Restart</button>
       </div>
       <div class="settings-group">
+        <div class="settings-label">Updates</div>
+        <div class="settings-note" id="update-status">Not checked yet.</div>
+        <div id="update-actions" style="display:none;margin-top:8px">
+          <button class="settings-save-btn" id="update-go-btn" onclick="performUpdate()">Update &amp; Restart</button>
+          <button class="settings-note-btn" id="update-rollback-btn" style="display:none" onclick="performRollback()">↩ Revert last update</button>
+        </div>
+        <button class="settings-note-btn" onclick="checkForUpdates(true)">Check for updates</button>
+      </div>
+      <div class="settings-group">
         <div class="settings-label">About</div>
         <div class="about-blurb">Self-hosted PWA dashboard. Tailscale-only, no accounts, no cloud. MIT licensed.</div>
         <div class="about-madeby">Made by linux.user01</div>
