@@ -14,10 +14,33 @@ then relies on the passcode alone for LAN-visible traffic.
 """
 import os, sys
 
-from shared import app, sock
-from routes import register_blueprints
-
-register_blueprints(app, sock)
+# ─── Update safety net ────────────────────────────────────────────
+# If the previous self-update is fresh and THIS boot fails during
+# startup, check the last-good revision back out before exiting, so
+# the service manager (systemd Restart=always) brings the working
+# version up instead of crash-looping on broken code. Boot probes
+# spawned by the updater skip this (they must not move the tree).
+try:
+    from shared import app, sock
+    from routes import register_blueprints
+    from routes.update import rollback_on_failed_boot, clear_marker_after_healthy_uptime
+    from routes.update import read_update_meta
+    register_blueprints(app, sock)
+    if os.environ.get('DECLOUD_UPDATE_PROBE') != '1':
+        _meta = read_update_meta()
+        if _meta.get('state') in ('installed', 'rolled_back', 'prepared'):
+            clear_marker_after_healthy_uptime()
+except Exception as _boot_error:
+    if os.environ.get('DECLOUD_UPDATE_PROBE') != '1':
+        try:
+            from routes.update import rollback_on_failed_boot
+            if rollback_on_failed_boot():
+                print('[DeCloud] startup failed after a recent update — '
+                      'rolled back to the previous version. Restarting…',
+                      flush=True)
+        except Exception:
+            pass
+    raise
 
 
 if __name__ == '__main__':

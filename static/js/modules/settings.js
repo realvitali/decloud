@@ -26,6 +26,7 @@ function loadAbout() {
     document.getElementById('about-version').textContent = '?';
     document.getElementById('about-changelog').innerHTML = '<p>Unable to load version info.</p>';
   });
+  checkForUpdates(false);
 }
 
 function loadSettings() {
@@ -191,3 +192,113 @@ function exportLogs() {
 }
 
 // ─── App Usage Tracking ────────────────────────────────
+
+// ─── Self-update (Settings → About) ──────────────────────
+var _updateState = null;
+
+async function checkForUpdates(manual) {
+  var status = document.getElementById('update-status');
+  var actions = document.getElementById('update-actions');
+  if (status) status.textContent = 'Checking for updates…';
+  try {
+    var r = await fetch('/api/system/update/check');
+    var d = await r.json();
+    _updateState = d;
+
+    if (!d.is_git) {
+      if (status) status.textContent = 'Updates unavailable — this install is not a git checkout.';
+      if (actions) actions.style.display = 'none';
+      return;
+    }
+    if (!d.tree_clean) {
+      if (status) status.textContent = 'Local files have been modified — updates are paused to protect your changes.';
+      if (actions) actions.style.display = 'none';
+      return;
+    }
+    if (d.update_available && d.latest && d.latest.tag) {
+      var notes = d.latest.notes ? ' — ' + d.latest.notes.split('\n')[0].slice(0, 120) : '';
+      if (status) status.textContent = 'Update available: ' + d.latest.tag +
+        ' (you are on v' + d.current_version + ')' + notes;
+      var go = document.getElementById('update-go-btn');
+      if (go) go.setAttribute('data-ref', d.latest.tag);
+      if (actions) actions.style.display = '';
+    } else {
+      if (status) status.textContent = 'You are up to date (v' + d.current_version + ').';
+      if (actions) actions.style.display = d.can_rollback ? '' : 'none';
+    }
+    var rb = document.getElementById('update-rollback-btn');
+    if (rb) rb.style.display = d.can_rollback ? '' : 'none';
+  } catch (e) {
+    if (status) status.textContent = 'Could not check for updates: ' + (e.message || 'network error');
+  }
+}
+
+async function performUpdate() {
+  var go = document.getElementById('update-go-btn');
+  var ref = go ? go.getAttribute('data-ref') : '';
+  if (!ref) return;
+  if (!confirm('Update DeCloud to ' + ref + '?\n\nThe new version is downloaded, verified, and test-booted before anything restarts. Your passcode, settings, books, and files are untouched. If the new version fails to start, DeCloud reverts automatically.')) return;
+  var status = document.getElementById('update-status');
+  if (status) status.textContent = 'Updating to ' + ref + '… (this can take a minute)';
+  try {
+    var r = await fetch('/api/system/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ref: ref })
+    });
+    var d = await r.json();
+    if (!r.ok) {
+      if (status) status.textContent = 'Update did not apply: ' + (d.error || r.status);
+      return;
+    }
+    if (status) status.textContent = d.message + ' — ' + (d.to || ref);
+    if (d.restart === 'scheduled') {
+      _waitForRestart(ref);
+    }
+  } catch (e) {
+    if (status) status.textContent = 'Update error: ' + (e.message || 'network');
+  }
+}
+
+async function performRollback() {
+  if (!confirm('Revert to the version from before the last update? DeCloud will restart.')) return;
+  var status = document.getElementById('update-status');
+  if (status) status.textContent = 'Reverting…';
+  try {
+    var r = await fetch('/api/system/update/rollback', { method: 'POST' });
+    var d = await r.json();
+    if (!r.ok) {
+      if (status) status.textContent = 'Revert did not apply: ' + (d.error || r.status);
+      return;
+    }
+    if (status) status.textContent = 'Reverted — restarting…';
+    _waitForRestart(null);
+  } catch (e) {
+    if (status) status.textContent = 'Revert error: ' + (e.message || 'network');
+  }
+}
+
+async function _waitForRestart(toRef) {
+  // The server kills itself ~2s after responding; poll until it's back
+  // (systemd restarts it in ~3s), then reload the page for fresh assets.
+  for (var i = 0; i < 30; i++) {
+    await new Promise(function(res) { setTimeout(res, 3000); });
+    try {
+      var r = await fetch('/api/version');
+      if (r.ok) {
+        var d = await r.json();
+        if (!toRef || d.version === toRef.replace(/^v/, '')) {
+          setTimeout(function() { location.reload(); }, 500);
+          return;
+        }
+      }
+    } catch (e) { /* still down */ }
+  }
+  var status = document.getElementById('update-status');
+  if (status) status.textContent = 'The app is taking a while to come back — refresh the page in a minute. If it is still down, DeCloud has automatically reverted; check again shortly.';
+}
+
+// Expose for inline onclick handlers
+window.checkForUpdates = checkForUpdates;
+window.performUpdate = performUpdate;
+window.performRollback = performRollback;

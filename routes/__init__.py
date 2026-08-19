@@ -56,6 +56,9 @@ def register_blueprints(app, sock):
     from .version import bp as version_bp
     app.register_blueprint(version_bp)
 
+    from .update import bp as update_bp
+    app.register_blueprint(update_bp)
+
     # WebSocket routes (need sock instance)
     if sock is not None:
         from .terminal import register as register_terminal
