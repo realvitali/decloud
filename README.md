@@ -51,7 +51,7 @@ DeCloud uses **Tailscale Funnel** for secure remote access:
 - **End-to-end encrypted** — WireGuard + TLS 1.3
 - **Friends don't need Tailscale** — they just open the link
 
-The first time you open DeCloud, enter your PIN to unlock.
+The first time you open DeCloud, enter your passcode to unlock (tap ✓ after typing).
 
 ## Configuration
 
@@ -60,7 +60,7 @@ All configuration is via environment variables in `.env` (see `.env.example`):
 | Variable | Default | Description |
 |---|---|---|
 | `DECLOUD_PORT` | `8899` | Port to run on |
-| `DECLOUD_PIN` | *(random)* | PIN to unlock the app |
+| `DECLOUD_PIN` | *(random)* | Passcode to unlock the app (8+ chars recommended) |
 | `DECLOUD_BOOKS_DIR` | `~/Books` | Where your books live |
 | `DECLOUD_FILES_DIR` | `~/Files` | Directory for the Files browser |
 | `DECLOUD_MUSIC_DIR` | `~/Music/decloud-music` | Music library path |
@@ -165,11 +165,50 @@ journalctl --user -u decloud -f      # View live logs
 
 ## Security
 
-- **PIN authentication** — required to unlock the app
-- **Rate limiting** — 5 attempts per minute on login
-- **Localhost only** — app binds to 127.0.0.1, never exposed directly
-- **Tailscale Funnel** — end-to-end encrypted tunnel, no open ports
-- **No telemetry** — zero tracking, zero analytics
+- **Passcode authentication** — the app is locked behind `DECLOUD_PIN`
+  (8 digits generated at install; passphrases up to 64 chars). The
+  passcode is only used at login; after that the app uses an opaque
+  session token (never the passcode) with a 30-day expiry.
+- **CSRF protection** — state-changing requests require a per-session
+  CSRF token.
+- **Rate limiting + lockout** — 5 login attempts per minute per IP, with
+  exponential backoff after repeated failures.
+- **Localhost by default** — the app binds to 127.0.0.1 unless you
+  explicitly set `DECLOUD_HOST`; binding wider prints a loud warning.
+- **Tailscale Funnel only** — no third-party relay fallbacks. End-to-end
+  encrypted tunnel, no open ports. (cloudflared works manually if you
+  prefer.)
+- **Hardened shell** — quick commands run shell-free from a fixed
+  allowlist; the interactive terminal requires the session token,
+  including over tunnels.
+- **Security headers** — CSP, X-Frame-Options, nosniff, Referrer-Policy,
+  and no-store caching on API responses.
+- **Local-only usage stats** — the Usage screen logs activity to a local
+  JSON file; nothing is tracked externally, nothing leaves your machine.
+
+See [SECURITY_AUDIT.md](SECURITY_AUDIT.md) for the full audit and its
+accepted limitations.
+
+## Testing
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest tests/        # 74 security + smoke tests
+```
+
+CI runs the suite on Ubuntu, macOS, and Windows.
+
+## Windows
+
+Windows is supported (the app itself runs anywhere Python 3.10+ does):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup.ps1   # install + logon task
+.\decloud.ps1 status                                   # manage the app
+```
+
+The interactive web terminal requires Linux/macOS (it uses a PTY) and
+shows a friendly message on Windows; every other feature works.
 
 ## License
 

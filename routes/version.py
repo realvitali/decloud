@@ -8,9 +8,30 @@ bp = Blueprint('version', __name__)
 
 VERSION_FILE = Path(__file__).parent.parent / 'version.json'
 
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 CHANGELOG = [
+    {
+        "version": "0.0.2",
+        "date": "2026-08-19",
+        "changes": [
+            "Security: opaque session tokens replace the PIN cookie — the passcode is never stored in the browser",
+            "Security: CSRF protection on all state-changing requests",
+            "Security: WebSocket terminal/voice sockets require the session token (works over tunnels now)",
+            "Security: quick commands run shell-free (allowlisted argv table, no shell=True)",
+            "Security: brute-force backoff + rate limits on login; 8-digit passcode default",
+            "Security: removed third-party localhost.run relay — Tailscale Funnel only",
+            "Security: binds 127.0.0.1 by default; loud warning otherwise",
+            "Security: CSP, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy headers",
+            "Books: correct chapter counts per book (no more 30-chapter cap)",
+            "Books: reading position syncs across devices (phone and laptop resume the same spot)",
+            "Books: cover generator uses cross-platform fonts",
+            "AI chat: consistent default model, input caps, real error messages from summarize/Q&A",
+            "Cross-platform: real OS detection (Debian/Fedora/macOS/Windows)",
+            "Windows: setup.ps1 installer + decloud.ps1 lifecycle wrapper; terminal degrades gracefully",
+            "Tests: 74 security tests (auth, CSRF, WebSocket, allowlist, traversal, symlinks) + CI on Ubuntu/macOS/Windows",
+        ]
+    },
     {
         "version": "0.0.1",
         "date": "2026-08-14",
