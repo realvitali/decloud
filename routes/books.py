@@ -244,12 +244,81 @@ def book_settings(book_id):
     settings_file.write_text(json.dumps(settings, indent=2))
     return jsonify(settings)
 
+# ─── API: Reading position sync (cross-device resume) ──────────
+# The PWA saves playback/bookmark position in localStorage per device.
+# These endpoints mirror that state on the server so a phone and a
+# laptop resume from the same spot. The newest write wins (by epoch).
+def _position_file(book_id):
+    return AUDIO_DIR / f'{book_id}_position.json'
+
+@bp.route('/api/book/<book_id>/position', methods=['GET', 'POST'])
+def book_position(book_id):
+    import time as _time
+    pos_file = _position_file(book_id)
+    if request.method == 'GET':
+        if pos_file.exists():
+            try:
+                return jsonify(json.loads(pos_file.read_text()))
+            except Exception:
+                pass
+        return jsonify({})
+
+    # POST — validate and merge, newest fields win
+    data = request.get_json(silent=True) or {}
+    current = {}
+    if pos_file.exists():
+        try:
+            current = json.loads(pos_file.read_text())
+        except Exception:
+            current = {}
+
+    now = _time.time()
+    updated = False
+
+    def _merge_section(key, allowed_keys):
+        nonlocal updated
+        incoming = data.get(key)
+        if not isinstance(incoming, dict):
+            return
+        section = dict(current.get(key) or {})
+        for k in allowed_keys:
+            if k not in incoming:
+                continue
+            v = incoming[k]
+            # Strict types: indices are ints, positions/times are numbers
+            if k in ('chapter', 'word_index') and not isinstance(v, int):
+                continue
+            if k in ('time', 'scroll') and not isinstance(v, (int, float)):
+                continue
+            if v != section.get(k):
+                section[k] = v
+                section['updated'] = now
+                updated = True
+        if section:
+            current[key] = section
+            updated = True
+
+    _merge_section('audio', ('chapter', 'time'))
+    _merge_section('reader', ('chapter', 'word_index', 'scroll'))
+    if isinstance(data.get('mode'), str) and data['mode'] in ('audio', 'reader'):
+        if current.get('mode') != data['mode']:
+            current['mode'] = data['mode']
+            updated = True
+
+    if updated:
+        current['updated'] = now
+        try:
+            pos_file.write_text(json.dumps(current, indent=2))
+        except OSError as e:
+            return jsonify({'error': f'could not save position: {e}'}), 500
+    return jsonify(current)
+
 # ─── API: Book Chapter Status ────────────────────────────────
 @bp.route('/api/book/<book_id>/chapters')
 def book_chapters(book_id):
     """Return per-chapter status for a book."""
     chapters = []
-    for i in range(30):
+    for i in range(200):
         chapter_file = AUDIO_DIR / f'{book_id}_chapter_{i}.mp3'
         if chapter_file.exists():
             chapters.append({'index': i, 'status': 'done', 'size_kb': chapter_file.stat().st_size // 1024})
@@ -321,10 +390,25 @@ def _ensure_book_cover(book_id):
         img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
         draw = ImageDraw.Draw(img)
         title = book_id.replace('_', ' ')
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
-        except Exception:
-            font = ImageFont.load_default()
+        # Cross-platform font: try common system fonts, then Pillow's
+        # bundled default (which supports a size parameter on Pillow >= 10.1).
+        font = None
+        font_candidates = [
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',       # Debian/Ubuntu/Fedora
+            '/System/Library/Fonts/Supplemental/Arial Bold.ttf',          # macOS
+            'C:/Windows/Fonts/arialbd.ttf',                               # Windows
+        ]
+        for cand in font_candidates:
+            try:
+                font = ImageFont.truetype(cand, 28)
+                break
+            except Exception:
+                continue
+        if font is None:
+            try:
+                font = ImageFont.load_default(size=28)
+            except TypeError:
+                font = ImageFont.load_default()
         words = title.split()
         lines = []
         line = ""
@@ -483,6 +567,8 @@ def summarize():
                 {'role': 'system', 'content': 'Summarize the passage in 1-2 short sentences. Plain language. No em dashes.'},
                 {'role': 'user', 'content': f'"{current_title}"\n\n{chapter_portion[:4000]}'}
             ], timeout=30)
+            if msg.startswith('[LLM error'):
+                return jsonify({'error': msg}), 503
             result['chapter_summary'] = msg
         else:
             result['chapter_summary'] = 'Not enough text read yet. Keep reading!'
@@ -503,6 +589,8 @@ def summarize():
                 {'role': 'system', 'content': 'Summarize everything the reader has covered in one short paragraph. Main themes and how ideas connect. Plain language. No em dashes.'},
                 {'role': 'user', 'content': f'Book: "{book_id.replace("_", " ")}"\n\n{combined[:6000]}'}
             ], timeout=60)
+            if msg.startswith('[LLM error'):
+                return jsonify({'error': msg}), 503
             result['sofar_summary'] = msg
         else:
             result['sofar_summary'] = 'Not enough text read yet. Keep reading!'
@@ -545,6 +633,8 @@ def ask_question():
         {'role': 'system', 'content': 'You are a friendly study companion helping the user understand a book they are reading. Answer their question based on the context provided. Be concise, clear, and conversational. If the answer is not in the context, say so. Do not use em dashes.'},
         {'role': 'user', 'content': f'Context:\n{full_context}\n\nQuestion: {question}'}
     ])
+    if answer.startswith('[LLM error'):
+        return jsonify({'error': answer}), 503
 
     return jsonify({'answer': answer})
 
