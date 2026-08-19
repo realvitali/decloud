@@ -1,7 +1,7 @@
 """System info and network stats routes."""
 from flask import Blueprint, jsonify, request
 import platform, psutil, time
-from shared import _network_last
+from shared import _network_last, detect_os
 
 bp = Blueprint('system', __name__)
 
@@ -21,9 +21,12 @@ def system_info():
         except:
             pass
 
+        osinfo = detect_os()
         return jsonify({
             'hostname': platform.node(),
-            'os': 'Linux Mint 22.3',
+            'os': osinfo['name'],
+            'os_version': osinfo['version'],
+            'os_kernel': osinfo['kernel'],
             'cpu_percent': psutil.cpu_percent(interval=0.5),
             'cpu_cores': psutil.cpu_count(),
             'ram_total': vm.total,

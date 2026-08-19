@@ -35,15 +35,8 @@
       </svg>
     </div>
     <div class="login-title">DeCloud</div>
-    <div class="login-subtitle">Enter PIN to continue</div>
-    <div class="login-dots" id="login-dots">
-      <span class="login-dot"></span>
-      <span class="login-dot"></span>
-      <span class="login-dot"></span>
-      <span class="login-dot"></span>
-      <span class="login-dot"></span>
-      <span class="login-dot"></span>
-    </div>
+    <div class="login-subtitle">Enter passcode to continue</div>
+    <div class="login-dots" id="login-dots"></div>
     <div class="login-error" id="login-error"></div>
     <div class="login-keypad" id="login-keypad">
       <button class="login-key" data-key="1" onclick="loginPress('1')">1</button>
@@ -55,7 +48,9 @@
       <button class="login-key" data-key="7" onclick="loginPress('7')">7<span class="login-key-sub">PQRS</span></button>
       <button class="login-key" data-key="8" onclick="loginPress('8')">8<span class="login-key-sub">TUV</span></button>
       <button class="login-key" data-key="9" onclick="loginPress('9')">9<span class="login-key-sub">WXYZ</span></button>
-      <button class="login-key login-key-blank" disabled></button>
+      <button class="login-key login-key-go" onclick="loginGo()">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>
       <button class="login-key" data-key="0" onclick="loginPress('0')">0</button>
       <button class="login-key login-key-back" onclick="loginBack()">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

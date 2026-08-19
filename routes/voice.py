@@ -23,7 +23,7 @@ def voice_stt():
         model_name = request.form.get('model', 'base')
 
         # Save to temp wav file
-        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False, dir='/tmp') as tmp:
+        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False, dir=tempfile.gettempdir()) as tmp:
             audio_file.save(tmp.name)
             tmp_path = tmp.name
 
@@ -69,7 +69,7 @@ def voice_tts():
         model_path = os.path.join(os.path.dirname(__file__), engine['model'])
         config_path = model_path.replace('.onnx', '.onnx.json')
 
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False, dir='/tmp') as tmp:
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False, dir=tempfile.gettempdir()) as tmp:
             output_path = tmp.name
 
         proc = subprocess.run(
@@ -105,7 +105,7 @@ def voice_tts_stream():
     model_path = os.path.join(os.path.dirname(__file__), engine['model'])
     config_path = model_path.replace('.onnx', '.onnx.json')
 
-    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False, dir='/tmp') as tmp:
+    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False, dir=tempfile.gettempdir()) as tmp:
         output_path = tmp.name
 
     proc = subprocess.run(
@@ -143,7 +143,7 @@ def voice_hermes():
             return jsonify({'error': 'No audio file provided'}), 400
 
         # 1. STT - transcribe audio
-        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False, dir='/tmp') as tmp:
+        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False, dir=tempfile.gettempdir()) as tmp:
             audio_file.save(tmp.name)
             tmp_path = tmp.name
 
@@ -204,7 +204,7 @@ def voice_hermes():
         engine = TTS_ENGINES.get(tts_engine_id, TTS_ENGINES['piper-lessac-high'])
 
         audio_id = str(uuid.uuid4())[:8]
-        audio_out = f'/tmp/voice_hermes_{audio_id}.wav'
+        audio_out = os.path.join(tempfile.gettempdir(), f'voice_hermes_{audio_id}.wav')
 
         subprocess.run(
             engine['cmd'] + ['-m', engine['model'], '-t', reply_text, '-o', audio_out],
@@ -431,7 +431,22 @@ def vui_load_voice_proxy():
 def register(sock):
     @sock.route('/api/voice/vui/ws')
     def vui_ws_proxy(ws):
-        """Proxy WebSocket messages between browser and Vui's WS endpoint."""
+        """Proxy WebSocket messages between browser and Vui's WS endpoint.
+
+        Authentication is checked HERE because Flask's before_request
+        hooks never run for WebSocket upgrades."""
+        from shared import ws_is_authenticated
+        if not ws_is_authenticated(getattr(ws, 'environ', {})):
+            try:
+                ws.send(json.dumps({'type': 'error', 'text': 'Authentication required'}))
+            except Exception:
+                pass
+            try:
+                ws.close()
+            except Exception:
+                pass
+            return
+
         import urllib.parse
         cid = request.args.get('cid', '')
         vui_ws_url = f'ws://127.0.0.1:8081/ws?cid={urllib.parse.quote(cid)}'

@@ -22,8 +22,11 @@ get_tunnel_url() {
         cat "$TUNNEL_URL_FILE"
         return 0
     fi
-    
-    # Check for Tailscale funnel
+
+    # Tailscale Funnel is the only supported tunnel. We deliberately do
+    # NOT fall back to third-party relays (localhost.run etc.): those
+    # terminate TLS on someone else's box and forward plaintext HTTP,
+    # which contradicts DeCloud's privacy story.
     if command -v tailscale &>/dev/null && tailscale status &>/dev/null; then
         URL=$(tailscale funnel status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
         if [ -n "$URL" ]; then
@@ -32,17 +35,9 @@ get_tunnel_url() {
             return 0
         fi
     fi
-    
-    # Otherwise parse from log (localhost.run)
-    if [ ! -f "$TUNNEL_LOG" ]; then
-        echo ""
-        return 1
-    fi
-    URL=$(sed 's/\x1b\[[0-9;]*m//g' "$TUNNEL_LOG" 2>/dev/null | grep -oP 'https://[a-z0-9]+\.lhr\.life' | head -1)
-    if [ -n "$URL" ]; then
-        echo "$URL" > "$TUNNEL_URL_FILE"
-    fi
-    echo "$URL"
+
+    echo ""
+    return 1
 }
 
 start_app() {
@@ -76,31 +71,36 @@ stop_app() {
 start_tunnel() {
     # Kill existing tunnel
     stop_tunnel
-    
+
     echo "Starting Tailscale Funnel..."
     # Check if tailscale is available
     if ! command -v tailscale &>/dev/null; then
-        echo "⚠ Tailscale not installed — falling back to localhost.run"
-        start_tunnel_localhost
-        return $?
+        echo "⚠ Tailscale not installed — skipping tunnel."
+        echo "  Install it: curl -fsSL https://tailscale.com/install.sh | sh"
+        echo "  Then run:   sudo tailscale up  (login to your account)"
+        echo "  Then:       ./decloud start"
+        echo "  (Alternative: run your own tunnel, e.g."
+        echo "   cloudflared tunnel --url http://localhost:$PORT)"
+        return 1
     fi
-    
+
     # Check if tailscale is running
     if ! tailscale status &>/dev/null; then
-        echo "⚠ Tailscale not running — falling back to localhost.run"
-        start_tunnel_localhost
-        return $?
+        echo "⚠ Tailscale not running — skipping tunnel."
+        echo "  Run: sudo tailscale up  (login to your account)"
+        echo "  Then: ./decloud start"
+        return 1
     fi
-    
+
     # Start funnel in background
     setsid nohup tailscale funnel --bg --https=443 http://localhost:$PORT \
         > "$TUNNEL_LOG" 2>&1 < /dev/null &
     echo $! > "$TUNNEL_PID_FILE"
     disown
-    
+
     echo "Waiting for funnel..."
     sleep 3
-    
+
     # Get the funnel URL
     URL=$(tailscale funnel status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
     if [ -n "$URL" ]; then
@@ -108,7 +108,7 @@ start_tunnel() {
         echo "✓ Funnel active: $URL"
         return 0
     fi
-    
+
     # Fallback: try to get from tailscale status
     HOSTNAME=$(tailscale status --json 2>/dev/null | grep -oP '"HostName":\s*"[^"]+"' | head -1 | cut -d'"' -f4)
     TAILNET=$(tailscale status --json 2>/dev/null | grep -oP '"MagicDNSSuffix":\s*"[^"]+"' | cut -d'"' -f4)
@@ -118,30 +118,8 @@ start_tunnel() {
         echo "✓ Funnel active: $URL"
         return 0
     fi
-    
-    echo "⚠ Funnel failed — check tunnel.log"
-    return 1
-}
 
-start_tunnel_localhost() {
-    echo "Starting localhost.run tunnel..."
-    setsid nohup ssh -R 80:localhost:$PORT nokey@localhost.run \
-        -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-        -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
-        > "$TUNNEL_LOG" 2>&1 < /dev/null &
-    echo $! > "$TUNNEL_PID_FILE"
-    disown
-    
-    echo "Waiting for tunnel..."
-    for i in $(seq 1 20); do
-        URL=$(get_tunnel_url)
-        if [ -n "$URL" ]; then
-            echo "✓ Tunnel active: $URL"
-            return 0
-        fi
-        sleep 1
-    done
-    echo "⚠ Tunnel failed — check tunnel.log"
+    echo "⚠ Funnel failed — check tunnel.log"
     return 1
 }
 
@@ -150,13 +128,11 @@ stop_tunnel() {
     if command -v tailscale &>/dev/null; then
         tailscale funnel --https=443 off 2>/dev/null || true
     fi
-    
-    # Kill SSH tunnel
+
     if [ -f "$TUNNEL_PID_FILE" ]; then
         kill $(cat "$TUNNEL_PID_FILE") 2>/dev/null || true
         rm -f "$TUNNEL_PID_FILE"
     fi
-    pkill -f "localhost.run" 2>/dev/null || true
     rm -f "$TUNNEL_URL_FILE"  # Clear cached URL
 }
 
@@ -179,25 +155,26 @@ show_qr() {
         return 1
     fi
     
-    PIN=$(grep DECLOUD_PIN .env 2>/dev/null | cut -d= -f2 || echo "not set")
-    
+    PASSCODE=$(grep DECLOUD_PIN .env 2>/dev/null | cut -d= -f2 || echo "not set")
+
     echo ""
     echo "📱 DeCloud Tunnel"
     echo "════════════════════════════════════════"
     echo "URL: $URL"
-    echo "PIN: $PIN"
+    echo "Passcode: $PASSCODE"
     echo ""
-    
+
     if command -v qrencode &>/dev/null; then
         qrencode -t ANSIUTF8 "$URL" 2>/dev/null || qrencode -t ANSI "$URL" 2>/dev/null
         echo ""
     else
         echo "(Install qrencode for QR code: sudo apt install qrencode)"
     fi
-    
+
     echo ""
-    echo "⚠️  This is a TEMPORARY tunnel (changes every few hours)"
-    echo "   For permanent access, see: PERMANENT_TUNNEL.md"
+    echo "🔒 The URL is public (https://….ts.net) — anyone who opens it"
+    echo "   still needs the passcode to unlock anything."
+    echo "   For private (tailnet-only) access, see: PERMANENT_TUNNEL.md"
     echo ""
 }
 

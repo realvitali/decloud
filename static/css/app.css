@@ -4525,6 +4525,15 @@ body {
 .login-key-blank {
   visibility: hidden;
 }
+.login-key-go {
+  color: white;
+  background: var(--accent);
+  border: none;
+}
+.login-key-go:active {
+  opacity: 0.85;
+  transform: scale(0.94);
+}
 .login-key-back {
   color: var(--text-dim);
 }

@@ -1,9 +1,9 @@
 // ===== Module: auth =====
-// PIN login screen logic — checks auth on load, shows login if needed.
+// Passcode login screen logic — checks auth on load, shows login if needed.
 
 let _loginPin = '';
 let _loginBusy = false;
-const _LOGIN_PIN_LENGTH = 6;
+const _LOGIN_PIN_MAX = 10;  // keypad supports 6–10 digits; longer passcodes via UI only
 
 // Check auth on page load — show login screen or main app
 (async function checkAuthOnLoad() {
@@ -11,7 +11,8 @@ const _LOGIN_PIN_LENGTH = 6;
     const r = await fetch('/api/auth/check');
     const d = await r.json();
     if (d.authenticated) {
-      // Already authenticated — make sure login is hidden
+      // Already authenticated — stash the CSRF token for state-changing calls
+      if (d.csrf) sessionStorage.setItem('decloud_csrf', d.csrf);
       hideLoginScreen();
     } else {
       // Need to log in
@@ -29,6 +30,7 @@ function showLoginScreen() {
   if (login) login.style.display = 'flex';
   // Hide all app screens
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  renderLoginDots();
 }
 
 function hideLoginScreen() {
@@ -39,31 +41,41 @@ function hideLoginScreen() {
   if (home) home.classList.add('active');
 }
 
-function updateLoginDots() {
-  const dots = document.querySelectorAll('#login-dots .login-dot');
-  dots.forEach((dot, i) => {
-    dot.classList.toggle('filled', i < _loginPin.length);
-  });
+function renderLoginDots() {
+  const dots = document.getElementById('login-dots');
+  if (!dots) return;
+  dots.innerHTML = '';
+  for (let i = 0; i < Math.max(_loginPin.length, 1); i++) {
+    const span = document.createElement('span');
+    span.className = 'login-dot' + (i < _loginPin.length ? ' filled' : '');
+    dots.appendChild(span);
+  }
 }
 
 function loginPress(key) {
   if (_loginBusy) return;
-  if (_loginPin.length >= _LOGIN_PIN_LENGTH) return;
+  if (_loginPin.length >= _LOGIN_PIN_MAX) return;
   _loginPin += key;
-  updateLoginDots();
+  renderLoginDots();
   // Clear any previous error
   const err = document.getElementById('login-error');
   if (err) err.classList.remove('show');
-  if (_loginPin.length === _LOGIN_PIN_LENGTH) {
-    submitLogin();
+}
+
+function loginGo() {
+  if (_loginBusy) return;
+  if (_loginPin.length < 6) {
+    loginFail('Passcode is at least 6 digits');
+    return;
   }
+  submitLogin();
 }
 
 function loginBack() {
   if (_loginBusy) return;
   if (_loginPin.length > 0) {
     _loginPin = _loginPin.slice(0, -1);
-    updateLoginDots();
+    renderLoginDots();
     const err = document.getElementById('login-error');
     if (err) err.classList.remove('show');
   }
@@ -80,17 +92,21 @@ async function submitLogin() {
     });
     const d = await r.json();
     if (r.ok && d.ok) {
-      // Store session token (not the PIN) for the cross-origin Bearer fallback.
-      // The PIN must never leave the server beyond this login request.
+      // Store the session token (not the PIN) for the cross-origin Bearer
+      // fallback and the CSRF token for state-changing requests.
+      // The PIN must never live in browser storage.
       if (d.session) {
         sessionStorage.setItem('decloud_session', d.session);
+      }
+      if (d.csrf) {
+        sessionStorage.setItem('decloud_csrf', d.csrf);
       }
       // Success — reload to get the main app with auth cookie set
       window.location.reload();
       return;
     }
     // Failed — show error and shake
-    loginFail(d.error || 'Invalid PIN');
+    loginFail(d.error || 'Invalid passcode');
   } catch (e) {
     loginFail('Network error — try again');
   }
@@ -99,7 +115,7 @@ async function submitLogin() {
 function loginFail(msg) {
   _loginBusy = false;
   _loginPin = '';
-  updateLoginDots();
+  renderLoginDots();
   const err = document.getElementById('login-error');
   if (err) {
     err.textContent = msg;
@@ -123,8 +139,12 @@ async function logout() {
     console.warn('Logout request failed:', e);
   }
   sessionStorage.removeItem('decloud_session');
+  sessionStorage.removeItem('decloud_csrf');
   window.location.reload();
 }
 
 // Expose for inline onclick handlers
 window.logout = logout;
+window.loginPress = loginPress;
+window.loginBack = loginBack;
+window.loginGo = loginGo;

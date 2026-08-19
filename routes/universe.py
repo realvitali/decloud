@@ -34,7 +34,7 @@ def journal_voice():
         if not audio_file:
             return jsonify({'error': 'No audio file provided'}), 400
 
-        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False, dir='/tmp') as tmp:
+        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False, dir=tempfile.gettempdir()) as tmp:
             audio_file.save(tmp.name)
             tmp_path = tmp.name
 

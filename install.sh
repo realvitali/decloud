@@ -133,8 +133,9 @@ if [ ! -f .env ]; then
         sed -i "s/change-me-to-a-random-string/$SECRET/" .env
     fi
 
-    # Generate a random 6-digit PIN for app access
-    PIN=$($PYBIN -c "import secrets; print(''.join(str(secrets.randbelow(10)) for _ in range(6)))")
+    # Generate a random 8-digit passcode for app access (longer = harder
+    # to brute-force; the app warns if you shorten it below 8 characters)
+    PIN=$($PYBIN -c "import secrets; print(''.join(str(secrets.randbelow(10)) for _ in range(8)))")
     echo "DECLOUD_PIN=$PIN" >> .env
     echo "✓ .env created (edit it to customize paths)"
 fi

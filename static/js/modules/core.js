@@ -23,6 +23,20 @@ window.fetch = function(input, init) {
       }
     }
   }
+  // CSRF token on state-changing requests (server requires it when the
+  // request is authenticated only by cookie)
+  const method = (init.method || 'GET').toUpperCase();
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrf = sessionStorage.getItem('decloud_csrf');
+    if (csrf) {
+      init.headers = init.headers || {};
+      if (init.headers instanceof Headers) {
+        init.headers.set('X-CSRF-Token', csrf);
+      } else {
+        init.headers['X-CSRF-Token'] = csrf;
+      }
+    }
+  }
   // Always include credentials (cookies)
   init.credentials = 'same-origin';
   return _originalFetch.call(this, input, init);
