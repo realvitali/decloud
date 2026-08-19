@@ -19,10 +19,11 @@ async function loadBooks() {
     }
     document.getElementById('book-list').innerHTML = books.map(b => {
       const statusClass = b.status === 'ready' ? 'ready' : b.status === 'generating' ? 'generating' : 'new';
-      const statusText = b.status === 'ready' ? `${b.total_chapters} chapters` :
-                         b.status === 'generating' ? 'Generating' :
-                         b.total_chapters > 0 ? `${b.total_chapters}/${b.chapters.length}` :
-                         'Not generated';
+      const done = b.chapters_done || 0;
+      const total = b.total_chapters;
+      const statusText = b.status === 'ready' ? (total ? `${total} chapters` : `${done} chapters`) :
+                         b.status === 'generating' ? (total ? `${done}/${total} chapters` : `${done} chapters done`) :
+                         total ? `${done}/${total} chapters` : 'Not generated';
       return `
         <div class="book-item" onclick="openBook('${b.id}', '${b.title.replace(/'/g,"\\'")}')">
           <div class="book-item-info">

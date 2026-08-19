@@ -61,7 +61,31 @@ def list_books():
             else:
                 status = 'new'
 
-            # Per-chapter status
+            # Real chapter counts: prefer the TTS worker's metadata file,
+            # then the JSON source length. PDFs/TXTs without metadata get
+            # None (unknown) so the UI can hide the number instead of lying.
+            chapters_done = 0
+            total_chapters = None
+            for i in range(200):  # generous cap — books can exceed 30 chapters
+                if (AUDIO_DIR / f'{book_id}_chapter_{i}.mp3').exists():
+                    chapters_done = i + 1
+                else:
+                    break
+            if json_meta.exists():
+                try:
+                    meta = json.loads(json_meta.read_text())
+                    if isinstance(meta.get('total_chapters'), int):
+                        total_chapters = meta['total_chapters']
+                except Exception:
+                    pass
+            if total_chapters is None and ftype == 'json':
+                try:
+                    with open(f) as jf:
+                        total_chapters = len(json.load(jf))
+                except Exception:
+                    pass
+
+            # Per-chapter status (backward-compatible 30-slot array)
             chapters = []
             for i in range(30):  # check up to 30 chapters
                 chapter_file = AUDIO_DIR / f'{book_id}_chapter_{i}.mp3'
@@ -79,7 +103,8 @@ def list_books():
                 'status': status,
                 'voice': settings.get('voice', 'kathleen-low'),
                 'chapters': chapters,
-                'total_chapters': len([c for c in chapters if c['status'] == 'done']),
+                'chapters_done': chapters_done,
+                'total_chapters': total_chapters,
             })
     return jsonify(books)
 
