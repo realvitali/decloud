@@ -80,8 +80,11 @@ async function submitLogin() {
     });
     const d = await r.json();
     if (r.ok && d.ok) {
-      // Store PIN for the fetch auth wrapper
-      sessionStorage.setItem('decloud_pin', _loginPin);
+      // Store session token (not the PIN) for the cross-origin Bearer fallback.
+      // The PIN must never leave the server beyond this login request.
+      if (d.session) {
+        sessionStorage.setItem('decloud_session', d.session);
+      }
       // Success — reload to get the main app with auth cookie set
       window.location.reload();
       return;
@@ -112,3 +115,16 @@ function loginFail(msg) {
   // Haptic feedback
   if (navigator.vibrate) navigator.vibrate(100);
 }
+
+async function logout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } catch (e) {
+    console.warn('Logout request failed:', e);
+  }
+  sessionStorage.removeItem('decloud_session');
+  window.location.reload();
+}
+
+// Expose for inline onclick handlers
+window.logout = logout;
