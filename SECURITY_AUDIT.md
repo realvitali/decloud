@@ -76,7 +76,7 @@ now solved with the explicit `?token=` mechanism.
   logger records paths only (no query strings). Tokens expire in 30 days
   and revoke on logout/restart.
 
-## Test coverage (74 tests, `pytest tests/`)
+## Test coverage (93 tests, `pytest tests/`)
 
 - Login: wrong passcode, missing passcode, raw-pin-as-Bearer rejection,
   cookie-is-token-not-pin, backoff/lockout, session cap, expiry, logout
@@ -92,8 +92,43 @@ now solved with the explicit `?token=` mechanism.
   destructive endpoint
 - Misc: security headers, API no-store, OS detection, Ollama input caps,
   book-position API (roundtrip, type rejection, newest-write-wins)
+- Self-updater: auth on all endpoints, ref whitelist, dirty-tree refusal
+  (fetch never runs), unknown-ref rejection, marker file handling,
+  boot-failure rollback logic
 
 CI runs the suite on Ubuntu, macOS, and Windows.
+
+## Self-update safety design
+
+The Settings → About updater is the highest-risk feature in the app (it
+can change the code the user runs remotely), so it is built fail-safe:
+
+1. **Explicit** — the UI shows the exact tag and release notes; nothing
+   updates silently. The ref is a whitelisted tag name; git receives it
+   as a single argument.
+2. **Read-only until verified** — `git fetch` first, then `git checkout
+   --detach` *without* `-f`, so git itself refuses to clobber any local
+   modification. A dirty working tree is refused before anything runs.
+3. **Verification before switch** — the new code must pass
+   `py_compile` AND a live boot probe on a scratch port. Any failure
+   checks the previous revision back out and the running app is never
+   touched.
+4. **Self-healing boot** — if the new code still crashes on the real
+   startup (within 10 minutes of the update), `app.py` checks out the
+   previous revision before exiting, so systemd's `Restart=always`
+   brings the working version up instead of crash-looping.
+5. **Revert path** — "Revert last update" returns to the recorded
+   pre-update revision through the same guarded path.
+6. **Bounded** — single-flight lock, 3 attempts/15 min rate limit,
+   cached read-only version check against a hardcoded GitHub host (no
+   SSRF surface).
+
+Verified live in a throwaway clone: a deliberately broken release was
+rejected by the boot probe and rolled back automatically with the
+working version left running; a good release applied cleanly; the
+revert endpoint returned to the previous revision. The restart is a
+detached SIGTERM→SIGKILL escalation handled by the service manager
+(install.sh sets `Restart=always`).
 
 ## Verdict
 
