@@ -69,9 +69,12 @@ def _tree_clean() -> bool:
     ok, out = _git('status', '--porcelain', timeout=15)
     if not ok:
         return False
-    # Ignore untracked files that are ours (caches, .env are gitignored
-    # anyway); any tracked modification or untracked file = refuse.
-    return out == ''
+    # Ignore our own update marker: after a rollback to an OLDER release
+    # whose .gitignore predates it, the marker shows up as an untracked
+    # file and would wrongly block the next update.
+    lines = [ln for ln in out.splitlines()
+             if '.update_meta.json' not in ln]
+    return not lines
 
 def _head_sha() -> str:
     ok, out = _git('rev-parse', 'HEAD', timeout=15)
