@@ -1,0 +1,2 @@
+# Development/test dependencies (not needed to run the app)
+pytest==8.4.1
