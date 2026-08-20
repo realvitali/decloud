@@ -3,6 +3,26 @@
 
 let botsState = { list: [], active: null, loading: false };
 
+// ─── History/back-button support ────────────────────────────────
+// Bot chats push #bot/<name>; popstate returns to the roster.
+window.addEventListener('popstate', () => {
+  const m = location.hash.match(/^#bot\/([a-z0-9_-]+)$/);
+  if (m) {
+    botsOpen(m[1], true);
+  } else if (botsState.active) {
+    // left the bot hash (back to #agents or home) — restore roster
+    botsRestoreRoster();
+  }
+});
+
+function botsRestoreRoster() {
+  const screen = document.getElementById('agents-content-inner') || document.querySelector('.agents-content');
+  if (screen && botsState.rosterHTML && botsState.active) {
+    screen.innerHTML = botsState.rosterHTML;
+  }
+  botsState.active = null;
+}
+
 async function botsLoad() {
   const el = document.getElementById('bots-roster');
   if (!el) return;
@@ -33,8 +53,9 @@ function botsRenderRoster(el) {
       <div class="bot-info">
         <div class="bot-name">${esc(b.title)}
           <span class="bot-model">${esc(b.model || 'no model')}</span></div>
-        <div class="bot-desc">${esc(b.description || b.name)}</div>
+        <div class="bot-preview">${esc(b.last_preview || b.description || b.name)}</div>
       </div>
+      ${b.last_ts ? `<span class="bot-ts">${esc(b.last_ts.slice(11,16))}</span>` : ''}
       ${b.protected ? '<span class="bot-tag-protected" title="Core profile">core</span>' : ''}
       <button class="bot-delete" title="Delete bot"
         onclick="event.stopPropagation(); botsDelete('${b.name}')">✕</button>
@@ -46,13 +67,18 @@ function esc(s) {
     c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-async function botsOpen(name) {
+async function botsOpen(name, fromPop) {
   const bot = botsState.list.find(b => b.name === name);
   if (!bot) return;
   botsState.active = name;
+  if (!fromPop) {
+    // real history entry so mobile back returns to the roster
+    if (location.hash !== `#bot/${name}`) history.pushState({}, '', `#bot/${name}`);
+  }
   // stash roster scroll, swap screen content to chat view
   const screen = document.getElementById('agents-content-inner') || document.querySelector('.agents-content');
-  botsState.rosterHTML = screen.innerHTML;
+  if (!botsState.rosterHTML) botsState.rosterHTML = screen.innerHTML;
+  const others = botsState.list.filter(b => b.name !== name);
   screen.innerHTML = `
     <div class="bot-chat-wrap">
       <div class="bot-chat-header" style="border-color:${bot.color}">
@@ -61,24 +87,138 @@ async function botsOpen(name) {
         <div class="bot-info"><div class="bot-name">${esc(bot.title)}</div>
         <div class="bot-model">${esc(bot.model || '')}</div></div>
         <button class="bot-chat-clear" onclick="botsClear('${name}')">Clear</button>
+        <button class="bot-persona-btn" onclick="botsTogglePersona('${name}')">Persona</button>
+        <select id="bot-model-picker" class="bot-model-picker" onchange="botsSwitchModel('${name}', this.value)">
+          <option value="">${esc(bot.model || 'default')}</option>
+        </select>
       </div>
       <div class="bot-chat-messages" id="bot-msgs"><div class="text-dim">Loading…</div></div>
+      <div class="bot-routines" id="bot-routines"></div>
+      <div class="bot-mention-bar" id="bot-mention-bar" style="display:none">
+        <span id="bot-mention-label"></span>
+        <button class="bot-mention-cancel" onclick="botsMentionClear()">✕</button>
+      </div>
       <div class="bot-chat-inputrow">
         <textarea id="bot-input" class="bot-chat-input" rows="1"
-          placeholder="Message ${esc(bot.title)}…"
+          placeholder="Message ${esc(bot.title)}… (@${esc(name)} them)"
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();botsSend();}"></textarea>
         <button class="bot-send-btn" id="bot-send" onclick="botsSend()">➤</button>
       </div>
     </div>`;
-  await botsHistory(name);
+  botsCurrentModel[name] = bot.model || '';
+  // @mention autocomplete on typing "@"
   const inp = document.getElementById('bot-input');
-  if (inp) inp.focus();
+  inp.addEventListener('input', () => botsMentionSuggest(inp, others));
+  await botsHistory(name);
+  await botsLoadRoutines(name);
+  botsLoadModels(name);
+  inp.focus();
 }
 
 function botsClose() {
-  const screen = document.getElementById('agents-content-inner') || document.querySelector('.agents-content');
-  if (botsState.rosterHTML) screen.innerHTML = botsState.rosterHTML;
-  botsState.active = null;
+  // Go back to bot roster, not DeCloud home.
+  // Clear hash and restore roster directly.
+  if (location.hash.startsWith('#bot/')) {
+    history.pushState({}, '', '#agents');
+  }
+  botsRestoreRoster();
+  // Reload roster to update previews
+  botsLoad();
+}
+
+// ─── @mention: pick another bot to relay the question to ────────
+let botsMention = null; // { to: 'botname' }
+
+function botsMentionSuggest(inp, others) {
+  const bar = document.getElementById('bot-mention-bar');
+  if (!bar) return;
+  const m = inp.value.match(/@([a-z0-9_-]*)$/);
+  if (m && others.length) {
+    const q = m[1].toLowerCase();
+    const hits = others.filter(b => b.name.startsWith(q)).slice(0, 3);
+    if (hits.length) {
+      bar.style.display = 'flex';
+      bar.innerHTML = hits.map(b =>
+        `<button class="bot-mention-pick" onclick="botsMentionSet('${b.name}')">` +
+        `<span class="bot-avatar xs" style="background:${b.color}">${b.emoji}</span> @${b.name}</button>`
+      ).join('');
+      return;
+    }
+  }
+  if (!botsMention) bar.style.display = 'none';
+}
+
+function botsMentionSet(name) {
+  botsMention = { to: name };
+  const bar = document.getElementById('bot-mention-bar');
+  bar.style.display = 'flex';
+  bar.innerHTML = `<span class="bot-mention-label">↗ relaying to @${esc(name)}</span>
+    <button class="bot-mention-cancel" onclick="botsMentionClear()">✕</button>`;
+  const inp = document.getElementById('bot-input');
+  inp.value = inp.value.replace(/@([a-z0-9_-]*)$/, '').trimEnd();
+  inp.focus();
+}
+
+function botsMentionClear() {
+  botsMention = null;
+  const bar = document.getElementById('bot-mention-bar');
+  if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+}
+
+async function botsSend() {
+  const name = botsState.active;
+  if (!name || botsState.loading) return;
+  const inp = document.getElementById('bot-input');
+  const el = document.getElementById('bot-msgs');
+  const btn = document.getElementById('bot-send');
+  const msg = (inp.value || '').trim();
+  if (!msg || !el) return;
+  inp.value = '';
+  el.insertAdjacentHTML('beforeend', botsMsgHTML({ role: 'user', text: msg }));
+  el.scrollTop = el.scrollHeight;
+  botsState.loading = true;
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  el.insertAdjacentHTML('beforeend',
+    `<div class="bot-msg" id="bot-typing"><div class="bot-bubble typing">
+      <span></span><span></span><span></span></div></div>`);
+  el.scrollTop = el.scrollHeight;
+  const mention = botsMention;
+  botsMentionClear();
+  try {
+    const url = mention ? `/api/bots/${name}/relay` : `/api/bots/${name}/chat`;
+    const body = mention ? { to: mention.to, message: msg } : { message: msg };
+    // Include selected model override if set
+    const selModel = botsCurrentModel[name];
+    if (selModel) body.model = selModel;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    const typing = document.getElementById('bot-typing');
+    if (typing) typing.remove();
+    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    if (mention) {
+      el.insertAdjacentHTML('beforeend',
+        `<div class="bot-msg relay"><div class="bot-bubble relay-bubble">
+         <span class="relay-tag">@${esc(data.from)}</span>${linkify(esc(data.reply))}</div></div>`);
+      if (data.followup) {
+        el.insertAdjacentHTML('beforeend', botsMsgHTML({ role: 'assistant', text: data.followup }));
+      }
+    } else {
+      el.insertAdjacentHTML('beforeend', botsMsgHTML({ role: 'assistant', text: data.reply }));
+    }
+  } catch (e) {
+    const typing = document.getElementById('bot-typing');
+    if (typing) typing.remove();
+    el.insertAdjacentHTML('beforeend',
+      `<div class="bot-msg"><div class="bot-bubble err">${esc(e.message)}</div></div>`);
+  } finally {
+    botsState.loading = false;
+    if (btn) { btn.disabled = false; btn.textContent = '➤'; }
+    el.scrollTop = el.scrollHeight;
+  }
 }
 
 async function botsHistory(name) {
@@ -106,52 +246,6 @@ function botsMsgHTML(m) {
 
 function linkify(s) {
   return s.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
-}
-
-async function botsSend() {
-  const name = botsState.active;
-  if (!name || botsState.loading) return;
-  const inp = document.getElementById('bot-input');
-  const el = document.getElementById('bot-msgs');
-  const btn = document.getElementById('bot-send');
-  const msg = (inp.value || '').trim();
-  if (!msg || !el) return;
-  inp.value = '';
-  el.insertAdjacentHTML('beforeend', botsMsgHTML({ role: 'user', text: msg }));
-  el.scrollTop = el.scrollHeight;
-  botsState.loading = true;
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
-  el.insertAdjacentHTML('beforeend',
-    `<div class="bot-msg" id="bot-typing"><div class="bot-bubble typing">
-      <span></span><span></span><span></span></div></div>`);
-  el.scrollTop = el.scrollHeight;
-  try {
-    const r = await fetch(`/api/bots/${name}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg }),
-    });
-    const data = await r.json();
-    const typing = document.getElementById('bot-typing');
-    if (typing) typing.remove();
-    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-    el.insertAdjacentHTML('beforeend', botsMsgHTML({ role: 'assistant', text: data.reply }));
-  } catch (e) {
-    const typing = document.getElementById('bot-typing');
-    if (typing) typing.remove();
-    el.insertAdjacentHTML('beforeend',
-      `<div class="bot-msg"><div class="bot-bubble err">${esc(e.message)}</div></div>`);
-  } finally {
-    botsState.loading = false;
-    if (btn) { btn.disabled = false; btn.textContent = '➤'; }
-    el.scrollTop = el.scrollHeight;
-  }
-}
-
-async function botsClear(name) {
-  if (!confirm('Clear chat and reset this bot\'s memory?')) return;
-  await fetch(`/api/bots/${name}/clear`, { method: 'POST' });
-  botsHistory(name);
 }
 
 async function botsDelete(name) {
@@ -242,3 +336,166 @@ async function botsCreate() {
 
 // Hook into screen switching: refresh roster when Agents screen opens
 const _origShowAgents = typeof showScreen === 'function' ? showScreen : null;
+
+// ─── Routines (per-bot scheduled jobs) ──────────────────────────
+async function botsLoadRoutines(name) {
+  const host = document.getElementById('bot-routines');
+  if (!host) return;
+  try {
+    const r = await fetch(`/api/bots/${name}/routines`);
+    const data = await r.json();
+    const items = (data.routines || []).map(rt => `
+      <div class="routine-row">
+        <div class="routine-info">
+          <div class="routine-name">${esc(rt.name)}</div>
+          <div class="routine-sched">${esc(typeof rt.schedule === 'object' ? (rt.schedule.display || JSON.stringify(rt.schedule)) : rt.schedule)}</div>
+          ${rt.next_run ? `<div class="routine-next">next: ${esc(String(rt.next_run).slice(0, 16).replace('T', ' '))}</div>` : ''}
+        </div>
+        <button class="routine-del" onclick="botsDelRoutine('${name}','${rt.id}')">✕</button>
+      </div>`).join('');
+    host.innerHTML = `
+      <div class="routine-head" onclick="document.getElementById('routine-form').classList.toggle('open')">
+        ⏰ Routines <span class="routine-count">${(data.routines || []).length}</span> <span class="routine-chev">▾</span>
+      </div>
+      <div class="routine-list">${items || '<div class="routine-none">No routines — this bot only talks when you message it.</div>'}</div>
+      <div class="routine-form" id="routine-form">
+        <input id="rt-name" placeholder="Routine name (e.g. morning brief)" autocomplete="off">
+        <input id="rt-sched" placeholder='Schedule: 30m, every 2h, or 0 9 * * *' autocomplete="off">
+        <textarea id="rt-prompt" rows="2" placeholder="What should it do on schedule?"></textarea>
+        <button class="routine-add" onclick="botsAddRoutine('${name}')">Add routine</button>
+      </div>`;
+  } catch (e) {
+    host.innerHTML = '';
+  }
+}
+
+async function botsAddRoutine(name) {
+  const rname = document.getElementById('rt-name').value.trim();
+  const sched = document.getElementById('rt-sched').value.trim();
+  const prompt = document.getElementById('rt-prompt').value.trim();
+  const btn = document.querySelector('.routine-add');
+  if (!sched || !prompt) { alert('Schedule and prompt required'); return; }
+  btn.disabled = true; btn.textContent = 'Adding…';
+  try {
+    const r = await fetch(`/api/bots/${name}/routines`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: rname, schedule: sched, prompt }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    await botsLoadRoutines(name);
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Add routine';
+  }
+}
+
+async function botsDelRoutine(name, id) {
+  if (!confirm('Delete this routine?')) return;
+  await fetch(`/api/bots/${name}/routines/${id}`, { method: 'DELETE' });
+  botsLoadRoutines(name);
+}
+
+// ─── Persona Editor ────────────────────────────────────────
+async function botsTogglePersona(name) {
+  var panel = document.getElementById('bot-persona-panel');
+  if (panel && panel.classList.contains('open')) {
+    panel.classList.remove('open');
+    return;
+  }
+  // Create panel if it doesn't exist
+  if (!panel) {
+    var wrap = document.querySelector('.bot-chat-wrap');
+    if (!wrap) return;
+    panel = document.createElement('div');
+    panel.id = 'bot-persona-panel';
+    panel.className = 'bot-persona-panel';
+    wrap.insertBefore(panel, document.getElementById('bot-msgs'));
+  }
+  panel.classList.add('open');
+  panel.innerHTML = '<div class="text-dim">Loading persona…</div>';
+
+  try {
+    var r = await fetch('/api/bots/' + name + '/persona');
+    var d = await r.json();
+    if (d.error) { panel.innerHTML = '<div class="text-dim">Error: ' + esc(d.error) + '</div>'; return; }
+    var content = d.persona || '';
+    panel.innerHTML =
+      '<div class="bot-persona-header">Persona (SOUL.md) — this defines the bot\'s personality and identity</div>' +
+      '<textarea id="bot-persona-text" class="bot-persona-textarea" placeholder="Write the bot\'s personality here…">' + esc(content) + '</textarea>' +
+      '<div class="bot-persona-actions">' +
+        '<button class="bot-persona-save" onclick="botsSavePersona(\'' + name + '\')">Save</button>' +
+        '<button class="bot-persona-cancel" onclick="document.getElementById(\'bot-persona-panel\').classList.remove(\'open\')">Cancel</button>' +
+        '<span class="bot-persona-hint">Changes apply to new messages. Clear chat to reset session.</span>' +
+      '</div>';
+  } catch (e) {
+    panel.innerHTML = '<div class="text-dim">Failed to load: ' + esc(e.message) + '</div>';
+  }
+}
+
+async function botsSavePersona(name) {
+  var ta = document.getElementById('bot-persona-text');
+  if (!ta) return;
+  var btn = document.querySelector('.bot-persona-save');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    var r = await fetch('/api/bots/' + name + '/persona', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ persona: ta.value })
+    });
+    var d = await r.json();
+    if (d.ok) {
+      document.getElementById('bot-persona-panel').classList.remove('open');
+    } else {
+      alert(d.error || 'Save failed');
+    }
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+  }
+}
+
+// ─── Model Picker ──────────────────────────────────────────
+var botsCurrentModel = {};
+
+async function botsLoadModels(name) {
+  var sel = document.getElementById('bot-model-picker');
+  if (!sel) return;
+  var current = botsCurrentModel[name] || '';
+  try {
+    var r = await fetch('/api/bots/models');
+    var d = await r.json();
+    if (d.error) return;
+    var opts = '<option value="">' + (current ? esc(current) : 'default') + '</option>';
+    // Group: local first, then cloud
+    var local = d.models.filter(function(m) { return !m.cloud; });
+    var cloud = d.models.filter(function(m) { return m.cloud; });
+    if (local.length) {
+      opts += '<optgroup label="Local">';
+      local.forEach(function(m) {
+        var sel = (m.name === current) ? ' selected' : '';
+        var sz = m.size_gb ? ' (' + m.size_gb + 'GB)' : '';
+        opts += '<option value="' + esc(m.name) + '"' + sel + '>' + esc(m.name) + sz + '</option>';
+      });
+      opts += '</optgroup>';
+    }
+    if (cloud.length) {
+      opts += '<optgroup label="Cloud">';
+      cloud.forEach(function(m) {
+        var s = (m.name === current) ? ' selected' : '';
+        opts += '<option value="' + esc(m.name) + '"' + s + '>' + esc(m.name) + '</option>';
+      });
+      opts += '</optgroup>';
+    }
+    sel.innerHTML = opts;
+  } catch (e) { /* silent */ }
+}
+
+function botsSwitchModel(name, model) {
+  botsCurrentModel[name] = model;
+  // The model is passed per-message via the chat API body
+}

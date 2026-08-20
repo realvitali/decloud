@@ -5368,6 +5368,30 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
   background: var(--accent-soft); padding: 1.5px 7px; border-radius: 99px;
 }
 .bot-desc { font-size: 12px; color: var(--text-dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bot-preview { font-size: 12px; color: var(--text-dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+.bot-ts { font-size: 10px; color: var(--text-dim); opacity: 0.6; margin-left: auto; padding-right: 8px; }
+
+/* Persona editor */
+.bot-persona-btn { background: none; border: 1px solid var(--border); color: var(--text-dim); padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+.bot-persona-btn:hover { color: var(--text); border-color: var(--text-dim); }
+.bot-persona-panel { display: none; background: var(--card); border: 1px solid var(--border); border-radius: 8px; margin: 8px 0; padding: 12px; }
+.bot-persona-panel.open { display: block; }
+.bot-persona-header { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; }
+.bot-persona-textarea { width: 100%; min-height: 200px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 10px; font-family: monospace; font-size: 13px; resize: vertical; }
+.bot-persona-textarea:focus { outline: none; border-color: var(--accent); }
+.bot-persona-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.bot-persona-save { background: var(--accent); color: #fff; border: none; padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.bot-persona-save:hover { opacity: 0.85; }
+.bot-persona-save:disabled { opacity: 0.5; cursor: wait; }
+.bot-persona-cancel { background: none; border: 1px solid var(--border); color: var(--text-dim); padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.bot-persona-cancel:hover { color: var(--text); }
+.bot-persona-hint { font-size: 11px; color: var(--text-dim); opacity: 0.6; }
+
+/* Model picker */
+.bot-model-picker { background: var(--bg); border: 1px solid var(--border); color: var(--text-dim); padding: 4px 8px; border-radius: 6px; font-size: 12px; max-width: 140px; cursor: pointer; }
+.bot-model-picker:hover { border-color: var(--text-dim); }
+.bot-model-picker optgroup { color: var(--text-dim); font-style: normal; font-size: 11px; }
+.bot-model-picker option { color: var(--text); }
 .bot-tag-protected { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-faint); border: 1px solid var(--glass-border); padding: 2px 6px; border-radius: 6px; }
 .bot-delete {
   border: none; background: transparent; color: var(--text-faint);
@@ -5469,3 +5493,74 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
 .bot-create-btn:disabled { opacity: 0.55; }
 .bot-create-note { font-size: 11.5px; color: var(--text-faint); margin-top: 10px; line-height: 1.5; }
 .bot-create-note code { background: var(--accent-soft); padding: 1px 5px; border-radius: 5px; font-size: 10.5px; }
+
+/* ═══ BOTS: mention bar + routines ═══ */
+.bot-avatar.xs { width: 20px; height: 20px; font-size: 11px; border-radius: 6px; }
+.bot-mention-bar {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 6px 2px 0;
+}
+.bot-mention-pick {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--glass-border); background: var(--glass);
+  color: var(--text); font-size: 12.5px; padding: 5px 10px;
+  border-radius: 99px; cursor: pointer;
+}
+.bot-mention-pick:hover, .bot-mention-label {
+  border-color: var(--accent); background: var(--accent-soft);
+}
+.bot-mention-label {
+  font-size: 12px; color: var(--accent-text); font-weight: 600;
+  padding: 5px 10px; border-radius: 99px; border: 1px solid var(--accent);
+}
+.bot-mention-cancel {
+  border: none; background: transparent; color: var(--text-faint);
+  cursor: pointer; font-size: 12px; padding: 4px 8px;
+}
+.bot-msg.relay { justify-content: flex-start; }
+.relay-bubble { border-style: dashed; background: var(--accent-soft); }
+.relay-tag {
+  display: inline-block; font-size: 10.5px; font-weight: 700;
+  color: var(--accent-text); background: var(--accent-soft);
+  border-radius: 6px; padding: 1px 6px; margin-bottom: 4px;
+}
+
+.bot-routines { border-top: 1px solid var(--glass-border); margin-top: 8px; padding-top: 6px; }
+.routine-head {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 700; color: var(--text-dim);
+  cursor: pointer; padding: 4px 0; user-select: none;
+}
+.routine-count {
+  background: var(--accent-soft); color: var(--accent-text);
+  border-radius: 99px; font-size: 10.5px; padding: 1px 7px;
+}
+.routine-chev { margin-left: auto; }
+.routine-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 2px; border-bottom: 1px dashed var(--glass-border);
+}
+.routine-info { flex: 1; min-width: 0; }
+.routine-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.routine-sched { font-size: 11px; color: var(--accent-text); font-family: ui-monospace, monospace; }
+.routine-next { font-size: 10.5px; color: var(--text-faint); }
+.routine-none { font-size: 11.5px; color: var(--text-faint); padding: 4px 0; }
+.routine-del {
+  border: none; background: transparent; color: var(--text-faint);
+  cursor: pointer; padding: 4px 8px; font-size: 12px;
+}
+.routine-del:hover { color: #ef4444; }
+.routine-form { display: none; flex-direction: column; gap: 6px; padding: 8px 0 4px; }
+.routine-form.open { display: flex; }
+.routine-form input, .routine-form textarea {
+  padding: 9px 12px; border-radius: 10px; font-size: 13px;
+  border: 1px solid var(--glass-border); background: var(--glass);
+  color: var(--text); font-family: inherit; outline: none;
+}
+.routine-form input:focus, .routine-form textarea:focus { border-color: var(--accent); }
+.routine-add {
+  align-self: flex-start; border: none; background: var(--accent);
+  color: #fff; font-size: 12.5px; font-weight: 600;
+  padding: 8px 14px; border-radius: 10px; cursor: pointer;
+}
+.routine-add:disabled { opacity: 0.55; }

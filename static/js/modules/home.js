@@ -516,7 +516,12 @@ function showScreen(id) {
   if (id === 'terminal-screen') {
     setTimeout(() => {
       if (!xterm) initXterm();
-      if (xtermFit) { xtermFit.fit(); sendResize(); }
+      if (xtermFit) {
+        xtermFit.fit();
+        sendResize();
+        // Refit again after fonts settle (xterm measures char width on first render)
+        setTimeout(() => { xtermFit.fit(); sendResize(); }, 200);
+      }
       if (xterm) xterm.focus();
     }, 100);
   }

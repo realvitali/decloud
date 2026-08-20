@@ -137,6 +137,21 @@ function initXterm() {
         sendResize();
       }
     });
+    // Also watch the container itself (for layout shifts, mobile address bar, etc.)
+    const container = document.getElementById('xterm-container');
+    if (container && typeof ResizeObserver !== 'undefined') {
+      let resizeTimer = null;
+      const ro = new ResizeObserver(() => {
+        if (resizeTimer) clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          if (xtermFit && xterm) {
+            xtermFit.fit();
+            sendResize();
+          }
+        }, 100);
+      });
+      ro.observe(container);
+    }
   }
 }
 

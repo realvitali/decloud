@@ -223,9 +223,10 @@ def register(sock):
         # Create a pseudo-terminal
         master_fd, slave_fd = _pty.openpty()
 
-        # Set terminal size (80x24 default, will be updated by frontend)
+        # Set terminal size (larger default so htop/neofetch render properly
+        # before the frontend resize message arrives)
         try:
-            _winsize = _struct.pack('HHHH', 24, 80, 0, 0)
+            _winsize = _struct.pack('HHHH', 40, 120, 0, 0)
             _fcntl.ioctl(slave_fd, _termios.TIOCSWINSZ, _winsize)
         except Exception:
             pass
