@@ -166,6 +166,23 @@ def ollama_chat():
     top_p = data.get('top_p', 0.9)
     max_tokens = data.get('max_tokens', 0)
 
+    # Input caps — this endpoint is exposed over the tunnel; without caps
+    # a client could push unbounded payloads into a local LLM.
+    if not isinstance(messages, list) or not messages:
+        return jsonify({'error': 'messages must be a non-empty list'}), 400
+    if len(messages) > 40:
+        return jsonify({'error': 'too many messages (max 40)'}), 400
+    total_chars = sum(len(str(m.get('content', ''))) for m in messages if isinstance(m, dict))
+    if total_chars > 120_000:
+        return jsonify({'error': 'conversation too long (max 120k chars)'}), 400
+    try:
+        if not (0 <= float(temperature) <= 2) or not (0 <= float(top_p) <= 1):
+            return jsonify({'error': 'temperature (0-2) or top_p (0-1) out of range'}), 400
+        if not (0 <= int(max_tokens) <= 32768):
+            return jsonify({'error': 'max_tokens out of range (0-32768)'}), 400
+    except (TypeError, ValueError):
+        return jsonify({'error': 'invalid numeric parameter'}), 400
+
     job_id = uuid.uuid4().hex[:12]
     job = {
         'chunks': [],
@@ -205,20 +222,6 @@ def ollama_chat_stream(job_id):
 
     from_idx = request.args.get('from', default=0, type=int)
     deadline = time.time() + 600
-
-    # Input caps — this endpoint is exposed over the tunnel; without caps
-    # a client could push unbounded payloads into a local LLM.
-    if not isinstance(messages, list) or not messages:
-        return jsonify({'error': 'messages must be a non-empty list'}), 400
-    if len(messages) > 40:
-        return jsonify({'error': 'too many messages (max 40)'}), 400
-    total_chars = sum(len(str(m.get('content', ''))) for m in messages if isinstance(m, dict))
-    if total_chars > 120_000:
-        return jsonify({'error': 'conversation too long (max 120k chars)'}), 400
-    if not (0 <= float(temperature) <= 2) or not (0 <= float(top_p) <= 1):
-        return jsonify({'error': 'temperature (0-2) or top_p (0-1) out of range'}), 400
-    if not (0 <= int(max_tokens) <= 32768):
-        return jsonify({'error': 'max_tokens out of range (0-32768)'}), 400
 
     def generate():
         idx = from_idx
