@@ -24,12 +24,16 @@ def toggle_job(job_id, action):
         return _not_configured()
     profile = request.args.get('profile', 'agent2')
     hermes_bin = os.path.join(os.path.dirname(HERMES_HOME), 'hermes-agent', 'venv', 'bin', 'hermes')
+    if not os.path.exists(hermes_bin):
+        hermes_bin = 'hermes'
     # Validate job_id (alphanumeric + dash/underscore only, no shell metachars)
     import re
     if not re.match(r'^[a-zA-Z0-9_-]+$', job_id):
         return jsonify({'error': 'Invalid job ID'}), 400
     env = dict(os.environ, HERMES_HOME=HERMES_HOME)
-    result = subprocess.run([hermes_bin, 'cron', action, job_id], capture_output=True, text=True, env=env)
+    # Pass -p <profile> so it targets the right profile's cron
+    result = subprocess.run([hermes_bin, '-p', profile, 'cron', action, job_id],
+                            capture_output=True, text=True, env=env, timeout=30)
     return jsonify({'ok': result.returncode == 0, 'output': result.stdout, 'error': result.stderr})
 
 
@@ -90,12 +94,19 @@ def get_agents():
         return _not_configured()
 
     def load_jobs(profile_name):
-        jobs_file = Path(HERMES_HOME) / 'cron' / 'jobs.json'
+        # Cron is per-profile — read from the profile's own cron dir
+        jobs_file = Path(HERMES_HOME) / 'profiles' / profile_name / 'cron' / 'jobs.json'
+        if not jobs_file.exists():
+            # Fall back to shared root (pre-profile isolation)
+            jobs_file = Path(HERMES_HOME) / 'cron' / 'jobs.json'
         if not jobs_file.exists():
             return []
-        with open(jobs_file) as f:
-            data = json.load(f)
-        return data.get('jobs', [])
+        try:
+            with open(jobs_file) as f:
+                data = json.load(f)
+            return data.get('jobs', [])
+        except Exception:
+            return []
 
     def job_status(jobs):
         has_error = any(j.get('last_status') == 'error' for j in jobs)
@@ -106,7 +117,8 @@ def get_agents():
             return 'paused'
         return 'ready'
 
-    jobs = load_jobs('default')
+    # Load jobs from agent2 profile (the main profile DeCloud manages)
+    jobs = load_jobs('agent2')
 
     return jsonify({
         'agents': [],
