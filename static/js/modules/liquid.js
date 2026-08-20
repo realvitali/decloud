@@ -1,20 +1,21 @@
 // ===== Module: liquid =====
-// Gooey morph menu for the home screen — a faithful vanilla-JS port of the
-// "morphing dropdown" from liquid-taffy:
+// Project-wide "liquid glass" interaction system, ported from the
+// morphing/anchored dropdowns of liquid-taffy:
 //   https://github.com/arknow91/liquid-taffy  (MIT, (c) 2026 arknow91)
 //
-// Ported with permission of the technique: the solved goo-rim thresholds,
-// the two spring polylines, the grab chain, the squircle path, and the
-// open/close choreography timings are taken verbatim from the reference
-// implementation. GSAP/React are replaced by a ~120-line tween engine so
-// DeCloud stays dependency-free.
+// Dependency-free (React/GSAP replaced by a small tween engine):
+//   1. Every <select> in the app becomes a liquid anchored dropdown
+//      (options mirrored live; picking dispatches the native change).
+//   2. Every button/clickable gets a liquid press-squash and a goo
+//      click ripple from one shared overlay canvas.
+//   3. The home-screen + button is the morphing-dropdown showcase.
 //
-// Reduced-motion users get the menu instantly, without physics.
+// Reduced-motion users get instant transitions, no physics.
 
 (function () {
   'use strict';
 
-  // ─── Spring / easing curves (sampled piecewise-linear) ──────────
+  // ─── Curves ─────────────────────────────────────────────────────
   const HOUSE_SPRING_POINTS = [
     [0.028, 0.0289], [0.056, 0.1062], [0.083, 0.2182], [0.111, 0.3519],
     [0.139, 0.4957], [0.167, 0.6396], [0.194, 0.7755], [0.222, 0.8974],
@@ -64,8 +65,6 @@
   }
 
   function bezier(x1, y1, x2, y2) {
-    // Newton-solve cubic bezier for y given x
-    const A = (x) => 3 * (1 - x) * (1 - x) * x;
     return function (x) {
       if (x <= 0) return 0;
       if (x >= 1) return 1;
@@ -83,7 +82,7 @@
     };
   }
 
-  // ─── Tiny tween engine (timeline + transforms) ──────────────────
+  // ─── Tween engine ───────────────────────────────────────────────
   const reducedMotion = window.matchMedia &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -93,22 +92,12 @@
       this._raf = 0;
       this._killed = false;
     }
-    set(targets, vars, at) {
-      this._entries.push({ at: at || 0, set: true, targets, vars });
-      return this;
-    }
-    to(targets, vars, at) {
-      this._entries.push({ at: at || 0, targets, vars });
-      return this;
-    }
-    call(fn, at) {
-      this._entries.push({ at: at || 0, fn });
-      return this;
-    }
+    set(targets, vars, at) { this._entries.push({ at: at || 0, set: true, targets, vars }); return this; }
+    to(targets, vars, at) { this._entries.push({ at: at || 0, targets, vars }); return this; }
+    call(fn, at) { this._entries.push({ at: at || 0, fn }); return this; }
     kill() { this._killed = true; if (this._raf) cancelAnimationFrame(this._raf); }
     play() {
       if (reducedMotion) {
-        // Instant version: apply final state of every tween and set
         this._entries.forEach((e) => { if (e.fn) e.fn(); else applyVars(e.targets, e.vars, false); });
         return;
       }
@@ -153,18 +142,19 @@
       if (v.scale !== undefined) { st.scaleX = st.scaleY = lerp(v.scale, st.scFrom || st.scaleX, k); }
       if (v.scaleX !== undefined) st.scaleX = lerp(v.scaleX, st.sxFrom || st.scaleX, k);
       if (v.scaleY !== undefined) st.scaleY = lerp(v.scaleY, st.syFrom || st.scaleY, k);
+      if (v.opacity !== undefined) st.opacity = lerp(v.opacity, st.oFrom || st.opacity, k);
       if (v.autoAlpha !== undefined) {
         st.opacity = lerp(v.autoAlpha, st.oFrom || st.opacity, k);
         el.style.visibility = st.opacity > 0.01 ? 'visible' : 'hidden';
       }
-      if (v.filter !== undefined) st.filter = v.filter;
+      if (v.attr) { for (const key in v.attr) el.setAttribute(key, v.attr[key]); }
       writeState(el, st);
     }
   }
 
   function getState(el) {
     if (!el._lqd) {
-      el._lqd = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, opacity: 1, filter: '' };
+      el._lqd = { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, opacity: 1 };
     }
     return el._lqd;
   }
@@ -176,14 +166,11 @@
     if (st.scaleX !== 1 || st.scaleY !== 1) tr += `scale(${st.scaleX}, ${st.scaleY})`;
     el.style.transform = tr.trim();
     el.style.opacity = String(st.opacity);
-    if (st.filter !== '') el.style.filter = st.filter;
   }
 
-  function lerp(to, from, k) {
-    return from + (to - from) * k;
-  }
+  function lerp(to, from, k) { return from + (to - from) * k; }
 
-  // ─── Squircle path (Apple continuous corner, PaintCode coeffs) ──
+  // ─── Squircle path (Apple continuous corner) ────────────────────
   function squirclePath(x, y, w, h, r) {
     const s = Math.min(r * 1.528665, w / 2, h / 2);
     const u = (k) => s * (k / 1.528665);
@@ -209,49 +196,47 @@
     ].join(' ');
   }
 
-  // ─── Goo filter ─────────────────────────────────────────────────
+  // ─── Goo filter table ───────────────────────────────────────────
   const GOO_RIM_THRESHOLDS = {
     1: [-14.5146, -24.6721],
     4: [-12.25, -14.25],
     5: [-12.7296, -15.063],
+    7: [-11.6925, -13.245],
   };
   const gooThreshold = (offset) =>
     `1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 30 ${offset}`;
 
-  function setGooBlur(els, blur) {
-    const [outer, inner] = GOO_RIM_THRESHOLDS[blur];
-    if (els.blur) els.blur.setAttribute('stdDeviation', String(blur));
-    if (els.rim) els.rim.setAttribute('values', gooThreshold(outer));
-    if (els.inner) els.inner.setAttribute('values', gooThreshold(inner));
+  function buildGooFilter(id, w, h) {
+    return `
+      <defs>
+        <filter id="${id}" filterUnits="userSpaceOnUse" x="0" y="0" width="${w}" height="${h}"
+                color-interpolation-filters="sRGB">
+          <feGaussianBlur class="lqd-blur" in="SourceGraphic" stdDeviation="1" result="blur"/>
+          <feColorMatrix class="lqd-rim" in="blur" type="matrix"
+            values="${gooThreshold(GOO_RIM_THRESHOLDS[1][0])}" result="goo"/>
+          <feColorMatrix class="lqd-inner" in="blur" type="matrix"
+            values="${gooThreshold(GOO_RIM_THRESHOLDS[1][1])}" result="inner"/>
+          <feFlood style="flood-color: var(--lqd-rim)" result="rimColor"/>
+          <feComposite in="rimColor" in2="goo" operator="in" result="rimFull"/>
+          <feMerge>
+            <feMergeNode in="rimFull"/>
+            <feMergeNode in="inner"/>
+          </feMerge>
+        </filter>
+      </defs>`;
   }
 
-  // ─── Geometry (verbatim constants from the reference) ───────────
-  const BUTTON_SIZE = 32;
-  const PANEL_WIDTH = 141;
-  const PANEL_HEIGHT = 164;             // 2×7 padding + 5 rows × 30
-  const PANEL_ORIGIN_X = PANEL_WIDTH / 2;          // 70.5
-  const PANEL_ORIGIN_Y = PANEL_HEIGHT - 16;        // 148
-  const PANEL_REST_SCALE = 0.11;
-  const GOO_BLUR_ACTIVE = 4;
-  const GOO_BLUR_REST = 1;
-  const GOO_BLUR_GRAB = 5;
-  const GOO_WIDTH = 320;
-  const GOO_HEIGHT = 308;
-  const TRIGGER_CX = 160;
-  const TRIGGER_CY = 220;
-  const PANEL_GOO_X = TRIGGER_CX - PANEL_WIDTH / 2;   // 89.5
-  const PANEL_GOO_Y = TRIGGER_CY - PANEL_ORIGIN_Y;    // 72
-  const GRAB_MAX = 44;
-  const GRAB_CHAIN = [
-    { follow: 1, size: 0.85, thin: 0.06, lag: 0.16 },
-    { follow: 0.84, size: 0.72, thin: 0.16, lag: 0.18 },
-    { follow: 0.68, size: 0.65, thin: 0.19, lag: 0.2 },
-    { follow: 0.52, size: 0.64, thin: 0.19, lag: 0.22 },
-    { follow: 0.36, size: 0.7, thin: 0.14, lag: 0.24 },
-    { follow: 0.2, size: 0.8, thin: 0.08, lag: 0.26 },
-  ];
+  function setGooBlur(svgRoot, blur) {
+    const [outer, inner] = GOO_RIM_THRESHOLDS[blur];
+    const b = svgRoot.querySelector('.lqd-blur');
+    const r = svgRoot.querySelector('.lqd-rim');
+    const i = svgRoot.querySelector('.lqd-inner');
+    if (b) b.setAttribute('stdDeviation', String(blur));
+    if (r) r.setAttribute('values', gooThreshold(outer));
+    if (i) i.setAttribute('values', gooThreshold(inner));
+  }
 
-  // ─── Sound (tiny synthesized pops; silent until first touch) ────
+  // ─── Sound (tiny synthesized pops) ──────────────────────────────
   const sfx = {
     ctx: null, muted: false,
     ensure() {
@@ -280,303 +265,569 @@
     mute() { this.muted = true; },
     unmute() { this.muted = false; },
   };
+  window.liquidSfx = sfx;
 
-  // ─── Build the widget ───────────────────────────────────────────
-  const root = document.getElementById('liquid-fab-root');
-  if (!root) return;
+  // ═══ 1. SHARED RIPPLE OVERLAY + UNIVERSAL PRESS SQUASH ═══════════
 
-  const svgNS = 'http://www.w3.org/2000/svg';
-  root.innerHTML = `
-    <div class="lqd-anchor">
-      <div class="lqd-bodies">
-        <div class="lqd-trigger-body"></div>
-        <svg class="lqd-panel-body" width="${PANEL_WIDTH}" height="${PANEL_HEIGHT}" viewBox="0 0 ${PANEL_WIDTH} ${PANEL_HEIGHT}">
-          <path class="lqd-panel-body-shape" d="${squirclePath(0.5, 0.5, PANEL_WIDTH - 1, PANEL_HEIGHT - 1, 16)}"></path>
-        </svg>
-      </div>
-      <svg class="lqd-goo" width="${GOO_WIDTH}" height="${GOO_HEIGHT}" viewBox="0 0 ${GOO_WIDTH} ${GOO_HEIGHT}" aria-hidden="true">
-        <defs>
-          <filter id="lqd-goo-filter" filterUnits="userSpaceOnUse" x="0" y="0"
-                  width="${GOO_WIDTH}" height="${GOO_HEIGHT}" color-interpolation-filters="sRGB">
-            <feGaussianBlur class="lqd-blur" in="SourceGraphic" stdDeviation="${GOO_BLUR_REST}" result="blur"/>
-            <feColorMatrix class="lqd-rim" in="blur" type="matrix"
-              values="${gooThreshold(GOO_RIM_THRESHOLDS[GOO_BLUR_REST][0])}" result="goo"/>
-            <feColorMatrix class="lqd-inner" in="blur" type="matrix"
-              values="${gooThreshold(GOO_RIM_THRESHOLDS[GOO_BLUR_REST][1])}" result="inner"/>
-            <feFlood style="flood-color: var(--lqd-rim)" result="rimColor"/>
-            <feComposite in="rimColor" in2="goo" operator="in" result="rimFull"/>
-            <feMerge>
-              <feMergeNode in="rimFull"/>
-              <feMergeNode in="inner"/>
-            </feMerge>
-          </filter>
-        </defs>
-        <g filter="url(#lqd-goo-filter)">
-          <path class="lqd-blob lqd-blob-panel" d="${squirclePath(PANEL_GOO_X, PANEL_GOO_Y, PANEL_WIDTH, PANEL_HEIGHT, 16)}"></path>
-          <circle class="lqd-blob lqd-blob-trigger" cx="${TRIGGER_CX}" cy="${TRIGGER_CY}" r="16"></circle>
-          ${GRAB_CHAIN.map((_l, i) => `<circle class="lqd-chain" data-i="${i}" cx="${TRIGGER_CX}" cy="${TRIGGER_CY}" r="11"></circle>`).join('')}
-        </g>
-      </svg>
-      <div class="lqd-panel" role="menu" aria-label="Quick actions"></div>
-      <button class="lqd-trigger" type="button" aria-label="Open menu" aria-expanded="false">
-        <span class="lqd-trigger-icon">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </span>
-      </button>
-    </div>`;
+  const overlaySVG = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  overlaySVG.setAttribute('class', 'lqd-overlay');
+  overlaySVG.setAttribute('aria-hidden', 'true');
+  overlaySVG.innerHTML = buildGooFilter('lqd-overlay-goo', window.innerWidth, window.innerHeight) +
+    '<g filter="url(#lqd-overlay-goo)"></g>';
+  document.body.appendChild(overlaySVG);
+  const overlayGroup = overlaySVG.querySelector('g');
 
-  const anchor = root.querySelector('.lqd-anchor');
-  const bodies = root.querySelector('.lqd-bodies');
-  const triggerBody = root.querySelector('.lqd-trigger-body');
-  const panelBody = root.querySelector('.lqd-panel-body');
-  const panelBodyShape = root.querySelector('.lqd-panel-body-shape');
-  const goo = root.querySelector('.lqd-goo');
-  const blurEl = root.querySelector('.lqd-blur');
-  const rimEl = root.querySelector('.lqd-rim');
-  const innerEl = root.querySelector('.lqd-inner');
-  const blobTrigger = root.querySelector('.lqd-blob-trigger');
-  const blobPanel = root.querySelector('.lqd-blob-panel');
-  const panel = root.querySelector('.lqd-panel');
-  const trigger = root.querySelector('.lqd-trigger');
-  const triggerIcon = root.querySelector('.lqd-trigger-icon');
-  const chainEls = Array.from(root.querySelectorAll('.lqd-chain'));
+  function spawnRipple(x, y) {
+    if (reducedMotion) return;
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('cx', x);
+    c.setAttribute('cy', y);
+    c.setAttribute('r', '8');
+    c.setAttribute('class', 'lqd-ripple');
+    overlayGroup.appendChild(c);
+    const tl = new Timeline();
+    tl.to(c, { attr: { r: 26 }, opacity: 0.55, duration: 0.16, ease: P2_OUT }, 0);
+    tl.to(c, { attr: { r: 34 }, opacity: 0, duration: 0.3, ease: P2_OUT }, 0.12);
+    tl.call(() => c.remove(), 0.45);
+    tl.play();
+  }
 
-  const gooEls = { blur: blurEl, rim: rimEl, inner: innerEl };
+  const PRESS_SELECTOR = 'button, .app-icon, .lego-card, .settings-tab, .theme-option, .app-tile';
+  function isLiquidInside(el) { return !!(el && el.closest && el.closest('.lqd-anchor, .lqd-selwrap, .lqd-panel')); }
 
-  // ─── Menu items (Books-first wedge + essentials) ────────────────
-  const THEME_ICON = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
-  const ITEMS = [
-    { label: 'Books', icon: (window.ICONS && ICONS.book) || '', action: () => openApp('audiobooks') },
-    { label: 'AI Chat', icon: (window.ICONS && ICONS.brain) || '', action: () => openApp('ollama') },
-    { label: 'Files', icon: (window.ICONS && ICONS.lego) || '', action: () => openApp('files') },
-    { label: 'Terminal', icon: (window.ICONS && ICONS.terminal) || '', action: () => openApp('terminal') },
-    { label: 'Theme', icon: THEME_ICON, action: toggleThemeQuick },
+  document.addEventListener('pointerdown', (e) => {
+    if (reducedMotion) return;
+    const el = e.target.closest && e.target.closest(PRESS_SELECTOR);
+    if (!el || isLiquidInside(el)) return;
+    const tl = new Timeline();
+    tl.to(el, { scale: 0.93, duration: 0.09, ease: OUT_STRONG }, 0);
+    tl.play();
+    const restore = () => {
+      const t2 = new Timeline();
+      t2.to(el, { scale: 1, duration: 0.3, ease: SPRING }, 0);
+      t2.play();
+      window.removeEventListener('pointerup', restore);
+    };
+    window.addEventListener('pointerup', restore, { once: true });
+  }, { passive: true });
+
+  document.addEventListener('click', (e) => {
+    if (reducedMotion) return;
+    const el = e.target.closest && e.target.closest(PRESS_SELECTOR);
+    if (!el || isLiquidInside(el)) return;
+    spawnRipple(e.clientX, e.clientY);
+  }, { passive: true });
+
+  // ═══ 2. LIQUIDIFY EVERY NATIVE SELECT (anchored dropdown) ════════
+
+  function liquidifySelect(sel) {
+    if (sel._lqdified) return;
+    sel._lqdified = true;
+
+    // Wrap so the liquid UI replaces the select in place
+    const wrap = document.createElement('div');
+    wrap.className = 'lqd-selwrap';
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+    sel.hidden = true;      // native select stays as the source of truth
+    sel.tabIndex = -1;
+
+    const host = document.createElement('button');
+    host.type = 'button';
+    host.className = 'lqd-selhost';
+    host.setAttribute('aria-haspopup', 'listbox');
+    host.innerHTML = '<span class="lqd-sellabel"></span><span class="lqd-selchevron">▾</span>';
+    wrap.appendChild(host);
+
+    let open = false;
+    let tl = null;
+    let gooRoot = null;
+    let panel = null;
+    let panelBody = null;
+    let panelShape = null;
+    let blobPanel = null;
+    let blobTrigger = null;
+    const GAP = 14;        // panel hangs 14px above the host (reference)
+    const ROW_H = 32;
+    const MAX_PANEL_H = 208;
+
+    function currentLabel() {
+      const opt = sel.options[sel.selectedIndex];
+      return opt ? opt.text : '—';
+    }
+    function refreshLabel() { host.querySelector('.lqd-sellabel').textContent = currentLabel(); }
+
+    function buildUI() {
+      host.querySelector('.lqd-sellabel').textContent = currentLabel();
+      if (!panel) return;
+      const count = sel.options.length || 1;
+      const panelH = Math.min(MAX_PANEL_H, count * ROW_H + 14);
+      const panelW = Math.max(200, host.offsetWidth);
+      panel.style.width = panelW + 'px';
+      panel.style.height = panelH + 'px';
+      panelBody.setAttribute('width', panelW);
+      panelBody.setAttribute('height', panelH);
+      panelShape.setAttribute('d', squirclePath(0.5, 0.5, panelW - 1, panelH - 1, 16));
+      blobPanel.setAttribute('d', squirclePath(0, 0, panelW, panelH, 16));
+      panel.innerHTML = '';
+      Array.from(sel.options).forEach((opt, i) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'lqd-item';
+        row.setAttribute('role', 'option');
+        if (i === sel.selectedIndex) row.setAttribute('data-active', '');
+        row.innerHTML = `<span class="lqd-item-inner"><span class="lqd-item-label">${opt.text}</span></span>`;
+        row.addEventListener('click', () => {
+          sel.value = opt.value;
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+          refreshLabel();
+          closeDropdown();
+        });
+        panel.appendChild(row);
+      });
+    }
+
+    function openDropdown() {
+      if (open) return;
+      open = true;
+      if (tl) tl.kill();
+      buildUI();
+
+      const count = sel.options.length || 1;
+      const panelH = Math.min(MAX_PANEL_H, count * ROW_H + 14);
+      const panelW = Math.max(200, host.offsetWidth);
+      const hostH = host.offsetHeight || 32;
+      const hostW = host.offsetWidth || 100;
+
+      // Canvas covers the panel + the host + padding, anchored top-left.
+      // Wrap coords: panel top = -(panelH + GAP), panel left = 0.
+      const CANVAS_PAD = 40;
+      const canvasW = panelW + CANVAS_PAD * 2;
+      const canvasH = panelH + GAP + hostH + CANVAS_PAD * 2;
+      // Panel top-left and button center, in canvas coordinates
+      const panelCX = CANVAS_PAD;
+      const panelCY = CANVAS_PAD;
+      const triggerCX = CANVAS_PAD + hostW / 2;
+      const triggerCY = CANVAS_PAD + panelH + GAP + hostH / 2;
+
+      gooRoot.setAttribute('width', canvasW);
+      gooRoot.setAttribute('height', canvasH);
+      gooRoot.style.width = canvasW + 'px';
+      gooRoot.style.height = canvasH + 'px';
+      gooRoot.style.left = -CANVAS_PAD + 'px';
+      gooRoot.style.top = -(panelH + GAP + CANVAS_PAD) + 'px';
+      gooRoot.querySelector('filter').setAttribute('width', canvasW);
+      gooRoot.querySelector('filter').setAttribute('height', canvasH);
+
+      blobPanel.setAttribute('d', squirclePath(panelCX, panelCY, panelW, panelH, 16));
+      blobPanel.style.transformOrigin = `${triggerCX}px ${panelCY + panelH + GAP}px`;
+      blobTrigger.setAttribute('cx', triggerCX);
+      blobTrigger.setAttribute('cy', triggerCY);
+
+      const restScale = 0.11;
+      // Crisp trio's origin: the button's top center, in panel coords
+      const originX = panelW / 2;
+      const originY = panelH + GAP + hostH / 2;
+      wrap._lqdGeo = { panelW, panelH, hostH, originX, originY };
+      panel.style.transformOrigin = `${originX}px ${originY}px`;
+      panelBody.style.transformOrigin = `${originX}px ${originY}px`;
+
+      tl = new Timeline();
+      gooRoot.style.opacity = '1';
+      gooRoot.style.visibility = 'visible';
+      setGooBlur(gooRoot, 7);      // σ7 bridges the 14px gap
+      wrap.setAttribute('data-liquid', '');
+
+      tl.set([panelBody, panel, blobPanel], { x: 0, y: 0 }, 0);
+      tl.set(blobPanel, { scale: restScale }, 0);
+      tl.set([panelBody, panel], { scale: restScale }, 0);
+      tl.to(blobPanel, { scale: 0.38, duration: 0.13, ease: P1_INOUT }, 0.02);
+      tl.to(blobPanel, { scaleY: 1, duration: 0.32, ease: POP }, 0.15);
+      tl.to(blobPanel, { scaleX: 1, duration: 0.32, ease: POP }, 0.2);
+      tl.to([panelBody, panel], { scaleY: 1, duration: 0.32, ease: POP }, 0.15);
+      tl.to([panelBody, panel], { scaleX: 1, duration: 0.32, ease: POP }, 0.2);
+      const inners = Array.from(panel.querySelectorAll('.lqd-item-inner'));
+      if (inners.length && getState(inners[0]).opacity < 0.05) {
+        tl.set(inners, { autoAlpha: 0, y: 10 }, 0);
+      }
+      inners.forEach((row, i) => {
+        tl.to(row, { autoAlpha: 1, y: 0, duration: 0.18, ease: BACK_OUT },
+          0.22 + (inners.length - 1 - i) * 0.02);
+      });
+      tl.call(() => setGooBlur(gooRoot, 1), 0.66);
+      tl.call(() => wrap.removeAttribute('data-liquid'), 0.65);
+      sfx.pop(700, 0.08);
+      tl.play();
+    }
+
+    function closeDropdown() {
+      if (!open) return;
+      open = false;
+      if (tl) tl.kill();
+
+      tl = new Timeline();
+      gooRoot.style.opacity = '1';
+      gooRoot.style.visibility = 'visible';
+      setGooBlur(gooRoot, 7);
+      wrap.setAttribute('data-liquid', '');
+      tl.to([panelBody, panel, blobPanel], { x: 0, y: 0, duration: 0.12, ease: OUT_STRONG }, 0);
+      tl.to([panelBody, panel, blobPanel], { scaleX: 0.32, duration: 0.16, ease: ANTICIPATE }, 0);
+      tl.to([panelBody, panel, blobPanel], { scaleY: 0.36, duration: 0.16, ease: ANTICIPATE }, 0.045);
+      const inners = Array.from(panel.querySelectorAll('.lqd-item-inner'));
+      inners.forEach((row, i) => {
+        tl.to(row, { autoAlpha: 0, y: 4, duration: 0.06, ease: P1_IN }, 0.05 + i * 0.004);
+      });
+      tl.to([panelBody, panel, blobPanel], { scale: 0.11, duration: 0.07, ease: P2_IN }, 0.21);
+      tl.set([panelBody, panel], { autoAlpha: 0 }, 0.28);
+      tl.to(gooRoot, { autoAlpha: 0, duration: 0.12, ease: P1_OUT }, 0.3);
+      tl.call(() => setGooBlur(gooRoot, 1), 0.42);
+      tl.call(() => wrap.removeAttribute('data-liquid'), 0.41);
+      sfx.pop(430, 0.1);
+      tl.play();
+    }
+
+    // Build the goo canvas once, rebuild panel contents per open
+    gooRoot = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    gooRoot.setAttribute('class', 'lqd-selgoo');
+    gooRoot.setAttribute('aria-hidden', 'true');
+    gooRoot.innerHTML = buildGooFilter('lqd-selgoo-filter', 300, 300) +
+      `<g filter="url(#lqd-selgoo-filter)">
+         <path class="lqd-blob lqd-blob-panel"></path>
+         <circle class="lqd-blob lqd-blob-trigger" r="16"></circle>
+       </g>`;
+    wrap.appendChild(gooRoot);
+    blobPanel = gooRoot.querySelector('.lqd-blob-panel');
+    blobTrigger = gooRoot.querySelector('.lqd-blob-trigger');
+    gooRoot.querySelector('filter').id = 'lqd-selgoo-filter-' + Math.random().toString(36).slice(2, 8);
+    gooRoot.querySelector('g').setAttribute('filter', 'url(#' + gooRoot.querySelector('filter').id + ')');
+
+    // Crisp bodies + rows
+    panelBody = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    panelBody.setAttribute('class', 'lqd-selpanelbody');
+    panelShape = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    panelShape.setAttribute('class', 'lqd-panel-body-shape');
+    panelBody.appendChild(panelShape);
+    wrap.appendChild(panelBody);
+    panel = document.createElement('div');
+    panel.className = 'lqd-panel lqd-selpanel';
+    panel.setAttribute('role', 'listbox');
+    wrap.appendChild(panel);
+
+    host.addEventListener('click', () => { if (open) closeDropdown(); else openDropdown(); });
+
+    // Outside click closes
+    document.addEventListener('click', (e) => {
+      if (open && !wrap.contains(e.target)) closeDropdown();
+    }, true);
+
+    // Mirror future option changes
+    new MutationObserver(() => {
+      if (open) buildUI();
+      refreshLabel();
+    }).observe(sel, { childList: true, subtree: true });
+
+    refreshLabel();
+  }
+
+  function liquidifyAllSelects() {
+    document.querySelectorAll('select').forEach(liquidifySelect);
+  }
+  window.liquidifyAllSelects = liquidifyAllSelects;
+
+  // ═══ 3. HOME FAB (morphing-dropdown showcase) ════════════════════
+
+  const BUTTON_SIZE = 32;
+  const PANEL_WIDTH = 141;
+  const PANEL_HEIGHT = 164;
+  const PANEL_ORIGIN_X = PANEL_WIDTH / 2;
+  const PANEL_ORIGIN_Y = PANEL_HEIGHT - 16;
+  const PANEL_REST_SCALE = 0.11;
+  const GOO_BLUR_ACTIVE = 4;
+  const GOO_BLUR_REST = 1;
+  const GOO_BLUR_GRAB = 5;
+  const GOO_WIDTH = 320;
+  const GOO_HEIGHT = 308;
+  const TRIGGER_CX = 160;
+  const TRIGGER_CY = 220;
+  const PANEL_GOO_X = TRIGGER_CX - PANEL_WIDTH / 2;
+  const PANEL_GOO_Y = TRIGGER_CY - PANEL_ORIGIN_Y;
+  const GRAB_MAX = 44;
+  const GRAB_CHAIN = [
+    { follow: 1, size: 0.85, thin: 0.06, lag: 0.16 },
+    { follow: 0.84, size: 0.72, thin: 0.16, lag: 0.18 },
+    { follow: 0.68, size: 0.65, thin: 0.19, lag: 0.2 },
+    { follow: 0.52, size: 0.64, thin: 0.19, lag: 0.22 },
+    { follow: 0.36, size: 0.7, thin: 0.14, lag: 0.24 },
+    { follow: 0.2, size: 0.8, thin: 0.08, lag: 0.26 },
   ];
 
-  ITEMS.forEach((item, i) => {
-    const row = document.createElement('button');
-    row.className = 'lqd-item';
-    row.setAttribute('role', 'menuitem');
-    row.innerHTML = `<span class="lqd-item-icon">${item.icon}</span>
-      <span class="lqd-item-inner"><span class="lqd-item-label">${item.label}</span></span>`;
-    row.addEventListener('click', () => {
-      if (stretch && stretch.consumeClick()) return;
-      closeMenu();
-      item.action();
-    });
-    row.addEventListener('pointerenter', () => sfx.pop(880, 0.05));
-    panel.appendChild(row);
-  });
+  const root = document.getElementById('liquid-fab-root');
+  if (root) {
+    root.innerHTML = `
+      <div class="lqd-anchor">
+        <div class="lqd-bodies">
+          <div class="lqd-trigger-body"></div>
+          <svg class="lqd-panel-body" width="${PANEL_WIDTH}" height="${PANEL_HEIGHT}" viewBox="0 0 ${PANEL_WIDTH} ${PANEL_HEIGHT}">
+            <path class="lqd-panel-body-shape" d="${squirclePath(0.5, 0.5, PANEL_WIDTH - 1, PANEL_HEIGHT - 1, 16)}"></path>
+          </svg>
+        </div>
+        <svg class="lqd-goo" width="${GOO_WIDTH}" height="${GOO_HEIGHT}" viewBox="0 0 ${GOO_WIDTH} ${GOO_HEIGHT}" aria-hidden="true">
+          ${buildGooFilter('lqd-goo-filter', GOO_WIDTH, GOO_HEIGHT)}
+          <g filter="url(#lqd-goo-filter)">
+            <path class="lqd-blob lqd-blob-panel" d="${squirclePath(PANEL_GOO_X, PANEL_GOO_Y, PANEL_WIDTH, PANEL_HEIGHT, 16)}"></path>
+            <circle class="lqd-blob lqd-blob-trigger" cx="${TRIGGER_CX}" cy="${TRIGGER_CY}" r="16"></circle>
+            ${GRAB_CHAIN.map((_l, i) => `<circle class="lqd-chain" data-i="${i}" cx="${TRIGGER_CX}" cy="${TRIGGER_CY}" r="11"></circle>`).join('')}
+          </g>
+        </svg>
+        <div class="lqd-panel" role="menu" aria-label="Quick actions"></div>
+        <button class="lqd-trigger" type="button" aria-label="Open menu" aria-expanded="false">
+          <span class="lqd-trigger-icon">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </span>
+        </button>
+      </div>`;
 
-  // Initial rest states: rows below their slot, chain beads gone
-  applyVars(Array.from(panel.querySelectorAll('.lqd-item-inner')), { autoAlpha: 0, y: 10 }, true);
-  applyVars(chainEls, { scale: 0 }, true);
+    const anchor = root.querySelector('.lqd-anchor');
+    const bodies = root.querySelector('.lqd-bodies');
+    const triggerBody = root.querySelector('.lqd-trigger-body');
+    const panelBody = root.querySelector('.lqd-panel-body');
+    const goo = root.querySelector('.lqd-goo');
+    const gooSVG = goo;
+    const blobTrigger = root.querySelector('.lqd-blob-trigger');
+    const blobPanel = root.querySelector('.lqd-blob-panel');
+    const panel = root.querySelector('.lqd-panel');
+    const trigger = root.querySelector('.lqd-trigger');
+    const triggerIcon = root.querySelector('.lqd-trigger-icon');
+    const chainEls = Array.from(root.querySelectorAll('.lqd-chain'));
 
-  function toggleThemeQuick() {
-    fetch('/api/settings/theme').then((r) => r.json()).then((d) => {
-      const next = (d.theme || 'auto') === 'dark' ? 'light' : 'dark';
-      if (typeof setTheme === 'function') setTheme(next);
-    }).catch(() => {});
-  }
+    const THEME_ICON = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+    const ITEMS = [
+      { label: 'Books', icon: (window.ICONS && ICONS.book) || '', action: () => openApp('audiobooks') },
+      { label: 'AI Chat', icon: (window.ICONS && ICONS.brain) || '', action: () => openApp('ollama') },
+      { label: 'Files', icon: (window.ICONS && ICONS.lego) || '', action: () => openApp('files') },
+      { label: 'Terminal', icon: (window.ICONS && ICONS.terminal) || '', action: () => openApp('terminal') },
+      { label: 'Theme', icon: THEME_ICON, action: toggleThemeQuick },
+    ];
 
-  // ─── State ──────────────────────────────────────────────────────
-  let open = false;
-  let tl = null;
-
-  const panelTrio = [panelBody, panel, blobPanel];
-  const triggerBits = [blobTrigger, triggerBody];
-  const triggerStretchBits = [blobTrigger, triggerBody];
-
-  function liquidOn(blur) {
-    anchor.setAttribute('data-liquid', '');
-    goo.style.opacity = '1';
-    goo.style.visibility = 'visible';
-    setGooBlur(gooEls, blur);
-    bodies.style.visibility = 'hidden';   // crisp picture steps aside
-  }
-
-  function openMenu() {
-    if (open) return;
-    open = true;
-    if (tl) tl.kill();
-    tl = new Timeline();
-
-    panelBody.style.visibility = 'visible';
-    panel.style.visibility = 'visible';
-    blobPanel.style.visibility = 'visible';
-    panelBody.style.transformOrigin = `${PANEL_ORIGIN_X}px ${PANEL_ORIGIN_Y}px`;
-    panel.style.transformOrigin = `${PANEL_ORIGIN_X}px ${PANEL_ORIGIN_Y}px`;
-
-    tl.set(panelTrio, { x: 0, y: 0 }, 0);
-    tl.set(chainEls, { x: 0, y: 0, scale: 0 }, 0);
-    tl.to(triggerStretchBits, { x: 0, y: -2, scaleX: 1.05, scaleY: 1.18, duration: 0.12, ease: OUT_STRONG }, 0);
-    tl.to(triggerBits, { scale: 1, y: 0, duration: 0.34, ease: SPRING }, 0.14);
-    tl.to(triggerIcon, { autoAlpha: 0, rotation: 135, duration: 0.14, ease: P2_IN }, 0.04);
-    tl.to(panelTrio, { scale: 0.38, duration: 0.13, ease: P1_INOUT }, 0.02);
-    tl.to(panelTrio, { scaleY: 1, rotation: 0, duration: 0.32, ease: POP }, 0.15);
-    tl.to(panelTrio, { scaleX: 1, duration: 0.32, ease: POP }, 0.2);
-    // Rows condense bottom-up
-    const rowInners = Array.from(panel.querySelectorAll('.lqd-item-inner'));
-    if (rowInners[0] && getState(rowInners[0]).opacity < 0.05) {
-      tl.set(rowInners, { autoAlpha: 0, y: 10 }, 0);
-    }
-    rowInners.forEach((row, i) => {
-      tl.to(row, { autoAlpha: 1, y: 0, duration: 0.18, ease: BACK_OUT }, 0.22 + (rowInners.length - 1 - i) * 0.03);
-    });
-    tl.set(triggerBody, { autoAlpha: 0 }, 0.34);
-    tl.set(bodies, { autoAlpha: 1 }, 0.5);
-    tl.to(goo, { autoAlpha: 0, duration: 0.14, ease: P1_OUT }, 0.5);
-    tl.call(() => { setGooBlur(gooEls, GOO_BLUR_REST); }, 0.66);
-    tl.call(() => anchor.removeAttribute('data-liquid'), 0.65);
-
-    liquidOn(GOO_BLUR_ACTIVE);
-    trigger.setAttribute('aria-expanded', 'true');
-    sfx.pop(660, 0.09);
-    tl.play();
-  }
-
-  function closeMenu() {
-    if (!open) { return; }
-    open = false;
-    if (tl) tl.kill();
-    tl = new Timeline();
-
-    tl.set(triggerBody, { autoAlpha: 1 }, 0);
-    tl.set(blobPanel, { autoAlpha: 1 }, 0);
-    tl.set(chainEls, { x: 0, y: 0, scale: 0 }, 0);
-    tl.to(panelTrio, { x: 0, y: 0, duration: 0.12, ease: OUT_STRONG }, 0);
-    tl.to(panelTrio, { scaleX: 0.32, duration: 0.16, ease: ANTICIPATE }, 0);
-    tl.to(panelTrio, { scaleY: 0.36, rotation: -2, duration: 0.16, ease: ANTICIPATE }, 0.045);
-    const rowInners = Array.from(panel.querySelectorAll('.lqd-item-inner'));
-    rowInners.forEach((row, i) => {
-      tl.to(row, { autoAlpha: 0, y: 4, duration: 0.06, ease: P1_IN }, 0.05 + i * 0.005);
-    });
-    tl.to(panelTrio, { scale: PANEL_REST_SCALE, duration: 0.07, ease: P2_IN }, 0.21);
-    tl.set([panelBody, panel], { autoAlpha: 0 }, 0.28);
-    tl.to(triggerBits, { scaleX: 1.2, scaleY: 0.82, duration: 0.06, ease: P2_OUT }, 0.24);
-    tl.to(triggerBits, { scaleX: 0.94, scaleY: 1.07, duration: 0.08, ease: P1_INOUT }, 0.30);
-    tl.to(triggerBits, { scaleX: 1, scaleY: 1, duration: 0.28, ease: SPRING }, 0.38);
-    tl.to(triggerIcon, { autoAlpha: 1, rotation: 0, duration: 0.18, ease: OUT_STRONG }, 0.26);
-    tl.set(bodies, { autoAlpha: 1 }, 0.34);
-    tl.to(goo, { autoAlpha: 0, duration: 0.12, ease: P1_OUT }, 0.34);
-    tl.call(() => { setGooBlur(gooEls, GOO_BLUR_REST); }, 0.47);
-    tl.call(() => anchor.removeAttribute('data-liquid'), 0.46);
-
-    liquidOn(GOO_BLUR_ACTIVE);
-    trigger.setAttribute('aria-expanded', 'false');
-    sfx.pop(420, 0.12);
-    tl.play();
-  }
-
-  trigger.addEventListener('click', () => {
-    if (stretch && stretch.consumeClick()) return;
-    if (open) closeMenu(); else openMenu();
-  });
-
-  // ─── Stretch gesture (the taffy grab) ───────────────────────────
-  const stretch = (function makeStretch() {
-    let pressed = false;
-    let suppressClick = false;
-    let grabBase = { x: 0, y: 0 };
-    let stretchDist = 0;
-
-    function beginGrab(e) {
-      if (reducedMotion || e.button !== 0 || open) return;
-      pressed = true;
-      suppressClick = false;
-      stretchDist = 0;
-      grabBase = { x: 0, y: 0 };
-      try { trigger.setPointerCapture(e.pointerId); } catch (_) {}
-      window.addEventListener('pointerup', release, { once: true });
-      liquidOn(GOO_BLUR_GRAB);
-      chainEls.forEach((c) => { const st = getState(c); st.x = st.y = 0; st.scaleX = st.scaleY = 0.4; writeState(c, st); });
-      const t = new Timeline();
-      t.to(triggerBits, { scale: 0.85, duration: 0.1, ease: OUT_STRONG }, 0);
-      t.play();
-    }
-
-    function pointerMove(e) {
-      if (!pressed || reducedMotion) return;
-      const rect = anchor.getBoundingClientRect();
-      const half = BUTTON_SIZE / 2;
-      const dx = e.clientX - (rect.left + half + grabBase.x);
-      const dy = e.clientY - (rect.top + half + grabBase.y);
-      const dist = Math.hypot(dx, dy);
-      stretchDist = dist;
-      const reach = Math.max(0, dist - 6);
-      const pull = Math.min(reach * 0.7, GRAB_MAX);
-      const tension = pull / GRAB_MAX;
-      const ux = dist > 0 ? dx / dist : 0;
-      const uy = dist > 0 ? dy / dist : 0;
-
-      chainEls.forEach((c, i) => {
-        const link = GRAB_CHAIN[i];
-        const st = getState(c);
-        st.x = ux * pull * link.follow;
-        st.y = uy * pull * link.follow;
-        st.scaleX = st.scaleY = link.size * (1 - tension * link.thin);
-        writeState(c, st);
+    ITEMS.forEach((item) => {
+      const row = document.createElement('button');
+      row.className = 'lqd-item';
+      row.setAttribute('role', 'menuitem');
+      row.innerHTML = `<span class="lqd-item-icon">${item.icon}</span>
+        <span class="lqd-item-inner"><span class="lqd-item-label">${item.label}</span></span>`;
+      row.addEventListener('click', () => {
+        if (stretch && stretch.consumeClick()) return;
+        closeMenu();
+        item.action();
       });
+      row.addEventListener('pointerenter', () => sfx.pop(880, 0.05));
+      panel.appendChild(row);
+    });
 
-      const st = getState(triggerStretchBits[0]);
-      st.x = ux * pull * 0.18;
-      st.y = uy * pull * 0.18;
-      st.rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
-      st.scaleX = (1 + tension * 0.12) * 0.85;
-      st.scaleY = (1 - tension * 0.06) * 0.85;
-      writeState(triggerStretchBits[0], st);
-      writeState(triggerStretchBits[1], st);
-      const ist = getState(triggerIcon);
-      ist.x = ux * pull * 0.28;
-      ist.y = uy * pull * 0.28;
-      writeState(triggerIcon, ist);
+    applyVars(Array.from(panel.querySelectorAll('.lqd-item-inner')), { autoAlpha: 0, y: 10 }, true);
+    applyVars(chainEls, { scale: 0 }, true);
+
+    function toggleThemeQuick() {
+      fetch('/api/settings/theme').then((r) => r.json()).then((d) => {
+        const next = (d.theme || 'auto') === 'dark' ? 'light' : 'dark';
+        if (typeof setTheme === 'function') setTheme(next);
+      }).catch(() => {});
     }
 
-    function release() {
-      if (!pressed) return;
-      pressed = false;
-      const wasStretched = stretchDist > 12;
-      suppressClick = wasStretched;
-      stretchDist = 0;
+    let open = false;
+    let tl = null;
+    const panelTrio = [panelBody, panel, blobPanel];
+    const triggerBits = [blobTrigger, triggerBody];
+    const triggerStretchBits = [blobTrigger, triggerBody];
 
-      const t = new Timeline();
-      if (wasStretched) {
-        chainEls.forEach((c, i) => {
-          t.to(c, { x: 0, y: 0, duration: 0.5, ease: SPRING }, i * 0.025);
-          t.to(c, { scale: 0, duration: 0.2, ease: P2_IN }, 0.16 + i * 0.025);
+    function liquidOn(blur) {
+      anchor.setAttribute('data-liquid', '');
+      goo.style.opacity = '1';
+      goo.style.visibility = 'visible';
+      setGooBlur(gooSVG, blur);
+      bodies.style.visibility = 'hidden';
+    }
+
+    function openMenu() {
+      if (open) return;
+      open = true;
+      if (tl) tl.kill();
+      tl = new Timeline();
+      panelBody.style.visibility = 'visible';
+      panel.style.visibility = 'visible';
+      blobPanel.style.visibility = 'visible';
+      panelBody.style.transformOrigin = `${PANEL_ORIGIN_X}px ${PANEL_ORIGIN_Y}px`;
+      panel.style.transformOrigin = `${PANEL_ORIGIN_X}px ${PANEL_ORIGIN_Y}px`;
+      tl.set(panelTrio, { x: 0, y: 0 }, 0);
+      tl.set(chainEls, { x: 0, y: 0, scale: 0 }, 0);
+      tl.to(triggerStretchBits, { x: 0, y: -2, scaleX: 1.05, scaleY: 1.18, duration: 0.12, ease: OUT_STRONG }, 0);
+      tl.to(triggerBits, { scale: 1, y: 0, duration: 0.34, ease: SPRING }, 0.14);
+      tl.to(triggerIcon, { autoAlpha: 0, rotation: 135, duration: 0.14, ease: P2_IN }, 0.04);
+      tl.to(panelTrio, { scale: 0.38, duration: 0.13, ease: P1_INOUT }, 0.02);
+      tl.to(panelTrio, { scaleY: 1, rotation: 0, duration: 0.32, ease: POP }, 0.15);
+      tl.to(panelTrio, { scaleX: 1, duration: 0.32, ease: POP }, 0.2);
+      const rowInners = Array.from(panel.querySelectorAll('.lqd-item-inner'));
+      if (rowInners[0] && getState(rowInners[0]).opacity < 0.05) {
+        tl.set(rowInners, { autoAlpha: 0, y: 10 }, 0);
+      }
+      rowInners.forEach((row, i) => {
+        tl.to(row, { autoAlpha: 1, y: 0, duration: 0.18, ease: BACK_OUT },
+          0.22 + (rowInners.length - 1 - i) * 0.03);
+      });
+      tl.set(triggerBody, { autoAlpha: 0 }, 0.34);
+      tl.set(bodies, { autoAlpha: 1 }, 0.5);
+      tl.to(goo, { autoAlpha: 0, duration: 0.14, ease: P1_OUT }, 0.5);
+      tl.call(() => { setGooBlur(gooSVG, GOO_BLUR_REST); }, 0.66);
+      tl.call(() => anchor.removeAttribute('data-liquid'), 0.65);
+      liquidOn(GOO_BLUR_ACTIVE);
+      trigger.setAttribute('aria-expanded', 'true');
+      sfx.pop(660, 0.09);
+      tl.play();
+    }
+
+    function closeMenu() {
+      if (!open) return;
+      open = false;
+      if (tl) tl.kill();
+      tl = new Timeline();
+      tl.set(triggerBody, { autoAlpha: 1 }, 0);
+      tl.set(blobPanel, { autoAlpha: 1 }, 0);
+      tl.set(chainEls, { x: 0, y: 0, scale: 0 }, 0);
+      tl.to(panelTrio, { x: 0, y: 0, duration: 0.12, ease: OUT_STRONG }, 0);
+      tl.to(panelTrio, { scaleX: 0.32, duration: 0.16, ease: ANTICIPATE }, 0);
+      tl.to(panelTrio, { scaleY: 0.36, rotation: -2, duration: 0.16, ease: ANTICIPATE }, 0.045);
+      const rowInners = Array.from(panel.querySelectorAll('.lqd-item-inner'));
+      rowInners.forEach((row, i) => {
+        tl.to(row, { autoAlpha: 0, y: 4, duration: 0.06, ease: P1_IN }, 0.05 + i * 0.005);
+      });
+      tl.to(panelTrio, { scale: PANEL_REST_SCALE, duration: 0.07, ease: P2_IN }, 0.21);
+      tl.set([panelBody, panel], { autoAlpha: 0 }, 0.28);
+      tl.to(triggerBits, { scaleX: 1.2, scaleY: 0.82, duration: 0.06, ease: P2_OUT }, 0.24);
+      tl.to(triggerBits, { scaleX: 0.94, scaleY: 1.07, duration: 0.08, ease: P1_INOUT }, 0.30);
+      tl.to(triggerBits, { scaleX: 1, scaleY: 1, duration: 0.28, ease: SPRING }, 0.38);
+      tl.to(triggerIcon, { autoAlpha: 1, rotation: 0, duration: 0.18, ease: OUT_STRONG }, 0.26);
+      tl.set(bodies, { autoAlpha: 1 }, 0.34);
+      tl.to(goo, { autoAlpha: 0, duration: 0.12, ease: P1_OUT }, 0.34);
+      tl.call(() => { setGooBlur(gooSVG, GOO_BLUR_REST); }, 0.47);
+      tl.call(() => anchor.removeAttribute('data-liquid'), 0.46);
+      liquidOn(GOO_BLUR_ACTIVE);
+      trigger.setAttribute('aria-expanded', 'false');
+      sfx.pop(420, 0.12);
+      tl.play();
+    }
+
+    trigger.addEventListener('click', () => {
+      if (stretch && stretch.consumeClick()) return;
+      if (open) closeMenu(); else openMenu();
+    });
+
+    const stretch = (function makeStretch() {
+      let pressed = false;
+      let suppressClick = false;
+      let stretchDist = 0;
+
+      function beginGrab(e) {
+        if (reducedMotion || e.button !== 0 || open) return;
+        pressed = true;
+        suppressClick = false;
+        stretchDist = 0;
+        try { trigger.setPointerCapture(e.pointerId); } catch (_) {}
+        window.addEventListener('pointerup', release, { once: true });
+        liquidOn(GOO_BLUR_GRAB);
+        chainEls.forEach((c) => {
+          const st = getState(c); st.x = st.y = 0; st.scaleX = st.scaleY = 0.4; writeState(c, st);
         });
+        const t = new Timeline();
+        t.to(triggerBits, { scale: 0.85, duration: 0.1, ease: OUT_STRONG }, 0);
+        t.play();
       }
-      t.to(triggerStretchBits, { x: 0, y: 0, rotation: 0, duration: 0.5, ease: SPRING }, 0);
-      t.to(triggerIcon, { x: 0, y: 0, duration: 0.5, ease: SPRING }, 0);
-      if (wasStretched) {
-        t.to(triggerBits, { scaleX: 1.2, scaleY: 0.82, duration: 0.09, ease: P2_OUT }, 0.12);
-        t.to(triggerBits, { scaleX: 0.93, scaleY: 1.09, duration: 0.11, ease: P1_INOUT }, 0.21);
-        t.to(triggerBits, { scaleX: 1, scaleY: 1, duration: 0.4, ease: SPRING }, 0.32);
-      } else {
-        t.to(triggerBits, { scale: 1, duration: 0.45, ease: SPRING }, 0);
+
+      function pointerMove(e) {
+        if (!pressed || reducedMotion) return;
+        const rect = anchor.getBoundingClientRect();
+        const half = BUTTON_SIZE / 2;
+        const dx = e.clientX - (rect.left + half);
+        const dy = e.clientY - (rect.top + half);
+        const dist = Math.hypot(dx, dy);
+        stretchDist = dist;
+        const reach = Math.max(0, dist - 6);
+        const pull = Math.min(reach * 0.7, GRAB_MAX);
+        const tension = pull / GRAB_MAX;
+        const ux = dist > 0 ? dx / dist : 0;
+        const uy = dist > 0 ? dy / dist : 0;
+        chainEls.forEach((c, i) => {
+          const link = GRAB_CHAIN[i];
+          const st = getState(c);
+          st.x = ux * pull * link.follow;
+          st.y = uy * pull * link.follow;
+          st.scaleX = st.scaleY = link.size * (1 - tension * link.thin);
+          writeState(c, st);
+        });
+        const st = getState(triggerStretchBits[0]);
+        st.x = ux * pull * 0.18;
+        st.y = uy * pull * 0.18;
+        st.rotation = (Math.atan2(dy, dx) * 180) / Math.PI;
+        st.scaleX = (1 + tension * 0.12) * 0.85;
+        st.scaleY = (1 - tension * 0.06) * 0.85;
+        writeState(triggerStretchBits[0], st);
+        writeState(triggerStretchBits[1], st);
+        const ist = getState(triggerIcon);
+        ist.x = ux * pull * 0.28;
+        ist.y = uy * pull * 0.28;
+        writeState(triggerIcon, ist);
       }
-      t.set(bodies, { autoAlpha: 1 }, wasStretched ? 0.45 : 0.3);
-      t.to(goo, { autoAlpha: 0, duration: 0.14, ease: P1_OUT }, wasStretched ? 0.45 : 0.3);
-      t.call(() => { setGooBlur(gooEls, GOO_BLUR_REST); anchor.removeAttribute('data-liquid'); }, wasStretched ? 0.6 : 0.44);
-      if (wasStretched) sfx.pop(520, 0.07);
-      t.play();
-    }
 
-    function consumeClick() {
-      if (suppressClick) { suppressClick = false; return true; }
-      return false;
-    }
+      function release() {
+        if (!pressed) return;
+        pressed = false;
+        const wasStretched = stretchDist > 12;
+        suppressClick = wasStretched;
+        stretchDist = 0;
+        const t = new Timeline();
+        if (wasStretched) {
+          chainEls.forEach((c, i) => {
+            t.to(c, { x: 0, y: 0, duration: 0.5, ease: SPRING }, i * 0.025);
+            t.to(c, { scale: 0, duration: 0.2, ease: P2_IN }, 0.16 + i * 0.025);
+          });
+        }
+        t.to(triggerStretchBits, { x: 0, y: 0, rotation: 0, duration: 0.5, ease: SPRING }, 0);
+        t.to(triggerIcon, { x: 0, y: 0, duration: 0.5, ease: SPRING }, 0);
+        if (wasStretched) {
+          t.to(triggerBits, { scaleX: 1.2, scaleY: 0.82, duration: 0.09, ease: P2_OUT }, 0.12);
+          t.to(triggerBits, { scaleX: 0.93, scaleY: 1.09, duration: 0.11, ease: P1_INOUT }, 0.21);
+          t.to(triggerBits, { scaleX: 1, scaleY: 1, duration: 0.4, ease: SPRING }, 0.32);
+        } else {
+          t.to(triggerBits, { scale: 1, duration: 0.45, ease: SPRING }, 0);
+        }
+        t.set(bodies, { autoAlpha: 1 }, wasStretched ? 0.45 : 0.3);
+        t.to(goo, { autoAlpha: 0, duration: 0.14, ease: P1_OUT }, wasStretched ? 0.45 : 0.3);
+        t.call(() => {
+          setGooBlur(gooSVG, GOO_BLUR_REST);
+          anchor.removeAttribute('data-liquid');
+        }, wasStretched ? 0.6 : 0.44);
+        if (wasStretched) sfx.pop(520, 0.07);
+        t.play();
+      }
 
-    trigger.addEventListener('pointerdown', beginGrab);
-    trigger.addEventListener('pointermove', pointerMove);
-    return { consumeClick };
-  })();
+      function consumeClick() {
+        if (suppressClick) { suppressClick = false; return true; }
+        return false;
+      }
 
-  // Arm audio on the first interaction anywhere (autoplay policy)
-  document.addEventListener('pointerdown', () => sfx.ensure(), { once: true });
+      trigger.addEventListener('pointerdown', beginGrab);
+      trigger.addEventListener('pointermove', pointerMove);
+      return { consumeClick };
+    })();
 
-  // Expose a mute toggle for power users
-  window.liquidSfx = sfx;
+    document.addEventListener('pointerdown', () => sfx.ensure(), { once: true });
+  }
+
+  // ─── Init ───────────────────────────────────────────────────────
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', liquidifyAllSelects);
+  } else {
+    liquidifyAllSelects();
+  }
 })();
