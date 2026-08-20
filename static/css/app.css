@@ -11,10 +11,10 @@
   --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 1);
   --card: rgba(255, 255, 255, 0.65);
   --card-hover: rgba(255, 255, 255, 0.85);
-  --accent: #6366f1;
-  --accent-soft: rgba(99, 102, 241, 0.1);
-  --accent-glow: rgba(99, 102, 241, 0.2);
-  --accent-text: #4f46e5;
+  --accent: #0d9488;
+  --accent-soft: rgba(13, 148, 136, 0.1);
+  --accent-glow: rgba(13, 148, 136, 0.2);
+  --accent-text: #0f766e;
   --text: #1a1a2e;
   --text-dim: #6b7280;
   --text-faint: #9ca3af;
@@ -31,12 +31,12 @@
   --modal-bg: rgba(0, 0, 0, 0.2);
   --terminal-bg: rgba(20, 20, 30, 0.92);
   --terminal-text: #a7f3d0;
-  --scrollbar: rgba(99, 102, 241, 0.3);
-  --scrollbar-hover: rgba(99, 102, 241, 0.5);
+  --scrollbar: rgba(13, 148, 136, 0.3);
+  --scrollbar-hover: rgba(13, 148, 136, 0.5);
   --chip-bg: rgba(255, 255, 255, 0.6);
   --chip-border: rgba(0, 0, 0, 0.06);
-  --sparkline-stroke: rgba(99, 102, 241, 0.6);
-  --sparkline-fill: rgba(99, 102, 241, 0.1);
+  --sparkline-stroke: rgba(13, 148, 136, 0.6);
+  --sparkline-fill: rgba(13, 148, 136, 0.1);
 }
 
 /* Dark mode */
@@ -52,10 +52,10 @@
     --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
     --card: rgba(30, 30, 42, 0.5);
     --card-hover: rgba(40, 40, 55, 0.7);
-    --accent: #818cf8;
-    --accent-soft: rgba(129, 140, 248, 0.15);
-    --accent-glow: rgba(129, 140, 248, 0.3);
-    --accent-text: #a5b4fc;
+    --accent: #2dd4bf;
+    --accent-soft: rgba(45, 212, 191, 0.15);
+    --accent-glow: rgba(45, 212, 191, 0.3);
+    --accent-text: #5eead4;
     --text: #e5e7eb;
     --text-dim: #9ca3af;
     --text-faint: #6b7280;
@@ -68,12 +68,12 @@
     --modal-bg: rgba(0, 0, 0, 0.6);
     --terminal-bg: rgba(10, 10, 15, 0.95);
     --terminal-text: #6ee7b7;
-    --scrollbar: rgba(129, 140, 248, 0.3);
-    --scrollbar-hover: rgba(129, 140, 248, 0.5);
+    --scrollbar: rgba(45, 212, 191, 0.3);
+    --scrollbar-hover: rgba(45, 212, 191, 0.5);
     --chip-bg: rgba(255, 255, 255, 0.06);
     --chip-border: rgba(255, 255, 255, 0.1);
-    --sparkline-stroke: rgba(129, 140, 248, 0.7);
-    --sparkline-fill: rgba(129, 140, 248, 0.12);
+    --sparkline-stroke: rgba(45, 212, 191, 0.7);
+    --sparkline-fill: rgba(45, 212, 191, 0.12);
   }
 }
 
@@ -2071,7 +2071,7 @@ body {
   flex-shrink: 0;
 }
 
-.agent-avatar.nika { background: linear-gradient(135deg, #6366f1, #a78bfa); }
+.agent-avatar.nika { background: linear-gradient(135deg, #0d9488, #14b8a6); }
 .agent-avatar.hermy { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
 .agent-avatar.decloud { background: linear-gradient(135deg, #10b981, #34d399); }
 .agent-avatar.pengy { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
@@ -3358,7 +3358,7 @@ body {
 }
 .legos-fab:active { transform: scale(0.9); }
 .legos-fab-add {
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, #0d9488, #2dd4bf);
   color: white;
   border-color: transparent;
   box-shadow: 0 4px 20px rgba(99,102,241,0.3);
@@ -3414,8 +3414,8 @@ body {
 }
 
 @keyframes voice-orb-pulse {
-  0%, 100% { box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4), 0 0 0 0 rgba(99, 102, 241, 0.3); }
-  50% { box-shadow: 0 4px 30px rgba(99, 102, 241, 0.5), 0 0 0 12px rgba(99, 102, 241, 0); }
+  0%, 100% { box-shadow: 0 4px 20px rgba(13, 148, 136, 0.4), 0 0 0 0 rgba(13, 148, 136, 0.3); }
+  50% { box-shadow: 0 4px 30px rgba(13, 148, 136, 0.5), 0 0 0 12px rgba(13, 148, 136, 0); }
 }
 
 /* Voice overlay */
@@ -3476,7 +3476,7 @@ body {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #818cf8);
+  background: linear-gradient(135deg, #0d9488, #2dd4bf);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3490,7 +3490,7 @@ body {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  border: 2px solid rgba(99, 102, 241, 0.4);
+  border: 2px solid rgba(13, 148, 136, 0.4);
   animation: voice-ring 2s ease-out infinite;
 }
 
@@ -3504,7 +3504,7 @@ body {
 
 /* States */
 .voice-anim-idle .voice-anim-core {
-  box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 0 20px rgba(13, 148, 136, 0.3);
 }
 
 .voice-anim-listening .voice-anim-core {
@@ -3696,7 +3696,7 @@ body {
 }
 
 .voice-setting-row select:focus {
-  border-color: rgba(99, 102, 241, 0.6);
+  border-color: rgba(13, 148, 136, 0.6);
 }
 
 /* Controls */
@@ -3741,8 +3741,8 @@ body {
 }
 
 #voice-mute-btn:not(.muted) {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: rgba(99, 102, 241, 0.35);
+  background: rgba(13, 148, 136, 0.15);
+  border-color: rgba(13, 148, 136, 0.35);
 }
 
 /* Dark mode adjustments */
@@ -3780,12 +3780,12 @@ body {
     color: rgba(0, 0, 0, 0.6);
   }
   .voice-mode-btn.active {
-    background: rgba(99, 102, 241, 0.15);
-    border-color: rgba(99, 102, 241, 0.4);
-    color: #6366f1;
+    background: rgba(13, 148, 136, 0.15);
+    border-color: rgba(13, 148, 136, 0.4);
+    color: #0d9488;
   }
   .voice-chat-msg.user {
-    background: rgba(99, 102, 241, 0.12);
+    background: rgba(13, 148, 136, 0.12);
     color: rgba(0, 0, 0, 0.8);
   }
   .voice-chat-msg.assistant {
@@ -3798,14 +3798,14 @@ body {
     color: rgba(0, 0, 0, 0.85);
   }
   .voice-chat-send {
-    background: rgba(99, 102, 241, 0.2);
-    color: #6366f1;
+    background: rgba(13, 148, 136, 0.2);
+    color: #0d9488;
   }
   .chat-history-content {
     background: rgba(255, 255, 255, 0.98);
   }
   .chat-history-header h3 { color: rgba(0, 0, 0, 0.8); }
-  .chat-history-item.user { background: rgba(99, 102, 241, 0.08); }
+  .chat-history-item.user { background: rgba(13, 148, 136, 0.08); }
   .chat-history-item.assistant { background: rgba(0, 0, 0, 0.04); }
   .chat-history-role { color: rgba(0, 0, 0, 0.5); }
   .chat-history-text { color: rgba(0, 0, 0, 0.75); }
@@ -3843,9 +3843,9 @@ body {
 }
 
 .voice-mode-btn.active {
-  background: rgba(99, 102, 241, 0.25);
-  color: #818cf8;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+  background: rgba(13, 148, 136, 0.25);
+  color: #2dd4bf;
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.2);
 }
 
 /* ═══ VOICE VIEW ═══ */
@@ -4008,7 +4008,7 @@ body {
 }
 
 .voice-chat-input:focus {
-  border-color: rgba(99, 102, 241, 0.5);
+  border-color: rgba(13, 148, 136, 0.5);
 }
 
 .voice-chat-input::placeholder {
@@ -4020,8 +4020,8 @@ body {
   height: 48px;
   border: none;
   border-radius: 50%;
-  background: rgba(99, 102, 241, 0.3);
-  color: #818cf8;
+  background: rgba(13, 148, 136, 0.3);
+  color: #2dd4bf;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -4031,7 +4031,7 @@ body {
 }
 
 .voice-chat-send:active { transform: scale(0.9); }
-.voice-chat-send:hover { background: rgba(99, 102, 241, 0.4); }
+.voice-chat-send:hover { background: rgba(13, 148, 136, 0.4); }
 
 /* ═══ CHAT HISTORY MODAL ═══ */
 
@@ -4108,7 +4108,7 @@ body {
 .chat-history-item.user {
   align-self: flex-end;
   max-width: 85%;
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(13, 148, 136, 0.15);
   border-bottom-right-radius: 4px;
 }
 
@@ -4628,10 +4628,10 @@ body {
   --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --card: rgba(30, 30, 42, 0.5);
   --card-hover: rgba(40, 40, 55, 0.7);
-  --accent: #818cf8;
-  --accent-soft: rgba(129, 140, 248, 0.15);
-  --accent-glow: rgba(129, 140, 248, 0.3);
-  --accent-text: #a5b4fc;
+  --accent: #2dd4bf;
+  --accent-soft: rgba(45, 212, 191, 0.15);
+  --accent-glow: rgba(45, 212, 191, 0.3);
+  --accent-text: #5eead4;
   --text: #e5e7eb;
   --text-dim: #9ca3af;
   --text-faint: #6b7280;
@@ -4644,12 +4644,12 @@ body {
   --modal-bg: rgba(0, 0, 0, 0.6);
   --terminal-bg: rgba(10, 10, 15, 0.95);
   --terminal-text: #6ee7b7;
-  --scrollbar: rgba(129, 140, 248, 0.3);
-  --scrollbar-hover: rgba(129, 140, 248, 0.5);
+  --scrollbar: rgba(45, 212, 191, 0.3);
+  --scrollbar-hover: rgba(45, 212, 191, 0.5);
   --chip-bg: rgba(255, 255, 255, 0.06);
   --chip-border: rgba(255, 255, 255, 0.1);
-  --sparkline-stroke: rgba(129, 140, 248, 0.7);
-  --sparkline-fill: rgba(129, 140, 248, 0.12);
+  --sparkline-stroke: rgba(45, 212, 191, 0.7);
+  --sparkline-fill: rgba(45, 212, 191, 0.12);
 }
 
 /* Forced light mode via data-theme */
@@ -4664,10 +4664,10 @@ body {
   --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 1);
   --card: rgba(255, 255, 255, 0.65);
   --card-hover: rgba(255, 255, 255, 0.85);
-  --accent: #6366f1;
-  --accent-soft: rgba(99, 102, 241, 0.1);
-  --accent-glow: rgba(99, 102, 241, 0.2);
-  --accent-text: #4f46e5;
+  --accent: #0d9488;
+  --accent-soft: rgba(13, 148, 136, 0.1);
+  --accent-glow: rgba(13, 148, 136, 0.2);
+  --accent-text: #0f766e;
   --text: #1a1a2e;
   --text-dim: #6b7280;
   --text-faint: #9ca3af;
@@ -4680,12 +4680,12 @@ body {
   --modal-bg: rgba(0, 0, 0, 0.2);
   --terminal-bg: rgba(20, 20, 30, 0.92);
   --terminal-text: #a7f3d0;
-  --scrollbar: rgba(99, 102, 241, 0.3);
-  --scrollbar-hover: rgba(99, 102, 241, 0.5);
+  --scrollbar: rgba(13, 148, 136, 0.3);
+  --scrollbar-hover: rgba(13, 148, 136, 0.5);
   --chip-bg: rgba(255, 255, 255, 0.6);
   --chip-border: rgba(0, 0, 0, 0.06);
-  --sparkline-stroke: rgba(99, 102, 241, 0.6);
-  --sparkline-fill: rgba(99, 102, 241, 0.1);
+  --sparkline-stroke: rgba(13, 148, 136, 0.6);
+  --sparkline-fill: rgba(13, 148, 136, 0.1);
 }
 
 
@@ -5138,7 +5138,7 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
 
 .lego-image-poof {
   right: 78px;
-  background: rgba(99, 102, 241, 0.8);
+  background: rgba(13, 148, 136, 0.8);
 }
 
 .lego-image-save {
@@ -5274,7 +5274,7 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
 
 .lego-swipe-hint-right {
   right: 20px;
-  background: rgba(99, 102, 241, 0.9);
+  background: rgba(13, 148, 136, 0.9);
   color: white;
   transform: rotate(15deg);
 }
@@ -5319,7 +5319,7 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
 }
 
 .lego-swipe-btn-poof {
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(13, 148, 136, 0.15);
 }
 
 /* ═══ BOTS (Bot Mode) ═══ */

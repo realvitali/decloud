@@ -268,11 +268,15 @@ def bot_chat(name):
     session = f'bots-{name}-{suffix}' if suffix else f'bots-{name}'
     args = ['-p', name, 'chat', '-q', msg, '--continue', session,
             '--create-if-missing', '-Q', '--max-turns', '12',
-            '-t', 'web,terminal,file,browser,code_execution,skills,memory,session_search,a2a',
+            '-t', 'web,terminal,file,browser,code_execution,skills,memory,session_search',
             '--yolo']
-    model = data.get('model')
+    model = data.get('model') or reg[name].get('model', '')
     if model and re.match(r'^[\w.:/-]+$', model):
         args += ['-m', model]
+    # Tell the agent which model it's actually running on, so it doesn't
+    # hallucinate its own identity when asked.
+    if model:
+        msg = f'[system note: you are running on model "{model}"]\n{msg}'
 
     _append_log(name, 'user', msg)
     rc, out, err = _run_hermes(args, profile=name)
@@ -282,20 +286,20 @@ def bot_chat(name):
         raw = (err or out or '').strip()
         raw_lower = raw.lower()
         if rc == 124:
-            reply = '⏱ The agent timed out. Try again or use a simpler question.'
+            reply = 'The agent timed out. Try again or use a simpler question.'
         elif '402' in raw_lower or 'payment required' in raw_lower or 'balance is empty' in raw_lower:
-            reply = '💳 This model is out of credits. Tell Vitali to top up the ollama balance or switch models.'
+            reply = 'This model is out of credits. Tell Vitali to top up the ollama balance or switch models.'
         elif '429' in raw_lower or 'rate limit' in raw_lower or 'usage limit' in raw_lower:
-            reply = '🚦 This model hit a rate limit. It will reset later. Try again in a bit.'
+            reply = 'This model hit a rate limit. It will reset later. Try again in a bit.'
         elif '401' in raw_lower or 'unauthorized' in raw_lower or 'token expired' in raw_lower:
-            reply = '🔑 API key is expired or invalid. Tell Vitali to refresh the key.'
+            reply = 'API key is expired or invalid. Tell Vitali to refresh the key.'
         elif 'connection' in raw_lower or 'refused' in raw_lower or 'timeout' in raw_lower:
-            reply = '🔌 Could not connect to the model server. It might be down.'
+            reply = 'Could not connect to the model server. It might be down.'
         elif 'model' in raw_lower and 'not found' in raw_lower:
-            reply = '❓ The configured model was not found. It may have been removed.'
+            reply = 'The configured model was not found. It may have been removed.'
         else:
             last_line = (raw.splitlines() or ['unknown error'])[-1][:300]
-            reply = f'⚠ Agent error: {last_line}'
+            reply = f'Agent error: {last_line}'
     _append_log(name, 'assistant', reply)
     return jsonify({'ok': True, 'reply': reply})
 
@@ -409,11 +413,11 @@ def bot_relay(name):
         rc, out, err = _run_hermes(['-p', bot, 'chat', '-q', text, '--continue',
                                     session, '--create-if-missing', '-Q',
                                     '--max-turns', '8',
-                                    '-t', 'web,terminal,file,browser,skills,memory,a2a',
+                                    '-t', 'web,terminal,file,browser,skills,memory',
                                     '--yolo'], profile=bot)
         reply = _parse_reply(out)
         if not reply:
-            reply = f'⚠ error: {((err or out).strip().splitlines() or ["unknown"])[-1][:200]}'
+            reply = f'error: {((err or out).strip().splitlines() or ["unknown"])[-1][:200]}'
         return reply
 
     _append_log(name, 'user', msg)
