@@ -5056,3 +5056,227 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
   background: rgba(99, 102, 241, 0.15);
 }
 
+
+/* ─── Liquid menu (port of liquid-taffy morphing dropdown) ───
+   Surface + rim are solid per frame so the goo filter's alpha
+   thresholds render a stable 1px border. */
+
+:root {
+  --lqd-surface: #ffffff;
+  --lqd-rim: #d7d7dc;
+  --lqd-text: #1f1f28;
+  --lqd-icon: #1f1f28;
+  --lqd-icon-hover: #6366f1;
+  --lqd-item-tint: rgba(99, 102, 241, 0.10);
+  --lqd-shadow: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.18));
+}
+:root[data-theme="dark"] {
+  --lqd-surface: #16161e;
+  --lqd-rim: #2f2f3a;
+  --lqd-text: #e8e8ee;
+  --lqd-icon: #e8e8ee;
+  --lqd-item-tint: rgba(129, 140, 248, 0.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --lqd-surface: #16161e;
+    --lqd-rim: #2f2f3a;
+    --lqd-text: #e8e8ee;
+    --lqd-icon: #e8e8ee;
+    --lqd-item-tint: rgba(129, 140, 248, 0.12);
+  }
+}
+
+#liquid-fab-root {
+  position: fixed;
+  right: 22px;
+  bottom: 26px;
+  z-index: 400;
+  display: none;
+}
+#home-screen.active #liquid-fab-root {
+  display: block;
+}
+
+.lqd-anchor {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+/* Crisp picture: one silhouette shadow for both bodies */
+.lqd-bodies {
+  position: absolute;
+  inset: 0;
+  filter: var(--lqd-shadow);
+}
+
+.lqd-trigger-body {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  background: var(--lqd-surface);
+  border: 1px solid var(--lqd-rim);
+  will-change: transform;
+}
+
+.lqd-panel-body {
+  position: absolute;
+  left: -54.5px;
+  bottom: 0;
+  width: 141px;
+  height: 164px;
+  overflow: visible;
+  visibility: hidden;
+  opacity: 0;
+  will-change: transform;
+}
+
+.lqd-panel-body-shape {
+  fill: var(--lqd-surface);
+  stroke: var(--lqd-rim);
+  stroke-width: 1;
+}
+
+/* The goo canvas: headroom for the panel, the finger, the blur tail */
+.lqd-goo {
+  position: absolute;
+  right: -144px;
+  bottom: -72px;
+  width: 320px;
+  height: 308px;
+  z-index: 1;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+.lqd-goo * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.lqd-blob {
+  fill: var(--lqd-surface);
+  will-change: transform;
+}
+.lqd-blob-panel {
+  transform-box: view-box;
+  transform-origin: 160px 220px;   /* = panel origin in goo coords */
+}
+.lqd-chain {
+  fill: var(--lqd-surface);
+  will-change: transform;
+}
+
+/* Rows above the goo, sharing the panel's rect and transforms */
+.lqd-panel {
+  position: absolute;
+  left: -54.5px;
+  bottom: 0;
+  width: 141px;
+  height: 164px;
+  padding: 7px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  visibility: hidden;
+  opacity: 0;
+  will-change: transform;
+}
+
+.lqd-item {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--lqd-text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 200ms ease-out, filter 200ms ease-out;
+}
+.lqd-item:hover {
+  color: var(--lqd-icon-hover);
+  background: var(--lqd-item-tint);
+}
+
+.lqd-item-icon {
+  position: relative;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lqd-item-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.lqd-item-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  will-change: transform;
+}
+
+.lqd-item-label {
+  position: relative;
+  z-index: 1;
+}
+
+/* Transparent hit area over the circle */
+.lqd-trigger {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: none;
+  color: var(--lqd-icon);
+  cursor: pointer;
+  transition: color 160ms ease-out, background-color 160ms ease-out;
+}
+.lqd-trigger:hover {
+  color: var(--lqd-icon-hover);
+  background: var(--lqd-item-tint);
+}
+[data-liquid] .lqd-trigger:hover,
+[data-liquid] .lqd-trigger {
+  background: none;
+}
+
+.lqd-trigger-icon {
+  display: flex;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lqd-item,
+  .lqd-trigger {
+    transition: none;
+  }
+}
