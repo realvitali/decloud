@@ -5388,3 +5388,90 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
     transition: none;
   }
 }
+
+/* ─── Liquid system: AI speed dial ─── */
+.lqd-ai {
+  position: fixed;
+  z-index: 450;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.lqd-ai-goo {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: visible;
+}
+.lqd-ai-goo * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.lqd-ai .lqd-blob,
+.lqd-ai .lqd-chain {
+  fill: var(--lqd-surface);
+}
+.lqd-ai-triggerbody {
+  position: absolute;
+  z-index: 2;
+  border-radius: 50%;
+  background: var(--lqd-surface);
+  border: 1px solid var(--lqd-rim);
+  filter: var(--lqd-shadow);
+  will-change: transform;
+}
+.lqd-ai-trigger {
+  position: absolute;
+  z-index: 3;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  color: var(--lqd-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: none;
+}
+.lqd-ai-triggericon {
+  display: flex;
+  will-change: transform;
+}
+.lqd-ai-triggericon svg {
+  width: 20px;
+  height: 20px;
+}
+.lqd-ai-sat {
+  position: absolute;
+  z-index: 3;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: pointer;
+  touch-action: none;
+  will-change: transform;
+}
+.lqd-ai-saticon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lqd-ai-saticon svg {
+  width: 22px;
+  height: 22px;
+}
+.lqd-ai-satlabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
