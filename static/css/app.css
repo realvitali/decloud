@@ -5118,11 +5118,8 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
   position: absolute;
   left: 0;
   top: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 16px;
-  background: var(--lqd-surface);
-  border: 1px solid var(--lqd-rim);
+  width: 52px;
+  height: 52px;
   will-change: transform;
 }
 
@@ -5254,7 +5251,7 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
   justify-content: center;
   padding: 0;
   border: 0;
-  border-radius: 16px;
+  border-radius: 14px;
   background: none;
   color: var(--lqd-icon);
   cursor: pointer;
@@ -5416,10 +5413,8 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
 .lqd-ai-triggerbody {
   position: absolute;
   z-index: 2;
-  border-radius: 50%;
-  background: var(--lqd-surface);
-  border: 1px solid var(--lqd-rim);
   filter: var(--lqd-shadow);
+  overflow: visible;
   will-change: transform;
 }
 .lqd-ai-trigger {
@@ -5427,7 +5422,7 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
   z-index: 3;
   border: none;
   background: transparent;
-  border-radius: 50%;
+  border-radius: 16px;
   color: var(--lqd-icon);
   display: flex;
   align-items: center;
@@ -5446,9 +5441,9 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
 .lqd-ai-sat {
   position: absolute;
   z-index: 3;
-  border: none;
-  background: transparent;
-  border-radius: 50%;
+  border: 1px solid var(--lqd-rim);
+  background: var(--lqd-surface);
+  border-radius: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -5457,6 +5452,7 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
   cursor: pointer;
   touch-action: none;
   will-change: transform;
+  filter: var(--lqd-shadow);
 }
 .lqd-ai-saticon {
   width: 24px;

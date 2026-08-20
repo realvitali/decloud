@@ -1,16 +1,23 @@
 // ===== Module: liquid =====
 // Project-wide "liquid glass" interaction system, ported from the
-// morphing/anchored dropdowns of liquid-taffy:
+// morphing/speed-dial interactions of liquid-taffy:
 //   https://github.com/arknow91/liquid-taffy  (MIT, (c) 2026 arknow91)
 //
-// Dependency-free (React/GSAP replaced by a small tween engine):
-//   1. Every <select> in the app becomes a liquid anchored dropdown
-//      (options mirrored live; picking dispatches the native change).
-//   2. Every button/clickable gets a liquid press-squash and a goo
-//      click ripple from one shared overlay canvas.
-//   3. The home-screen + button is the morphing-dropdown showcase.
+// DeCloud's shapes are ROUNDED SQUARES, so every liquid body here is a
+// squircle with DeCloud's corner language (not the reference's circles).
 //
-// Reduced-motion users get instant transitions, no physics.
+// Dependency-free (React/GSAP replaced by a small tween engine):
+//   1. Every <select> becomes a liquid anchored dropdown whose goo
+//      trigger is the host button's own rounded-rect silhouette.
+//   2. Every button/clickable gets a liquid press-squash and a
+//      squircle click ripple from one shared overlay canvas.
+//   3. The AI tile's spread is a liquid speed dial of squircle
+//      satellites that ooze out of the tile and ring still.
+//   4. The home-screen + tile is the morphing-dropdown showcase.
+//
+// Hardening: the animation step is exception-guarded, deferred
+// callbacks capture their targets (no null derefs after close), and
+// reduced-motion users get instant transitions.
 
 (function () {
   'use strict';
@@ -56,8 +63,8 @@
     for (let i = 0; i < points.length; i++) {
       if (t <= points[i][0]) {
         const dx = points[i][0] - prev[0];
-        const dy = points[i][1] - prev[1];
-        return prev[1] + ((t - prev[0]) / dx) * dy;
+        if (dx <= 0) return prev[1];
+        return prev[1] + ((t - prev[0]) / dx) * (points[i][1] - prev[1]);
       }
       prev = points[i];
     }
@@ -82,7 +89,7 @@
     };
   }
 
-  // ─── Tween engine ───────────────────────────────────────────────
+  // ─── Tween engine (exception-guarded) ──────────────────────────
   const reducedMotion = window.matchMedia &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -98,32 +105,39 @@
     kill() { this._killed = true; if (this._raf) cancelAnimationFrame(this._raf); }
     play() {
       if (reducedMotion) {
-        this._entries.forEach((e) => { if (e.fn) e.fn(); else applyVars(e.targets, e.vars, false); });
+        this._entries.forEach((e) => {
+          try { if (e.fn) e.fn(); else applyVars(e.targets, e.vars, false); } catch (err) { console.error('[liquid]', err); }
+        });
         return;
       }
       const start = performance.now();
       const step = () => {
         if (this._killed) return;
-        const now = (performance.now() - start) / 1000;
-        let alive = false;
-        for (const e of this._entries) {
-          const local = now - e.at;
-          if (local < 0) { alive = true; continue; }
-          if (e.fn) { if (!e.done) { e.done = true; e.fn(); } continue; }
-          if (e.set) {
-            if (!e.done) { e.done = true; applyVars(e.targets, e.vars, true); }
-            continue;
+        try {
+          const now = (performance.now() - start) / 1000;
+          let alive = false;
+          for (const e of this._entries) {
+            const local = now - e.at;
+            if (local < 0) { alive = true; continue; }
+            if (e.fn) { if (!e.done) { e.done = true; e.fn(); } continue; }
+            if (e.set) {
+              if (!e.done) { e.done = true; applyVars(e.targets, e.vars, true); }
+              continue;
+            }
+            const dur = e.vars.duration || 0.3;
+            if (local >= dur) {
+              if (!e.done) { e.done = true; applyVars(e.targets, e.vars, false); }
+              continue;
+            }
+            alive = true;
+            const ease = e.vars.ease || P2_OUT;
+            applyVars(e.targets, e.vars, false, ease(Math.min(1, local / dur)));
           }
-          const dur = e.vars.duration || 0.3;
-          if (local >= dur) {
-            if (!e.done) { e.done = true; applyVars(e.targets, e.vars, false); }
-            continue;
-          }
-          alive = true;
-          const ease = e.vars.ease || P2_OUT;
-          applyVars(e.targets, e.vars, false, ease(Math.min(1, local / dur)));
+          if (alive) this._raf = requestAnimationFrame(step);
+        } catch (err) {
+          // Never let an animation error wedge the UI
+          console.error('[liquid] timeline error:', err);
         }
-        if (alive) this._raf = requestAnimationFrame(step);
       };
       this._raf = requestAnimationFrame(step);
     }
@@ -133,7 +147,7 @@
     const list = Array.isArray(targets) ? targets : [targets];
     const k = (isSet || t === undefined) ? 1 : t;
     for (const el of list) {
-      if (!el) continue;
+      if (!el || !el.style) continue;
       const st = getState(el);
       const v = vars;
       if (v.x !== undefined) st.x = lerp(v.x, st.xFrom || st.x, k);
@@ -227,6 +241,7 @@
   }
 
   function setGooBlur(svgRoot, blur) {
+    if (!svgRoot) return;
     const [outer, inner] = GOO_RIM_THRESHOLDS[blur];
     const b = svgRoot.querySelector('.lqd-blur');
     const r = svgRoot.querySelector('.lqd-rim');
@@ -236,7 +251,7 @@
     if (i) i.setAttribute('values', gooThreshold(inner));
   }
 
-  // ─── Sound (tiny synthesized pops) ──────────────────────────────
+  // ─── Sound ──────────────────────────────────────────────────────
   const sfx = {
     ctx: null, muted: false,
     ensure() {
@@ -252,22 +267,24 @@
     pop(freq, dur) {
       const ctx = this.ensure();
       if (!ctx) return;
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = 'sine';
-      o.frequency.setValueAtTime(freq, ctx.currentTime);
-      o.frequency.exponentialRampToValueAtTime(freq * 0.55, ctx.currentTime + dur);
-      g.gain.setValueAtTime(0.12, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
-      o.connect(g).connect(ctx.destination);
-      o.start(); o.stop(ctx.currentTime + dur);
+      try {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(freq, ctx.currentTime);
+        o.frequency.exponentialRampToValueAtTime(freq * 0.55, ctx.currentTime + dur);
+        g.gain.setValueAtTime(0.12, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+        o.connect(g).connect(ctx.destination);
+        o.start(); o.stop(ctx.currentTime + dur);
+      } catch (e) { /* audio is optional */ }
     },
     mute() { this.muted = true; },
     unmute() { this.muted = false; },
   };
   window.liquidSfx = sfx;
 
-  // ═══ 1. SHARED RIPPLE OVERLAY + UNIVERSAL PRESS SQUASH ═══════════
+  // ═══ 1. SHARED SQUIRCLE RIPPLE OVERLAY + PRESS SQUASH ═══════════
 
   const overlaySVG = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   overlaySVG.setAttribute('class', 'lqd-overlay');
@@ -279,21 +296,21 @@
 
   function spawnRipple(x, y) {
     if (reducedMotion) return;
-    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    c.setAttribute('cx', x);
-    c.setAttribute('cy', y);
-    c.setAttribute('r', '8');
-    c.setAttribute('class', 'lqd-ripple');
-    overlayGroup.appendChild(c);
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', squirclePath(-10, -10, 20, 20, 9)); // rounded-square droplet
+    p.setAttribute('class', 'lqd-ripple');
+    p.style.transformOrigin = 'center';
+    p.style.transform = `translate(${x}px, ${y}px) scale(0.4)`;
+    overlayGroup.appendChild(p);
     const tl = new Timeline();
-    tl.to(c, { attr: { r: 26 }, opacity: 0.55, duration: 0.16, ease: P2_OUT }, 0);
-    tl.to(c, { attr: { r: 34 }, opacity: 0, duration: 0.3, ease: P2_OUT }, 0.12);
-    tl.call(() => c.remove(), 0.45);
+    tl.to(p, { scale: 1.3, opacity: 0.5, duration: 0.16, ease: P2_OUT }, 0);
+    tl.to(p, { scale: 1.8, opacity: 0, duration: 0.3, ease: P2_OUT }, 0.12);
+    tl.call(() => { try { p.remove(); } catch (e) {} }, 0.45);
     tl.play();
   }
 
   const PRESS_SELECTOR = 'button, .app-icon, .lego-card, .settings-tab, .theme-option, .app-tile';
-  function isLiquidInside(el) { return !!(el && el.closest && el.closest('.lqd-anchor, .lqd-selwrap, .lqd-panel')); }
+  function isLiquidInside(el) { return !!(el && el.closest && el.closest('.lqd-anchor, .lqd-selwrap, .lqd-panel, .lqd-ai')); }
 
   document.addEventListener('pointerdown', (e) => {
     if (reducedMotion) return;
@@ -306,7 +323,6 @@
       const t2 = new Timeline();
       t2.to(el, { scale: 1, duration: 0.3, ease: SPRING }, 0);
       t2.play();
-      window.removeEventListener('pointerup', restore);
     };
     window.addEventListener('pointerup', restore, { once: true });
   }, { passive: true });
@@ -318,18 +334,17 @@
     spawnRipple(e.clientX, e.clientY);
   }, { passive: true });
 
-  // ═══ 2. LIQUIDIFY EVERY NATIVE SELECT (anchored dropdown) ════════
+  // ═══ 2. LIQUIDIFY EVERY NATIVE SELECT (anchored dropdown) ═══════
 
   function liquidifySelect(sel) {
     if (sel._lqdified) return;
     sel._lqdified = true;
 
-    // Wrap so the liquid UI replaces the select in place
     const wrap = document.createElement('div');
     wrap.className = 'lqd-selwrap';
     sel.parentNode.insertBefore(wrap, sel);
     wrap.appendChild(sel);
-    sel.hidden = true;      // native select stays as the source of truth
+    sel.hidden = true;
     sel.tabIndex = -1;
 
     const host = document.createElement('button');
@@ -347,9 +362,10 @@
     let panelShape = null;
     let blobPanel = null;
     let blobTrigger = null;
-    const GAP = 14;        // panel hangs 14px above the host (reference)
+    const GAP = 14;
     const ROW_H = 32;
     const MAX_PANEL_H = 208;
+    const HOST_R = 10;   // matches .lqd-selhost border-radius
 
     function currentLabel() {
       const opt = sel.options[sel.selectedIndex];
@@ -358,7 +374,7 @@
     function refreshLabel() { host.querySelector('.lqd-sellabel').textContent = currentLabel(); }
 
     function buildUI() {
-      host.querySelector('.lqd-sellabel').textContent = currentLabel();
+      refreshLabel();
       if (!panel) return;
       const count = sel.options.length || 1;
       const panelH = Math.min(MAX_PANEL_H, count * ROW_H + 14);
@@ -399,12 +415,9 @@
       const hostH = host.offsetHeight || 32;
       const hostW = host.offsetWidth || 100;
 
-      // Canvas covers the panel + the host + padding, anchored top-left.
-      // Wrap coords: panel top = -(panelH + GAP), panel left = 0.
       const CANVAS_PAD = 40;
       const canvasW = panelW + CANVAS_PAD * 2;
       const canvasH = panelH + GAP + hostH + CANVAS_PAD * 2;
-      // Panel top-left and button center, in canvas coordinates
       const panelCX = CANVAS_PAD;
       const panelCY = CANVAS_PAD;
       const triggerCX = CANVAS_PAD + hostW / 2;
@@ -416,16 +429,16 @@
       gooRoot.style.height = canvasH + 'px';
       gooRoot.style.left = -CANVAS_PAD + 'px';
       gooRoot.style.top = -(panelH + GAP + CANVAS_PAD) + 'px';
-      gooRoot.querySelector('filter').setAttribute('width', canvasW);
-      gooRoot.querySelector('filter').setAttribute('height', canvasH);
+      const f = gooRoot.querySelector('filter');
+      if (f) { f.setAttribute('width', canvasW); f.setAttribute('height', canvasH); }
 
+      // Trigger blob = the host button's OWN rounded-rect silhouette
+      blobTrigger.setAttribute('d',
+        squirclePath(CANVAS_PAD, panelCY + panelH + GAP, hostW, hostH, HOST_R));
       blobPanel.setAttribute('d', squirclePath(panelCX, panelCY, panelW, panelH, 16));
       blobPanel.style.transformOrigin = `${triggerCX}px ${panelCY + panelH + GAP}px`;
-      blobTrigger.setAttribute('cx', triggerCX);
-      blobTrigger.setAttribute('cy', triggerCY);
 
       const restScale = 0.11;
-      // Crisp trio's origin: the button's top center, in panel coords
       const originX = panelW / 2;
       const originY = panelH + GAP + hostH / 2;
       wrap._lqdGeo = { panelW, panelH, hostH, originX, originY };
@@ -435,7 +448,7 @@
       tl = new Timeline();
       gooRoot.style.opacity = '1';
       gooRoot.style.visibility = 'visible';
-      setGooBlur(gooRoot, 7);      // σ7 bridges the 14px gap
+      setGooBlur(gooRoot, 7);
       wrap.setAttribute('data-liquid', '');
 
       tl.set([panelBody, panel, blobPanel], { x: 0, y: 0 }, 0);
@@ -464,11 +477,11 @@
       if (!open) return;
       open = false;
       if (tl) tl.kill();
-
+      const svg = gooRoot;
       tl = new Timeline();
-      gooRoot.style.opacity = '1';
-      gooRoot.style.visibility = 'visible';
-      setGooBlur(gooRoot, 7);
+      svg.style.opacity = '1';
+      svg.style.visibility = 'visible';
+      setGooBlur(svg, 7);
       wrap.setAttribute('data-liquid', '');
       tl.to([panelBody, panel, blobPanel], { x: 0, y: 0, duration: 0.12, ease: OUT_STRONG }, 0);
       tl.to([panelBody, panel, blobPanel], { scaleX: 0.32, duration: 0.16, ease: ANTICIPATE }, 0);
@@ -479,29 +492,26 @@
       });
       tl.to([panelBody, panel, blobPanel], { scale: 0.11, duration: 0.07, ease: P2_IN }, 0.21);
       tl.set([panelBody, panel], { autoAlpha: 0 }, 0.28);
-      tl.to(gooRoot, { autoAlpha: 0, duration: 0.12, ease: P1_OUT }, 0.3);
-      tl.call(() => setGooBlur(gooRoot, 1), 0.42);
+      tl.to(svg, { autoAlpha: 0, duration: 0.12, ease: P1_OUT }, 0.3);
+      tl.call(() => setGooBlur(svg, 1), 0.42);
       tl.call(() => wrap.removeAttribute('data-liquid'), 0.41);
       sfx.pop(430, 0.1);
       tl.play();
     }
 
-    // Build the goo canvas once, rebuild panel contents per open
     gooRoot = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     gooRoot.setAttribute('class', 'lqd-selgoo');
     gooRoot.setAttribute('aria-hidden', 'true');
-    gooRoot.innerHTML = buildGooFilter('lqd-selgoo-filter', 300, 300) +
-      `<g filter="url(#lqd-selgoo-filter)">
+    const fid = 'lqd-selgoo-filter-' + Math.random().toString(36).slice(2, 8);
+    gooRoot.innerHTML = buildGooFilter(fid, 300, 300) +
+      `<g filter="url(#${fid})">
          <path class="lqd-blob lqd-blob-panel"></path>
-         <circle class="lqd-blob lqd-blob-trigger" r="16"></circle>
+         <path class="lqd-blob lqd-blob-trigger"></path>
        </g>`;
     wrap.appendChild(gooRoot);
     blobPanel = gooRoot.querySelector('.lqd-blob-panel');
     blobTrigger = gooRoot.querySelector('.lqd-blob-trigger');
-    gooRoot.querySelector('filter').id = 'lqd-selgoo-filter-' + Math.random().toString(36).slice(2, 8);
-    gooRoot.querySelector('g').setAttribute('filter', 'url(#' + gooRoot.querySelector('filter').id + ')');
 
-    // Crisp bodies + rows
     panelBody = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     panelBody.setAttribute('class', 'lqd-selpanelbody');
     panelShape = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -515,12 +525,10 @@
 
     host.addEventListener('click', () => { if (open) closeDropdown(); else openDropdown(); });
 
-    // Outside click closes
     document.addEventListener('click', (e) => {
       if (open && !wrap.contains(e.target)) closeDropdown();
     }, true);
 
-    // Mirror future option changes
     new MutationObserver(() => {
       if (open) buildUI();
       refreshLabel();
@@ -534,13 +542,12 @@
   }
   window.liquidifyAllSelects = liquidifyAllSelects;
 
-  // ═══ 3. HOME FAB (morphing-dropdown showcase) ════════════════════
+  // ═══ 3. HOME FAB (morphing-dropdown showcase) ═══════════════════
 
-  const BUTTON_SIZE = 32;
   const PANEL_WIDTH = 141;
   const PANEL_HEIGHT = 164;
   const PANEL_ORIGIN_X = PANEL_WIDTH / 2;
-  const PANEL_ORIGIN_Y = PANEL_HEIGHT - 16;
+  const PANEL_ORIGIN_Y = PANEL_HEIGHT - 26;   // button 52px tall
   const PANEL_REST_SCALE = 0.11;
   const GOO_BLUR_ACTIVE = 4;
   const GOO_BLUR_REST = 1;
@@ -551,6 +558,8 @@
   const TRIGGER_CY = 220;
   const PANEL_GOO_X = TRIGGER_CX - PANEL_WIDTH / 2;
   const PANEL_GOO_Y = TRIGGER_CY - PANEL_ORIGIN_Y;
+  const TRIG_SIZE = 52;      // squircle tile
+  const TRIG_R = 14;         // corner radius (DeCloud tile language)
   const GRAB_MAX = 44;
   const GRAB_CHAIN = [
     { follow: 1, size: 0.85, thin: 0.06, lag: 0.16 },
@@ -564,9 +573,11 @@
   const root = document.getElementById('liquid-fab-root');
   if (root) {
     root.innerHTML = `
-      <div class="lqd-anchor">
+      <div class="lqd-anchor" style="width:${TRIG_SIZE}px;height:${TRIG_SIZE}px">
         <div class="lqd-bodies">
-          <div class="lqd-trigger-body"></div>
+          <svg class="lqd-trigger-body" width="${TRIG_SIZE}" height="${TRIG_SIZE}" viewBox="0 0 ${TRIG_SIZE} ${TRIG_SIZE}">
+            <path class="lqd-panel-body-shape" d="${squirclePath(0.5, 0.5, TRIG_SIZE - 1, TRIG_SIZE - 1, TRIG_R)}"></path>
+          </svg>
           <svg class="lqd-panel-body" width="${PANEL_WIDTH}" height="${PANEL_HEIGHT}" viewBox="0 0 ${PANEL_WIDTH} ${PANEL_HEIGHT}">
             <path class="lqd-panel-body-shape" d="${squirclePath(0.5, 0.5, PANEL_WIDTH - 1, PANEL_HEIGHT - 1, 16)}"></path>
           </svg>
@@ -575,7 +586,7 @@
           ${buildGooFilter('lqd-goo-filter', GOO_WIDTH, GOO_HEIGHT)}
           <g filter="url(#lqd-goo-filter)">
             <path class="lqd-blob lqd-blob-panel" d="${squirclePath(PANEL_GOO_X, PANEL_GOO_Y, PANEL_WIDTH, PANEL_HEIGHT, 16)}"></path>
-            <circle class="lqd-blob lqd-blob-trigger" cx="${TRIGGER_CX}" cy="${TRIGGER_CY}" r="16"></circle>
+            <path class="lqd-blob lqd-blob-trigger" d="${squirclePath(TRIGGER_CX - TRIG_SIZE / 2, TRIGGER_CY - TRIG_SIZE / 2, TRIG_SIZE, TRIG_SIZE, TRIG_R)}"></path>
             ${GRAB_CHAIN.map((_l, i) => `<circle class="lqd-chain" data-i="${i}" cx="${TRIGGER_CX}" cy="${TRIGGER_CY}" r="11"></circle>`).join('')}
           </g>
         </svg>
@@ -593,8 +604,7 @@
     const bodies = root.querySelector('.lqd-bodies');
     const triggerBody = root.querySelector('.lqd-trigger-body');
     const panelBody = root.querySelector('.lqd-panel-body');
-    const goo = root.querySelector('.lqd-goo');
-    const gooSVG = goo;
+    const gooSVG = root.querySelector('.lqd-goo');
     const blobTrigger = root.querySelector('.lqd-blob-trigger');
     const blobPanel = root.querySelector('.lqd-blob-panel');
     const panel = root.querySelector('.lqd-panel');
@@ -644,8 +654,8 @@
 
     function liquidOn(blur) {
       anchor.setAttribute('data-liquid', '');
-      goo.style.opacity = '1';
-      goo.style.visibility = 'visible';
+      gooSVG.style.opacity = '1';
+      gooSVG.style.visibility = 'visible';
       setGooBlur(gooSVG, blur);
       bodies.style.visibility = 'hidden';
     }
@@ -678,7 +688,7 @@
       });
       tl.set(triggerBody, { autoAlpha: 0 }, 0.34);
       tl.set(bodies, { autoAlpha: 1 }, 0.5);
-      tl.to(goo, { autoAlpha: 0, duration: 0.14, ease: P1_OUT }, 0.5);
+      tl.to(gooSVG, { autoAlpha: 0, duration: 0.14, ease: P1_OUT }, 0.5);
       tl.call(() => { setGooBlur(gooSVG, GOO_BLUR_REST); }, 0.66);
       tl.call(() => anchor.removeAttribute('data-liquid'), 0.65);
       liquidOn(GOO_BLUR_ACTIVE);
@@ -709,7 +719,7 @@
       tl.to(triggerBits, { scaleX: 1, scaleY: 1, duration: 0.28, ease: SPRING }, 0.38);
       tl.to(triggerIcon, { autoAlpha: 1, rotation: 0, duration: 0.18, ease: OUT_STRONG }, 0.26);
       tl.set(bodies, { autoAlpha: 1 }, 0.34);
-      tl.to(goo, { autoAlpha: 0, duration: 0.12, ease: P1_OUT }, 0.34);
+      tl.to(gooSVG, { autoAlpha: 0, duration: 0.12, ease: P1_OUT }, 0.34);
       tl.call(() => { setGooBlur(gooSVG, GOO_BLUR_REST); }, 0.47);
       tl.call(() => anchor.removeAttribute('data-liquid'), 0.46);
       liquidOn(GOO_BLUR_ACTIVE);
@@ -747,7 +757,7 @@
       function pointerMove(e) {
         if (!pressed || reducedMotion) return;
         const rect = anchor.getBoundingClientRect();
-        const half = BUTTON_SIZE / 2;
+        const half = TRIG_SIZE / 2;
         const dx = e.clientX - (rect.left + half);
         const dy = e.clientY - (rect.top + half);
         const dist = Math.hypot(dx, dy);
@@ -802,7 +812,7 @@
           t.to(triggerBits, { scale: 1, duration: 0.45, ease: SPRING }, 0);
         }
         t.set(bodies, { autoAlpha: 1 }, wasStretched ? 0.45 : 0.3);
-        t.to(goo, { autoAlpha: 0, duration: 0.14, ease: P1_OUT }, wasStretched ? 0.45 : 0.3);
+        t.to(gooSVG, { autoAlpha: 0, duration: 0.14, ease: P1_OUT }, wasStretched ? 0.45 : 0.3);
         t.call(() => {
           setGooBlur(gooSVG, GOO_BLUR_REST);
           anchor.removeAttribute('data-liquid');
@@ -824,21 +834,15 @@
     document.addEventListener('pointerdown', () => sfx.ensure(), { once: true });
   }
 
-  // ═══ 4. AI SPREAD → LIQUID SPEED DIAL ═════════════════════════
-  // The AI tile's radial spread becomes the reference's speed dial:
-  // satellites (AI Chat / Generate / Agents) ooze out of the tile,
-  // launch past full size and ring still; they can be grabbed and
-  // stretched like taffy; closing dives them back with a splat.
-  // The existing fan math (direction away from screen center, arc
-  // spread, radius) and navigation are reused untouched.
+  // ═══ 4. AI SPREAD → LIQUID SPEED DIAL (squircle satellites) ═════
 
   (function setupAISpeedDial() {
     if (typeof openAISpread !== 'function') return;
     const SUBAPPS = (typeof AI_SUBAPPS !== 'undefined') ? AI_SUBAPPS : [];
     if (!SUBAPPS.length) return;
-    const ITEM = 72;           // satellite size (matches the old spread)
-    const SAT_R = ITEM / 2;    // 36
-    const TRIG_R = 28;         // trigger circle drawn over the tile
+    const ITEM = 72;
+    const SAT_R = ITEM / 2;
+    const SAT_CORNER = 16;
     const GOO_BLUR_SPREAD = 5;
 
     let overlay = null;
@@ -848,9 +852,9 @@
     function findTile() { return document.querySelector('[data-app-id="ai"]'); }
 
     function fanGeometry() {
-      const btn = findTile();
-      if (!btn) return null;
-      const rect = btn.getBoundingClientRect();
+      const tile = findTile();
+      if (!tile) return null;
+      const rect = tile.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
       const n = SUBAPPS.length;
@@ -879,16 +883,19 @@
         const angle = fanAngle - halfArc + frac * (halfArc * 2);
         return { dx: Math.cos(angle) * r, dy: Math.sin(angle) * r };
       });
-      return { cx, cy, targets };
+      return { cx, cy, targets, tileW: rect.width, tileH: rect.height };
     }
 
     function buildOverlay() {
       const geo = fanGeometry();
-      if (!geo) return;
-      const { cx, cy, targets } = geo;
+      if (!geo) return null;
+      const { cx, cy, targets, tileW, tileH } = geo;
+      const TRIG_W = Math.max(56, tileW);
+      const TRIG_H = Math.max(56, tileH);
+      const TRIG_CR = Math.min(16, TRIG_W / 2, TRIG_H / 2);
       const pad = 80;
-      const xs = [cx - TRIG_R, cx + TRIG_R];
-      const ys = [cy - TRIG_R, cy + TRIG_R];
+      const xs = [cx - TRIG_W / 2, cx + TRIG_W / 2];
+      const ys = [cy - TRIG_H / 2, cy + TRIG_H / 2];
       targets.forEach((t) => {
         xs.push(cx + t.dx - SAT_R, cx + t.dx + SAT_R);
         ys.push(cy + t.dy - SAT_R, cy + t.dy + SAT_R);
@@ -897,8 +904,10 @@
       const top = Math.min.apply(null, ys) - pad;
       const w = Math.max.apply(null, xs) - left + pad;
       const h = Math.max.apply(null, ys) - top + pad;
-      const tCX = cx - left;   // trigger center in canvas coords
+      const tCX = cx - left;
       const tCY = cy - top;
+      const tX = tCX - TRIG_W / 2;
+      const tY = tCY - TRIG_H / 2;
 
       overlay = document.createElement('div');
       overlay.className = 'lqd-ai';
@@ -912,31 +921,34 @@
       svg.setAttribute('height', h);
       svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
       svg.setAttribute('class', 'lqd-ai-goo');
-      svg.innerHTML = buildGooFilter('lqd-ai-goo-filter', w, h) +
-        `<g filter="url(#lqd-ai-goo-filter)">
-           <circle class="lqd-blob lqd-ai-trigger-blob" cx="${tCX}" cy="${tCY}" r="${TRIG_R}"></circle>
-           ${targets.map((_t, i) => `<circle class="lqd-blob lqd-ai-sat-blob" data-i="${i}" cx="${tCX}" cy="${tCY}" r="${SAT_R}"></circle>`).join('')}
+      const fid = 'lqd-ai-goo-filter-' + Math.random().toString(36).slice(2, 8);
+      svg.innerHTML = buildGooFilter(fid, w, h) +
+        `<g filter="url(#${fid})">
+           <path class="lqd-blob lqd-ai-trigger-blob" d="${squirclePath(tX, tY, TRIG_W, TRIG_H, TRIG_CR)}"></path>
+           ${targets.map((_t, i) => `<path class="lqd-blob lqd-ai-sat-blob" data-i="${i}" d="${squirclePath(tX, tY, ITEM, ITEM, SAT_CORNER)}"></path>`).join('')}
            ${GRAB_CHAIN.map((_l, i) => `<circle class="lqd-chain lqd-ai-chain" data-i="${i}" cx="${tCX}" cy="${tCY}" r="11"></circle>`).join('')}
          </g>`;
       overlay.appendChild(svg);
 
-      // Crisp trigger body + hit area over the tile
-      const trigBody = document.createElement('div');
-      trigBody.className = 'lqd-ai-triggerbody';
-      trigBody.style.left = (tCX - TRIG_R) + 'px';
-      trigBody.style.top = (tCY - TRIG_R) + 'px';
-      trigBody.style.width = (TRIG_R * 2) + 'px';
-      trigBody.style.height = (TRIG_R * 2) + 'px';
+      // Crisp trigger body over the tile (same squircle silhouette)
+      const trigBody = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      trigBody.setAttribute('class', 'lqd-ai-triggerbody');
+      trigBody.setAttribute('width', TRIG_W);
+      trigBody.setAttribute('height', TRIG_H);
+      trigBody.setAttribute('viewBox', `0 0 ${TRIG_W} ${TRIG_H}`);
+      trigBody.style.left = tX + 'px';
+      trigBody.style.top = tY + 'px';
+      trigBody.innerHTML = `<path class="lqd-panel-body-shape" d="${squirclePath(0.5, 0.5, TRIG_W - 1, TRIG_H - 1, TRIG_CR)}"></path>`;
       overlay.appendChild(trigBody);
 
       const trigBtn = document.createElement('button');
       trigBtn.type = 'button';
       trigBtn.className = 'lqd-ai-trigger';
       trigBtn.setAttribute('aria-label', 'Close AI menu');
-      trigBtn.style.left = (tCX - TRIG_R) + 'px';
-      trigBtn.style.top = (tCY - TRIG_R) + 'px';
-      trigBtn.style.width = (TRIG_R * 2) + 'px';
-      trigBtn.style.height = (TRIG_R * 2) + 'px';
+      trigBtn.style.left = tX + 'px';
+      trigBtn.style.top = tY + 'px';
+      trigBtn.style.width = TRIG_W + 'px';
+      trigBtn.style.height = TRIG_H + 'px';
       trigBtn.innerHTML = '<span class="lqd-ai-triggericon">' + ((window.ICONS && ICONS.brain) || '') + '</span>';
       trigBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -945,7 +957,6 @@
       });
       overlay.appendChild(trigBtn);
 
-      // Satellites (crisp): body + icon + label, starting inside the trigger
       SUBAPPS.forEach((sub, i) => {
         const t = targets[i];
         const b = document.createElement('button');
@@ -969,31 +980,25 @@
           }, 50);
         });
         overlay.appendChild(b);
-        wireGrab(b);
+        wireGrab(b, overlay, tCX, tCY);
       });
 
       overlay.addEventListener('click', () => close());
       document.body.appendChild(overlay);
-      wireGrab(trigBtn);
+      wireGrab(trigBtn, overlay, tCX, tCY);
       return { tCX, tCY, targets };
     }
 
-    // Shared grab: rigid lean + chain from the grabbed body's rim
-    function wireGrab(el) {
+    // Rigid grab: lean + chain from the grabbed body's rim.
+    // All DOM lookups go through the captured overlay, and every
+    // pointer callback null-guards so a removed overlay can never throw.
+    function wireGrab(el, ov, baseCX, baseCY) {
       let pressed = false;
       let suppressClick = false;
       let stretchDist = 0;
-      let canvasBase = null;
 
-      function canvasPoint(e) {
-        const rect = el.getBoundingClientRect();
-        const olRect = overlay.getBoundingClientRect();
-        return {
-          x: rect.left + rect.width / 2 - olRect.left,
-          y: rect.top + rect.height / 2 - olRect.top,
-          clientX: e.clientX, clientY: e.clientY,
-        };
-      }
+      function svgOf() { return ov && ov.querySelector ? ov.querySelector('.lqd-ai-goo') : null; }
+      function chains() { return ov && ov.querySelectorAll ? Array.from(ov.querySelectorAll('.lqd-ai-chain')) : []; }
 
       function beginGrab(e) {
         if (reducedMotion || e.button !== 0) return;
@@ -1002,23 +1007,32 @@
         stretchDist = 0;
         try { el.setPointerCapture(e.pointerId); } catch (_) {}
         window.addEventListener('pointerup', release, { once: true });
-        overlay.setAttribute('data-liquid', '');
-        const svg = overlay.querySelector('.lqd-ai-goo');
-        svg.style.opacity = '1';
-        svg.style.visibility = 'visible';
-        setGooBlur(svg, GOO_BLUR_SPREAD);
+        ov.setAttribute('data-liquid', '');
+        const svg = svgOf();
+        if (svg) {
+          svg.style.opacity = '1';
+          svg.style.visibility = 'visible';
+          setGooBlur(svg, GOO_BLUR_SPREAD);
+        }
         const p = canvasPoint(e);
-        canvasBase = p;
-        const chains = Array.from(overlay.querySelectorAll('.lqd-ai-chain'));
-        chains.forEach((c) => {
+        chains().forEach((c) => {
           c.setAttribute('cx', p.x);
           c.setAttribute('cy', p.y);
           const st = getState(c); st.x = st.y = 0; st.scaleX = st.scaleY = 0.4; writeState(c, st);
         });
       }
 
+      function canvasPoint(e) {
+        const rect = el.getBoundingClientRect();
+        const olRect = ov.getBoundingClientRect();
+        return {
+          x: rect.left + rect.width / 2 - olRect.left,
+          y: rect.top + rect.height / 2 - olRect.top,
+        };
+      }
+
       function pointerMove(e) {
-        if (!pressed || reducedMotion) return;
+        if (!pressed || reducedMotion || !ov.isConnected) return;
         const rect = el.getBoundingClientRect();
         const baseX = rect.left + rect.width / 2;
         const baseY = rect.top + rect.height / 2;
@@ -1031,8 +1045,7 @@
         const tension = pull / GRAB_MAX;
         const ux = dist > 0 ? dx / dist : 0;
         const uy = dist > 0 ? dy / dist : 0;
-        const chains = Array.from(overlay.querySelectorAll('.lqd-ai-chain'));
-        chains.forEach((c, i) => {
+        chains().forEach((c, i) => {
           const link = GRAB_CHAIN[i];
           const st = getState(c);
           st.x = ux * pull * link.follow;
@@ -1052,24 +1065,25 @@
         const wasStretched = stretchDist > 12;
         suppressClick = wasStretched;
         stretchDist = 0;
+        if (!ov.isConnected) return;
         const t = new Timeline();
-        const chains = Array.from(overlay.querySelectorAll('.lqd-ai-chain'));
+        const ch = chains();
         if (wasStretched) {
-          chains.forEach((c, i) => {
+          ch.forEach((c, i) => {
             t.to(c, { x: 0, y: 0, duration: 0.5, ease: SPRING }, i * 0.025);
             t.to(c, { scale: 0, duration: 0.2, ease: P2_IN }, 0.16 + i * 0.025);
           });
         } else {
-          t.set(chains, { scale: 0 }, 0);
+          t.set(ch, { scale: 0 }, 0);
         }
         t.to(el, { x: 0, y: 0, duration: 0.5, ease: SPRING }, 0);
+        const svg = svgOf();
         t.call(() => {
-          const svg = overlay.querySelector('.lqd-ai-goo');
-          if (svg) {
+          if (svg && svg.isConnected) {
             setGooBlur(svg, 1);
             t.to(svg, { autoAlpha: 0, duration: 0.14, ease: P1_OUT }, 0);
           }
-          overlay.removeAttribute('data-liquid');
+          if (ov.isConnected) ov.removeAttribute('data-liquid');
         }, 0.45);
         if (wasStretched) sfx.pop(520, 0.07);
         t.play();
@@ -1089,18 +1103,18 @@
       if (isOpen) return;
       isOpen = true;
       if (tl) tl.kill();
-      if (overlay) overlay.remove();
+      if (overlay) { try { overlay.remove(); } catch (e) {} overlay = null; }
       const parts = buildOverlay();
       if (!parts) { isOpen = false; return; }
-      const svg = overlay.querySelector('.lqd-ai-goo');
-      const trigBtn = overlay.querySelector('.lqd-ai-trigger');
-      const trigIcon = overlay.querySelector('.lqd-ai-triggericon');
-      const trigBody = overlay.querySelector('.lqd-ai-triggerbody');
-      const satBlobs = Array.from(overlay.querySelectorAll('.lqd-ai-sat-blob'));
-      const sats = Array.from(overlay.querySelectorAll('.lqd-ai-sat'));
-      const chains = Array.from(overlay.querySelectorAll('.lqd-ai-chain'));
+      const ov = overlay;
+      const svg = ov.querySelector('.lqd-ai-goo');
+      const trigIcon = ov.querySelector('.lqd-ai-triggericon');
+      const trigBody = ov.querySelector('.lqd-ai-triggerbody');
+      const satBlobs = Array.from(ov.querySelectorAll('.lqd-ai-sat-blob'));
+      const sats = Array.from(ov.querySelectorAll('.lqd-ai-sat'));
+      const chains = Array.from(ov.querySelectorAll('.lqd-ai-chain'));
 
-      overlay.setAttribute('data-liquid', '');
+      ov.setAttribute('data-liquid', '');
       svg.style.opacity = '1';
       svg.style.visibility = 'visible';
       setGooBlur(svg, GOO_BLUR_SPREAD);
@@ -1112,7 +1126,6 @@
       tl.to(trigIcon, { autoAlpha: 0, rotation: 135, duration: 0.12, ease: P2_IN }, 0);
       satBlobs.forEach((blob, i) => {
         const t = parts.targets[i];
-        // ooze out, launch past full size, ring still
         tl.to(blob, { x: t.dx, y: t.dy, duration: 0.12, ease: OUT_STRONG }, 0.02 + i * 0.04);
         tl.to(blob, { scale: 1.08, duration: 0.4, ease: POP }, 0.12 + i * 0.04);
         tl.to(blob, { scale: 1, duration: 0.28, ease: SPRING }, 0.5 + i * 0.04);
@@ -1124,7 +1137,7 @@
         tl.to(b, { scale: 1, duration: 0.28, ease: SPRING }, 0.5 + i * 0.04);
       });
       tl.call(() => setGooBlur(svg, 1), 0.85);
-      tl.call(() => overlay.removeAttribute('data-liquid'), 0.84);
+      tl.call(() => { if (ov.isConnected) ov.removeAttribute('data-liquid'); }, 0.84);
       sfx.pop(700, 0.09);
       tl.play();
     }
@@ -1134,30 +1147,30 @@
       isOpen = false;
       if (tl) tl.kill();
       if (!overlay) return;
-      const svg = overlay.querySelector('.lqd-ai-goo');
-      const trigIcon = overlay.querySelector('.lqd-ai-triggericon');
-      const trigBody = overlay.querySelector('.lqd-ai-triggerbody');
-      const satBlobs = Array.from(overlay.querySelectorAll('.lqd-ai-sat-blob'));
-      const sats = Array.from(overlay.querySelectorAll('.lqd-ai-sat'));
+      const ov = overlay;
+      overlay = null;
+      const svg = ov.querySelector('.lqd-ai-goo');
+      const trigIcon = ov.querySelector('.lqd-ai-triggericon');
+      const trigBody = ov.querySelector('.lqd-ai-triggerbody');
+      const satBlobs = Array.from(ov.querySelectorAll('.lqd-ai-sat-blob'));
+      const sats = Array.from(ov.querySelectorAll('.lqd-ai-sat'));
 
-      overlay.setAttribute('data-liquid', '');
+      ov.setAttribute('data-liquid', '');
       svg.style.opacity = '1';
       svg.style.visibility = 'visible';
       setGooBlur(svg, GOO_BLUR_SPREAD);
 
       tl = new Timeline();
-      // gather (anticipate), then dive into the trigger
       tl.to(sats, { scale: 1.06, duration: 0.12, ease: ANTICIPATE }, 0);
       tl.to(satBlobs, { scale: 1.06, duration: 0.12, ease: ANTICIPATE }, 0);
       tl.to(sats, { x: 0, y: 0, scale: 0.11, duration: 0.16, ease: P2_IN }, 0.12);
       tl.to(satBlobs, { x: 0, y: 0, scale: 0.11, duration: 0.16, ease: P2_IN }, 0.12);
       tl.to(trigIcon, { autoAlpha: 1, rotation: 0, duration: 0.16, ease: OUT_STRONG }, 0.18);
-      // splat on the trigger
       tl.to(trigBody, { scaleX: 1.18, scaleY: 0.84, duration: 0.08, ease: P2_OUT }, 0.24);
       tl.to(trigBody, { scaleX: 0.95, scaleY: 1.06, duration: 0.1, ease: P1_INOUT }, 0.32);
       tl.to(trigBody, { scaleX: 1, scaleY: 1, duration: 0.3, ease: SPRING }, 0.42);
       tl.to(svg, { autoAlpha: 0, duration: 0.14, ease: P1_OUT }, 0.5);
-      tl.call(() => { if (overlay) overlay.remove(); overlay = null; }, 0.7);
+      tl.call(() => { try { if (ov.isConnected) ov.remove(); } catch (e) {} }, 0.7);
       sfx.pop(430, 0.11);
       tl.play();
     }
