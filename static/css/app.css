@@ -5280,3 +5280,111 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
     transition: none;
   }
 }
+
+/* ─── Liquid system: shared ripple overlay ─── */
+.lqd-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 500;
+  pointer-events: none;
+}
+.lqd-overlay g {
+  transform-box: view-box;
+}
+.lqd-ripple {
+  fill: var(--lqd-surface);
+  will-change: r, opacity;
+}
+
+/* ─── Liquid system: liquidified selects ─── */
+.lqd-selwrap {
+  position: relative;
+  width: 100%;
+}
+.lqd-selhost {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--lqd-surface);
+  border: 1px solid var(--lqd-rim);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.lqd-sellabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lqd-selchevron {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  flex-shrink: 0;
+  transition: transform 200ms ease-out;
+}
+.lqd-selwrap[data-liquid] .lqd-selchevron {
+  transform: rotate(180deg);
+}
+
+.lqd-selgoo {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  visibility: hidden;
+}
+.lqd-selgoo * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.lqd-selgoo .lqd-blob-panel {
+  transform-box: view-box;
+}
+
+.lqd-selpanelbody {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 14px);
+  overflow: visible;
+  visibility: hidden;
+  opacity: 0;
+  z-index: 2;
+  will-change: transform;
+}
+.lqd-selpanel {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 14px);
+  padding: 7px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  visibility: hidden;
+  opacity: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  will-change: transform;
+}
+.lqd-selpanel .lqd-item {
+  flex-shrink: 0;
+}
+.lqd-selpanel .lqd-item[data-active] {
+  color: var(--accent);
+  background: var(--lqd-item-tint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lqd-selchevron {
+    transition: none;
+  }
+}
