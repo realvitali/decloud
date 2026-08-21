@@ -1,5 +1,5 @@
 // DeCloud Service Worker
-const CACHE_NAME = 'decloud-v92';
+const CACHE_NAME = 'decloud-v93';
 const ASSETS = [
   '/',
   '/manifest.json',
