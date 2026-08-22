@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The AI Iceberg — everything, from surface to silicon</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #12161f;
+    --ink: #e6e9f0;
+    --muted: #8a93a6;
+    --accent: #6ee7b7;
+    --line: #232a38;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+    padding: 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; }
+  .sub { color: var(--muted); margin-bottom: 24px; font-size: .95rem; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; font-size: .8rem; color: var(--muted); }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+  .layer {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    background: var(--panel);
+  }
+  .layer-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px; cursor: pointer; user-select: none;
+  }
+  .layer-head:hover { background: #161b26; }
+  .layer-num {
+    font-weight: 700; font-size: .8rem; color: var(--bg);
+    padding: 4px 10px; border-radius: 20px; white-space: nowrap;
+  }
+  .layer-title { font-weight: 600; font-size: 1.05rem; }
+  .layer-desc { color: var(--muted); font-size: .85rem; margin-left: auto; text-align: right; }
+  .chev { transition: transform .2s; color: var(--muted); }
+  .layer.open .chev { transform: rotate(90deg); }
+
+  .concepts { display: none; padding: 0 18px 18px; }
+  .layer.open .concepts { display: block; }
+
+  .concept {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin-top: 10px;
+    background: #0e1219;
+  }
+  .concept-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; cursor: pointer;
+  }
+  .concept-head:hover { background: #141926; }
+  .concept-name { font-weight: 600; font-size: .95rem; }
+  .concept-tag { font-size: .7rem; color: var(--muted); border: 1px solid var(--line); padding: 1px 8px; border-radius: 12px; }
+  .concept-body { display: none; padding: 0 14px 14px; color: #c3cad8; font-size: .9rem; }
+  .concept.open .concept-body { display: block; }
+  .concept-body p { margin-top: 8px; }
+  .concept-body .links { margin-top: 10px; font-size: .82rem; color: var(--accent); }
+  .concept-body .links b { color: var(--muted); font-weight: 500; }
+  .c-chev { color: var(--muted); transition: transform .2s; }
+  .concept.open .c-chev { transform: rotate(90deg); }
+
+  .foot { margin-top: 24px; color: var(--muted); font-size: .8rem; text-align: center; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<h1>🧊 The AI Iceberg</h1>
+<div class="sub">Everything about AI — from the apps you touch down to the silicon and math underneath. Click a layer to open it, then click any concept to read what it is and what it connects to.</div>
+
+<div class="legend">
+  <span><span class="dot" style="background:#6ee7b7"></span> Surface — what you use</span>
+  <span><span class="dot" style="background:#7dd3fc"></span> Products & interfaces</span>
+  <span><span class="dot" style="background:#a78bfa"></span> Models & architectures</span>
+  <span><span class="dot" style="background:#fbbf24"></span> Training & data</span>
+  <span><span class="dot" style="background:#f87171"></span> Math & algorithms</span>
+  <span><span class="dot" style="background:#fb7185"></span> Hardware & systems</span>
+  <span><span class="dot" style="background:#94a3b8"></span> Foundations</span>
+</div>
+
+<div id="iceberg"></div>
+
+<div class="foot">Built for Vitali — a living map. Every concept is a doorway; the "connects to" lines tell you where to go next.</div>
+
+<script>
+const DATA = [
+  {
+    num: 1, color: "#6ee7b7", title: "Surface — what you actually touch",
+    desc: "The apps, chats, and buttons",
+    concepts: [
+      { name: "Chat assistants", tag: "use", body: "ChatGPT, Claude, Gemini, and your own local models. You type, it replies. Under the hood this is 'autoregressive text generation' — the model predicts the next token, one at a time, forever.", links: "connects to: tokenization, LLMs, inference" },
+      { name: "Image generation", tag: "use", body: "Midjourney, Stable Diffusion, FLUX (your go-to). You give a text prompt, it produces an image. This is a completely different model family — diffusion — not the same thing as a chatbot.", links: "connects to: diffusion, latent space, CLIP" },
+      { name: "Video generation", tag: "use", body: "Sora, Runway, Kling. Diffusion applied across time — each frame must be consistent with the last. Hugely compute-hungry, which is why it's newer and more expensive.", links: "connects to: diffusion, world models, compute" },
+      { name: "Voice & TTS", tag: "use", body: "ElevenLabs, Whisper (speech-to-text), your voice-type setup. Speech is just another modality — audio gets turned into tokens too.", links: "connects to: tokenization, multimodal, Whisper" },
+      { name: "Coding agents", tag: "use", body: "Claude Code, opencode, Cursor. An LLM that can read files, run commands, and edit code in a loop. This is 'agentic' — the model acts, observes results, acts again.", links: "connects to: agents, tool use, function calling" },
+    ]
+  },
+  {
+    num: 2, color: "#7dd3fc", title: "Products, interfaces & the ecosystem",
+    desc: "How models are packaged and served",
+    concepts: [
+      { name: "Open vs closed source", tag: "ecosystem", body: "Closed (GPT-4, Claude) = you can only use it via API, weights are secret. Open (Llama, Qwen, Mistral) = weights are downloadable, you run them yourself. 'Open weights' ≠ 'open source' — the training data and code are often still secret.", links: "connects to: weights, licenses, HuggingFace" },
+      { name: "Weights", tag: "core", body: "A model IS its weights — a giant file of numbers (billions of them). 'Downloading a model' = downloading these numbers. The architecture is the recipe; the weights are the cooked dish.", links: "connects to: parameters, quantization, GGUF" },
+      { name: "HuggingFace", tag: "ecosystem", body: "The GitHub of models. Where weights, datasets, and demos live. The `hf` CLI and `transformers` library are the standard way to grab and run models.", links: "connects to: weights, datasets, fine-tuning" },
+      { name: "Ollama / llama.cpp", tag: "serving", body: "Tools that run models locally. llama.cpp is the C++ engine; Ollama wraps it with a friendly API and model registry. This is what's running on your Cabin right now.", links: "connects to: GGUF, quantization, inference" },
+      { name: "APIs & providers", tag: "ecosystem", body: "OpenAI, Anthropic, OpenRouter, Together. You pay per token to use their hosted models. OpenRouter is a middleman that resells many providers behind one API.", links: "connects to: inference, tokens, serving" },
+      { name: "Licenses", tag: "ecosystem", body: "MIT (do anything), Apache 2.0 (do anything, with patent grant), AGPL (must open-source your code if you run it as a service), and 'custom' licenses (Llama's, which restrict scale/competitors). This is why we rebuilt the avatars from scratch — AGPL would've infected DeCloud.", links: "connects to: open vs closed, legal" },
+    ]
+  },
+  {
+    num: 3, color: "#a78bfa", title: "Models & architectures",
+    desc: "The different kinds of brains",
+    concepts: [
+      { name: "LLMs (large language models)", tag: "arch", body: "The chatbot brain. Trained to predict the next word, which turns out to teach it reasoning, world knowledge, and language. GPT, Llama, Qwen, Mistral, DeepSeek are all LLMs.", links: "connects to: transformer, attention, pretraining" },
+      { name: "Transformer", tag: "arch", body: "THE architecture behind almost everything modern (2017, 'Attention Is All You Need'). Its key trick: attention lets every token look at every other token, so context flows freely. Replaced RNNs/LSTMs.", links: "connects to: attention, self-attention, positional encoding" },
+      { name: "Diffusion models", tag: "arch", body: "The image/video brain. Trained by adding noise to images and learning to remove it. Generate by starting from pure noise and denoising step by step. Stable Diffusion, FLUX, DALL-E.", links: "connects to: latent space, U-Net, CLIP" },
+      { name: "Multimodal models", tag: "arch", body: "Models that handle text + image + audio + video together. GPT-4V, Gemini, LLaVA. The trick is projecting every modality into one shared token space.", links: "connects to: tokenization, embeddings, CLIP" },
+      { name: "Mixture of Experts (MoE)", tag: "arch", body: "A model with many 'expert' sub-networks, but only a few activate per token. Gives you the smarts of a huge model at a fraction of the compute. DeepSeek, Mixtral, and your 'A3B' models use this.", links: "connects to: parameters, active parameters, routing" },
+      { name: "Reasoning / thinking models", tag: "arch", body: "Models trained to 'think' before answering — producing a hidden chain-of-thought. o1, DeepSeek-R1, and your heretic model. Slower but better at math/code/logic. This is why 'hi' took 20s.", links: "connects to: chain-of-thought, RL, inference-time compute" },
+      { name: "World models", tag: "frontier", body: "Models that learn an internal simulation of reality — physics, cause and effect. The bet is that video models trained on enough data become world models, enabling robots and agents that 'understand' the world.", links: "connects to: video generation, embodied AI, AGI" },
+    ]
+  },
+  {
+    num: 4, color: "#fbbf24", title: "Training & data",
+    desc: "How a pile of numbers becomes smart",
+    concepts: [
+      { name: "Pretraining", tag: "train", body: "The first, massive phase: feed the model trillions of tokens of internet text and make it predict the next one. This is where it learns language, facts, and reasoning. Costs millions of dollars of compute.", links: "connects to: next-token prediction, datasets, loss" },
+      { name: "Fine-tuning", tag: "train", body: "Taking a pretrained model and training it a bit more on a specific task or style. Turns a general model into a specialist (or a persona). Cheap compared to pretraining.", links: "connects to: LoRA, datasets, transfer learning" },
+      { name: "RLHF / DPO", tag: "train", body: "Reinforcement Learning from Human Feedback — training the model to be helpful and harmless by having humans rank its answers. DPO is a cheaper version that skips the RL. This is what makes models 'aligned' and polite.", links: "connects to: alignment, reward models, preference data" },
+      { name: "LoRA / adapters", tag: "train", body: "Low-Rank Adaptation — a way to fine-tune by training only a tiny add-on matrix instead of the whole model. You can fine-tune a 70B model on one GPU this way. The basis of most local fine-tuning.", links: "connects to: fine-tuning, quantization, PEFT" },
+      { name: "Datasets", tag: "data", body: "The fuel. Common Crawl (the internet), books, code, and increasingly synthetic data (generated by other models). Data quality matters more than model size — 'garbage in, garbage out'.", links: "connects to: pretraining, tokenization, synthetic data" },
+      { name: "Tokenization", tag: "data", body: "Splitting text into 'tokens' — the model's vocabulary units. 'Hello' might be one token, 'unbelievable' might be three. This is why you pay 'per token' and why context is measured in tokens.", links: "connects to: tokens, context window, BPE" },
+      { name: "Embeddings", tag: "data", body: "Turning words/images into vectors (lists of numbers) where similar things are close together. The foundation of search, RAG, and how models 'understand' meaning.", links: "connects to: vector space, RAG, similarity" },
+      { name: "Self-improvement / self-training", tag: "frontier", body: "Models that generate their own training data and improve themselves — like Ornith-1.5 (the model you just downloaded). The frontier bet: this is how we get past the 'data wall'.", links: "connects to: synthetic data, RL, Ornith" },
+    ]
+  },
+  {
+    num: 5, color: "#f87171", title: "Math & algorithms",
+    desc: "The actual mechanics",
+    concepts: [
+      { name: "Neural networks", tag: "math", body: "Layers of 'neurons' (just numbers) connected by weights. Input flows through, gets multiplied and summed, and out comes a prediction. 'Deep' = many layers.", links: "connects to: weights, layers, activation functions" },
+      { name: "Backpropagation", tag: "math", body: "The learning algorithm. After a wrong prediction, it works backward through the network computing how much each weight contributed to the error, then nudges them. Repeat billions of times.", links: "connects to: gradient descent, loss, training" },
+      { name: "Attention", tag: "math", body: "The transformer's superpower. Each token computes 'how much should I pay attention to every other token?' — letting the model relate distant words. 'Self-attention' = tokens attending to each other.", links: "connects to: transformer, QKV, softmax" },
+      { name: "Gradient descent", tag: "math", body: "The optimizer. Imagine a foggy landscape where height = error. Gradient descent walks downhill step by step to find the lowest point (best weights).", links: "connects to: backpropagation, loss, learning rate" },
+      { name: "Loss function", tag: "math", body: "The scorecard — how wrong is the model right now? Training = minimizing loss. For LLMs it's 'cross-entropy' (how surprised was the model by the actual next token?).", links: "connects to: gradient descent, training, evaluation" },
+      { name: "Parameters", tag: "math", body: "The count of trainable numbers in a model. 7B = 7 billion parameters. More parameters = more capacity, but also more memory and compute. 'A3B' = 3 billion active (MoE).", links: "connects to: weights, MoE, VRAM" },
+      { name: "Latent space", tag: "math", body: "The compressed 'meaning space' inside a model. Diffusion works in latent space (compressed images) to be faster. Embeddings live here. It's where 'concepts' become geometry.", links: "connects to: embeddings, diffusion, VAE" },
+    ]
+  },
+  {
+    num: 6, color: "#fb7185", title: "Hardware, systems & inference",
+    desc: "The silicon and how models actually run",
+    concepts: [
+      { name: "GPUs & VRAM", tag: "hw", body: "Graphics cards are the workhorse — thousands of cores doing matrix math in parallel. VRAM is the GPU's own fast memory. A model must fit in VRAM to run fast; if it doesn't, it spills to CPU and crawls (your heretic 64k problem).", links: "connects to: CUDA, quantization, matrix multiplication" },
+      { name: "CUDA & kernels", tag: "hw", body: "NVIDIA's language for programming GPUs. 'Kernels' are the low-level functions that do the actual math. This is why NVIDIA dominates — the whole ecosystem is built on CUDA.", links: "connects to: GPUs, matrix multiplication, inference engines" },
+      { name: "Matrix multiplication", tag: "hw", body: "The fundamental operation. Neural networks are, at their core, giant matrix multiplications. GPUs and TPUs exist to do this one thing absurdly fast.", links: "connects to: GPUs, neural networks, tensor cores" },
+      { name: "Quantization", tag: "infer", body: "Shrinking the model's numbers from 16-bit to 8/4/3-bit to save memory. Q4_K_M, Q3_K_L (your heretic) are quantization levels. Lower = smaller/faster but slightly dumber. The key to running big models on small cards.", links: "connects to: GGUF, VRAM, precision" },
+      { name: "GGUF", tag: "infer", body: "A file format for quantized models that llama.cpp/Ollama can run. When you download a '.gguf', it's a quantized model ready to run locally.", links: "connects to: quantization, Ollama, llama.cpp" },
+      { name: "Context window & KV cache", tag: "infer", body: "Context window = how many tokens the model can 'remember' at once. The KV cache stores past attention results so it doesn't recompute them — but it eats VRAM. Bigger context = more VRAM (your 32k vs 64k tradeoff).", links: "connects to: tokens, attention, VRAM" },
+      { name: "Inference engines", tag: "infer", body: "vLLM, TensorRT-LLM, llama.cpp — software that makes models run fast in production. They do batching, KV-cache management, and speculative decoding.", links: "connects to: serving, batching, CUDA" },
+      { name: "Speculative decoding", tag: "infer", body: "A trick to speed up generation: a tiny fast model drafts tokens, the big model checks them. Can 2-3x speed with no quality loss.", links: "connects to: inference, tokens, speed" },
+    ]
+  },
+  {
+    num: 7, color: "#94a3b8", title: "Foundations — the bedrock",
+    desc: "The math and ideas everything sits on",
+    concepts: [
+      { name: "Linear algebra", tag: "foundation", body: "Vectors, matrices, dot products. The language of neural networks. 'Embeddings are vectors' and 'attention is matrix math' both live here.", links: "connects to: matrix multiplication, embeddings, attention" },
+      { name: "Calculus", tag: "foundation", body: "Derivatives = how fast things change. Backpropagation is just the chain rule of calculus applied to a network. The gradient in 'gradient descent' is a derivative.", links: "connects to: backpropagation, gradient descent" },
+      { name: "Probability & statistics", tag: "foundation", body: "LLMs output probability distributions over the next token. Sampling, temperature, and 'hallucination' are all probability concepts.", links: "connects to: softmax, sampling, loss" },
+      { name: "Information theory", tag: "foundation", body: "Entropy, bits, compression. A language model is fundamentally a compressor — it learns the patterns that let it predict (compress) text. Cross-entropy loss comes from here.", links: "connects to: loss, tokenization, compression" },
+      { name: "Optimization", tag: "foundation", body: "The field of finding the best solution. Gradient descent, Adam, learning-rate schedules — all optimization. Training a model is one giant optimization problem.", links: "connects to: gradient descent, training, loss" },
+    ]
+  },
+  {
+    num: 8, color: "#e879f9", title: "Agents & the frontier",
+    desc: "Where it's all heading",
+    concepts: [
+      { name: "Agents", tag: "frontier", body: "An LLM in a loop: perceive → think → act → observe → repeat. Given tools (files, terminal, web) and a goal, it works autonomously. This is what opencode and Claude Code are.", links: "connects to: tool use, planning, memory" },
+      { name: "Tool use / function calling", tag: "agent", body: "The model can call external functions — search the web, run code, read a file. The model outputs a structured 'call this function with these args', the system executes it, feeds the result back.", links: "connects to: agents, APIs, MCP" },
+      { name: "MCP (Model Context Protocol)", tag: "agent", body: "A standard for connecting models to tools — like USB-C for AI. One protocol lets any model use any tool. Growing fast as the agent ecosystem standardizes.", links: "connects to: tool use, agents, integrations" },
+      { name: "Memory & RAG", tag: "agent", body: "RAG (Retrieval-Augmented Generation) = look up relevant info from a database and feed it to the model, instead of relying on its baked-in knowledge. How agents 'remember' and cite facts.", links: "connects to: embeddings, vector DBs, context" },
+      { name: "Multi-agent systems", tag: "agent", body: "Multiple agents working together — one plans, one codes, one reviews. Like a team. This is how complex autonomous work gets done (and how I delegate subagents).", links: "connects to: agents, orchestration, delegation" },
+      { name: "Alignment & safety", tag: "frontier", body: "Making models do what we actually want and not what we don't. RLHF, red-teaming, jailbreaks, and interpretability all live here. The 'uncensored' models you like are the un-aligned versions.", links: "connects to: RLHF, jailbreaks, interpretability" },
+      { name: "Interpretability", tag: "frontier", body: "Understanding what's happening inside the black box — which neurons fire for which concepts. Anthropic's 'dictionary learning' found interpretable features. Still early.", links: "connects to: neural networks, alignment, features" },
+      { name: "AGI & beyond", tag: "frontier", body: "Artificial General Intelligence — a system as capable as a human across all domains. Nobody agrees when/if it arrives. The honest answer: we don't know, and anyone claiming certainty is selling something.", links: "connects to: world models, self-improvement, everything above" },
+    ]
+  },
+];
+
+const iceberg = document.getElementById('iceberg');
+
+DATA.forEach((layer, li) => {
+  const layerEl = document.createElement('div');
+  layerEl.className = 'layer';
+  layerEl.innerHTML = `
+    <div class="layer-head">
+      <span class="layer-num" style="background:${layer.color}">${layer.num}</span>
+      <span class="layer-title">${layer.title}</span>
+      <span class="layer-desc">${layer.desc}</span>
+      <span class="chev">▶</span>
+    </div>
+    <div class="concepts"></div>
+  `;
+  const conceptsEl = layerEl.querySelector('.concepts');
+
+  layer.concepts.forEach((c, ci) => {
+    const cEl = document.createElement('div');
+    cEl.className = 'concept';
+    cEl.innerHTML = `
+      <div class="concept-head">
+        <span class="c-chev">▶</span>
+        <span class="concept-name">${c.name}</span>
+        <span class="concept-tag">${c.tag}</span>
+      </div>
+      <div class="concept-body">
+        <p>${c.body}</p>
+        <div class="links"><b>${c.links}</b></div>
+      </div>
+    `;
+    cEl.querySelector('.concept-head').addEventListener('click', () => {
+      cEl.classList.toggle('open');
+    });
+    conceptsEl.appendChild(cEl);
+  });
+
+  layerEl.querySelector('.layer-head').addEventListener('click', () => {
+    layerEl.classList.toggle('open');
+  });
+
+  iceberg.appendChild(layerEl);
+});
+
+// open the first layer by default
+document.querySelector('.layer').classList.add('open');
+</script>
+</body>
+</html>

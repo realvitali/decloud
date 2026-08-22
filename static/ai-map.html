@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The AI Map — Powers of Ten & Metro</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #12161f;
+    --ink: #e6e9f0;
+    --muted: #8a93a6;
+    --local: #fbbf24;
+    --line: #232a38;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+  }
+
+  /* ===== top bar ===== */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px;
+    background: rgba(11,14,20,.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar h1 { font-size: 1rem; font-weight: 700; }
+  .toggle { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-left: auto; }
+  .toggle button {
+    background: transparent; color: var(--muted); border: none;
+    padding: 8px 16px; cursor: pointer; font-size: .85rem; font-weight: 600;
+  }
+  .toggle button.active { background: var(--local); color: #0b0e14; }
+
+  /* ===== POWERS OF TEN ===== */
+  #p10 { padding-top: 52px; }
+  .scale-section {
+    min-height: 100vh;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 40px 24px;
+    border-bottom: 1px solid var(--line);
+    position: relative;
+  }
+  .scale-label {
+    font-size: 2.2rem; font-weight: 800; letter-spacing: -1px;
+    margin-bottom: 4px;
+  }
+  .scale-name { color: var(--muted); font-size: 1rem; margin-bottom: 20px; }
+  .scale-cards { display: flex; flex-wrap: wrap; gap: 12px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; max-width: 320px; flex: 1 1 260px;
+    cursor: pointer;
+  }
+  .card:hover { border-color: #3a4557; }
+  .card.local { border-color: #3a2f14; }
+  .card h3 { font-size: .95rem; margin-bottom: 2px; }
+  .card .tag { font-size: .68rem; color: var(--muted); }
+  .card .localflag { display: inline-block; background: var(--local); color: #0b0e14; font-size: .6rem; font-weight: 700; padding: 1px 7px; border-radius: 9px; margin-left: 6px; }
+  .card p { font-size: .82rem; color: #c3cad8; margin-top: 8px; display: none; }
+  .card.open p { display: block; }
+  .card .links { font-size: .75rem; color: #6ee7b7; margin-top: 8px; display: none; }
+  .card.open .links { display: block; }
+  .card .links b { color: var(--muted); font-weight: 500; }
+
+  .scale-hint {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    color: var(--muted); font-size: .75rem; z-index: 50;
+    background: rgba(11,14,20,.8); padding: 6px 14px; border-radius: 20px;
+    border: 1px solid var(--line);
+  }
+
+  /* ===== METRO ===== */
+  #metro { padding-top: 52px; display: none; }
+  #metro svg { width: 100%; height: auto; display: block; }
+  .metro-wrap { padding: 20px; }
+  .metro-legend { display: flex; gap: 16px; flex-wrap: wrap; padding: 0 20px 20px; font-size: .8rem; color: var(--muted); }
+  .metro-legend span { display: flex; align-items: center; gap: 6px; }
+  .mline { width: 24px; height: 4px; border-radius: 2px; display: inline-block; }
+  .station { cursor: pointer; }
+  .station circle { transition: r .15s; }
+  .station text { font-size: 10px; fill: var(--ink); pointer-events: none; }
+  .station.local circle { fill: #3a2f14; stroke: var(--local); }
+  .station.local text { fill: #fde68a; }
+  .station.dim { opacity: .15; }
+  .station.hl circle { stroke-width: 3; }
+  .metro-line { fill: none; stroke-width: 4; stroke-linecap: round; }
+  .metro-line.dim { opacity: .08; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>🗺️ The AI Map</h1>
+  <div class="toggle">
+    <button id="btnP10" class="active" onclick="show('p10')">Powers of Ten</button>
+    <button id="btnMetro" onclick="show('metro')">Metro Map</button>
+  </div>
+</div>
+
+<!-- ================= POWERS OF TEN ================= -->
+<div id="p10"></div>
+<div class="scale-hint" id="p10hint">scroll to zoom out — from atoms up to agents</div>
+
+<!-- ================= METRO ================= -->
+<div id="metro">
+  <div class="metro-legend">
+    <span><span class="mline" style="background:#fbbf24"></span> Local AI line</span>
+    <span><span class="mline" style="background:#6ee7b7"></span> The stack</span>
+    <span><span class="mline" style="background:#a78bfa"></span> Models</span>
+    <span><span class="mline" style="background:#38bdf8"></span> Cloud / data centers</span>
+    <span><span class="mline" style="background:#e879f9"></span> Agents / frontier</span>
+  </div>
+  <div class="metro-wrap">
+    <svg id="metroSvg" viewBox="0 0 1200 900"></svg>
+  </div>
+</div>
+
+<script>
+// ================= DATA =================
+// Powers of Ten: ordered from smallest (atoms) to largest (agents)
+const SCALES = [
+  { label:"10⁻¹⁰ m", name:"Atoms & silicon", color:"#94a3b8", cards:[
+    { name:"Atoms", tag:"physics", body:"Silicon atoms — the raw material. A silicon crystal is a lattice of these. Everything below this is quantum mechanics.", links:"silicon · transistors" },
+    { name:"Silicon", tag:"material", body:"The semiconductor. Its special property — you can control its conductivity — is what makes transistors possible.", links:"atoms · transistors" },
+  ]},
+  { label:"10⁻⁹ m", name:"Transistors", color:"#f59e0b", cards:[
+    { name:"Transistors", tag:"silicon", body:"The fundamental switch — billions on a chip, each flipping on/off to do logic. Modern chips have ~100 billion.", links:"logic gates · process nodes" },
+    { name:"Process nodes", tag:"silicon", body:"How small the transistors are. '3nm' = feature size. Smaller = more transistors, faster, more efficient.", links:"transistors · lithography" },
+  ]},
+  { label:"10⁻⁷ m", name:"Chip features", color:"#f59e0b", cards:[
+    { name:"EUV lithography", tag:"silicon", body:"How chips are made — extreme ultraviolet light etches microscopic patterns onto silicon. ASML makes the $200M+ machines.", links:"process nodes · wafers" },
+    { name:"Logic gates", tag:"silicon", body:"Transistors wired together to do AND/OR/NOT — the basic operations of computation. Millions per chip.", links:"transistors · circuits" },
+  ]},
+  { label:"10⁻³ m", name:"Chips & dies", color:"#f59e0b", cards:[
+    { name:"Wafers & dies", tag:"silicon", body:"A wafer is a disc of pure silicon; hundreds of chips ('dies') are printed on it, then cut apart. Defects mean some dies are bad.", links:"lithography · fabs" },
+    { name:"Fabs", tag:"silicon", body:"The factories that make chips. TSMC makes most of the world's advanced chips. A modern fab costs $20B+.", links:"lithography · supply chain" },
+    { name:"HBM", tag:"silicon", body:"High Bandwidth Memory — memory stacked in 3D next to the GPU die for massive bandwidth. Why AI GPUs are expensive.", links:"memory · bandwidth" },
+  ]},
+  { label:"10⁻¹ m", name:"The GPU card", color:"#fb7185", cards:[
+    { name:"GPUs & VRAM", tag:"hw", local:true, body:"Graphics cards are the workhorse — thousands of cores doing matrix math in parallel. VRAM is the GPU's fast memory. A model must fit in VRAM to run fast.", links:"CUDA · quantization" },
+    { name:"Tensor cores", tag:"hw", body:"Specialized hardware inside GPUs that does matrix multiplication insanely fast. The thing that made deep learning practical.", links:"matrix mult · GPUs" },
+    { name:"CUDA & kernels", tag:"hw", body:"NVIDIA's language for programming GPUs. 'Kernels' are the low-level functions doing the math. Why NVIDIA dominates.", links:"GPUs · matrix mult" },
+  ]},
+  { label:"10⁰ m", name:"The server", color:"#38bdf8", cards:[
+    { name:"Servers", tag:"dc", body:"A server is a computer with 8 GPUs. The unit of AI compute. Your Cabin is a single-GPU server.", links:"GPUs · racks" },
+    { name:"Memory hierarchy", tag:"hw", local:true, body:"The speed/capacity ladder: registers → cache → VRAM/HBM → RAM → SSD. AI is memory-bound — the bottleneck is moving data.", links:"VRAM · HBM" },
+  ]},
+  { label:"10¹ m", name:"Racks & clusters", color:"#38bdf8", cards:[
+    { name:"Racks", tag:"dc", body:"A rack holds ~20 servers. A data center holds thousands of racks.", links:"servers · data centers" },
+    { name:"GPU clusters", tag:"dc", body:"Thousands of GPUs wired together to train one model. Training GPT-4-class models needs ~10,000+ GPUs for months.", links:"interconnect · training" },
+    { name:"Interconnect", tag:"dc", body:"How GPUs talk to each other. NVLink and InfiniBand move data fast enough to act as one giant computer.", links:"clusters · bandwidth" },
+  ]},
+  { label:"10² m", name:"Data centers", color:"#38bdf8", cards:[
+    { name:"Data centers", tag:"dc", body:"The physical home of cloud AI. Hundreds of megawatts of power, thousands of GPUs, liquid cooling.", links:"clusters · power" },
+    { name:"Power & cooling", tag:"dc", body:"AI data centers draw enough power for a small city. Air → liquid → immersion cooling. Your liquid-cooled Cabin is a micro version.", links:"energy · thermal" },
+    { name:"Energy & the grid", tag:"dc", body:"AI's dirty secret: it's energy-hungry. Companies sign deals for nuclear and geothermal. A real frontier constraint.", links:"power · sustainability" },
+  ]},
+  { label:"10³ m", name:"The network", color:"#38bdf8", cards:[
+    { name:"The internet", tag:"infra", body:"The fabric connecting everything — data centers, edge devices, your laptop. Where cloud APIs travel.", links:"data centers · edge" },
+    { name:"Edge computing", tag:"dc", local:true, body:"The opposite of the data center — running AI on devices at the edge (laptop, phone, home server). Local AI is edge computing.", links:"local AI · self-hosting" },
+  ]},
+  { label:"10⁶ m", name:"The planet", color:"#38bdf8", cards:[
+    { name:"The supply chain", tag:"silicon", body:"Design (NVIDIA, AMD) → fab (TSMC) → packaging → board → server → data center. Every model traces back to this chain.", links:"fabs · data centers" },
+    { name:"Geopolitics", tag:"industry", body:"The US-China chip war is about controlling the supply chain. AI is now a matter of national security.", links:"supply chain · fabs" },
+  ]},
+  { label:"∞", name:"The abstract — models & ideas", color:"#a78bfa", cards:[
+    { name:"Neural networks", tag:"math", body:"Layers of 'neurons' (just numbers) connected by weights. Input flows through, gets multiplied and summed, out comes a prediction.", links:"weights · layers" },
+    { name:"LLMs", tag:"arch", body:"The chatbot brain. Trained to predict the next word, which teaches reasoning, world knowledge, and language.", links:"transformer · attention" },
+    { name:"Transformer", tag:"arch", body:"THE architecture behind almost everything modern (2017). Attention lets every token look at every other token.", links:"attention · self-attention" },
+    { name:"Diffusion models", tag:"arch", body:"The image/video brain. Trained by adding noise and learning to remove it. Stable Diffusion, FLUX, DALL-E.", links:"latent space · CLIP" },
+    { name:"Quantization", tag:"infer", local:true, body:"Shrinking the model's numbers from 16-bit to 8/4/3-bit to save memory. The key to running big models on small cards.", links:"GGUF · VRAM" },
+    { name:"GGUF", tag:"infer", local:true, body:"A file format for quantized models that llama.cpp/Ollama can run. A '.gguf' is a quantized model ready to run locally.", links:"quantization · Ollama" },
+    { name:"Context & KV cache", tag:"infer", local:true, body:"Context window = how many tokens the model can remember. The KV cache stores past attention results — but eats VRAM.", links:"tokens · attention" },
+    { name:"Pretraining", tag:"train", body:"The first, massive phase: feed the model trillions of tokens and make it predict the next one. Costs millions in compute.", links:"datasets · loss" },
+    { name:"Fine-tuning", tag:"train", body:"Taking a pretrained model and training it a bit more on a specific task or style. Turns a general model into a specialist.", links:"LoRA · datasets" },
+    { name:"LoRA", tag:"train", local:true, body:"Low-Rank Adaptation — fine-tune by training only a tiny add-on matrix. Fine-tune a 70B model on one GPU.", links:"fine-tuning · quantization" },
+    { name:"Embeddings", tag:"data", body:"Turning words/images into vectors where similar things are close together. Foundation of search and RAG.", links:"vector space · RAG" },
+    { name:"Tokenization", tag:"data", body:"Splitting text into 'tokens' — the model's vocabulary units. Why you pay 'per token'.", links:"tokens · context" },
+  ]},
+  { label:"∞", name:"The abstract — products & agents", color:"#e879f9", cards:[
+    { name:"Ollama / llama.cpp", tag:"serving", local:true, body:"Tools that run models locally. llama.cpp is the C++ engine; Ollama wraps it with a friendly API. What's on your Cabin.", links:"GGUF · quantization" },
+    { name:"Self-hosting", tag:"infer", local:true, body:"Running the whole stack yourself on your own hardware. Your Cabin + Ollama + Tailscale is exactly this.", links:"Ollama · local AI" },
+    { name:"HuggingFace", tag:"ecosystem", body:"The GitHub of models. Where weights, datasets, and demos live.", links:"weights · datasets" },
+    { name:"Open vs closed", tag:"ecosystem", body:"Closed (GPT-4, Claude) = weights secret. Open (Llama, Qwen) = weights downloadable. 'Open weights' ≠ 'open source'.", links:"weights · licenses" },
+    { name:"Licenses", tag:"ecosystem", body:"MIT, Apache 2.0, AGPL, custom. Why we rebuilt the avatars — AGPL would've infected DeCloud.", links:"open vs closed" },
+    { name:"Chat assistants", tag:"use", body:"ChatGPT, Claude, Gemini, and your own local models. Autoregressive text generation under the hood.", links:"LLMs · inference" },
+    { name:"Image generation", tag:"use", body:"Midjourney, Stable Diffusion, FLUX. Text prompt in, image out. A different model family — diffusion.", links:"diffusion · latent space" },
+    { name:"Coding agents", tag:"use", body:"Claude Code, opencode, Cursor. An LLM that reads files, runs commands, and edits code in a loop.", links:"agents · tool use" },
+    { name:"Agents", tag:"frontier", body:"An LLM in a loop: perceive → think → act → observe → repeat. Given tools and a goal, it works autonomously.", links:"tool use · memory" },
+    { name:"Tool use", tag:"agent", body:"The model can call external functions — search the web, run code, read a file.", links:"agents · MCP" },
+    { name:"MCP", tag:"agent", body:"Model Context Protocol — a standard for connecting models to tools, like USB-C for AI.", links:"tool use · agents" },
+    { name:"RAG", tag:"agent", body:"Retrieval-Augmented Generation — look up relevant info and feed it to the model. How agents 'remember' and cite.", links:"embeddings · vector DBs" },
+    { name:"Multi-agent", tag:"agent", body:"Multiple agents working together — one plans, one codes, one reviews. Like a team.", links:"agents · orchestration" },
+    { name:"Alignment", tag:"frontier", body:"Making models do what we actually want. RLHF, red-teaming, jailbreaks. 'Uncensored' models are the un-aligned versions.", links:"RLHF · jailbreaks" },
+    { name:"AGI", tag:"frontier", body:"Artificial General Intelligence — as capable as a human across all domains. Nobody agrees when/if it arrives.", links:"world models · self-improvement" },
+  ]},
+];
+
+// ================= RENDER POWERS OF TEN =================
+const p10 = document.getElementById('p10');
+SCALES.forEach((s) => {
+  const sec = document.createElement('div');
+  sec.className = 'scale-section';
+  sec.style.borderLeft = `4px solid ${s.color}`;
+  sec.innerHTML = `<div class="scale-label" style="color:${s.color}">${s.label}</div>
+    <div class="scale-name">${s.name}</div>
+    <div class="scale-cards"></div>`;
+  const cards = sec.querySelector('.scale-cards');
+  s.cards.forEach((c) => {
+    const card = document.createElement('div');
+    card.className = 'card' + (c.local ? ' local' : '');
+    card.innerHTML = `<h3>${c.name}${c.local ? '<span class="localflag">LOCAL</span>' : ''}</h3>
+      <span class="tag">${c.tag}</span>
+      <p>${c.body}</p>
+      <div class="links"><b>connects to:</b> ${c.links}</div>`;
+    card.addEventListener('click', () => card.classList.toggle('open'));
+    cards.appendChild(card);
+  });
+  p10.appendChild(sec);
+});
+
+// ================= METRO MAP =================
+// Lines: local AI (yellow), stack (green), models (purple), cloud (blue), agents (pink)
+const metroSvg = document.getElementById('metroSvg');
+const NS = 'http://www.w3.org/2000/svg';
+
+// Station positions (hand-placed for a clean metro look)
+const stations = {
+  // Local AI line (yellow) — the sovereignty path, vertical
+  "local-app":   { x: 300, y: 120, name:"Local AI apps", local:true, line:"local" },
+  "ollama":      { x: 300, y: 240, name:"Ollama / llama.cpp", local:true, line:"local" },
+  "gguf":        { x: 300, y: 360, name:"GGUF", local:true, line:"local" },
+  "quantization":{ x: 300, y: 480, name:"Quantization", local:true, line:"local" },
+  "gpu":         { x: 300, y: 600, name:"GPUs & VRAM", local:true, line:"local" },
+  "self-host":   { x: 300, y: 720, name:"Self-hosting", local:true, line:"local" },
+  "edge":        { x: 300, y: 840, name:"Edge computing", local:true, line:"local" },
+
+  // Stack line (green) — the core vertical
+  "agent":       { x: 600, y: 120, name:"Agents", line:"stack" },
+  "llm":         { x: 600, y: 240, name:"LLMs", line:"stack" },
+  "transformer": { x: 600, y: 360, name:"Transformer", line:"stack" },
+  "attention":   { x: 600, y: 480, name:"Attention", line:"stack" },
+  "neural":      { x: 600, y: 600, name:"Neural networks", line:"stack" },
+  "matmul":      { x: 600, y: 720, name:"Matrix mult", line:"stack" },
+  "transistor":  { x: 600, y: 840, name:"Transistors", line:"stack" },
+
+  // Models line (purple)
+  "diffusion":   { x: 900, y: 240, name:"Diffusion", line:"models" },
+  "multimodal":  { x: 900, y: 360, name:"Multimodal", line:"models" },
+  "moe":         { x: 900, y: 480, name:"MoE", line:"models" },
+  "reasoning":   { x: 900, y: 600, name:"Reasoning", line:"models" },
+  "slm":         { x: 900, y: 720, name:"SLMs", local:true, line:"models" },
+
+  // Cloud line (blue)
+  "server":      { x: 1100, y: 240, name:"Servers", line:"cloud" },
+  "cluster":     { x: 1100, y: 360, name:"GPU clusters", line:"cloud" },
+  "datacenter":  { x: 1100, y: 480, name:"Data centers", line:"cloud" },
+  "power":       { x: 1100, y: 600, name:"Power & cooling", line:"cloud" },
+
+  // Agents line (pink)
+  "tool-use":    { x: 150, y: 240, name:"Tool use", line:"agents" },
+  "mcp":         { x: 150, y: 360, name:"MCP", line:"agents" },
+  "rag":         { x: 150, y: 480, name:"RAG", line:"agents" },
+  "multi-agent": { x: 150, y: 600, name:"Multi-agent", line:"agents" },
+  "agi":         { x: 150, y: 720, name:"AGI", line:"agents" },
+};
+
+const lineColors = { local:"#fbbf24", stack:"#6ee7b7", models:"#a78bfa", cloud:"#38bdf8", agents:"#e879f9" };
+
+// draw lines (connect stations on the same line, in y order)
+Object.entries(lineColors).forEach(([line, color]) => {
+  const pts = Object.entries(stations).filter(([id,s]) => s.line === line)
+    .map(([id,s]) => ({id, ...s}))
+    .sort((a,b) => a.y - b.y);
+  if (pts.length < 2) return;
+  const d = pts.map((p,i) => `${i===0?'M':'L'} ${p.x} ${p.y}`).join(' ');
+  const path = document.createElementNS(NS,'path');
+  path.setAttribute('d', d);
+  path.setAttribute('class','metro-line');
+  path.setAttribute('stroke', color);
+  path.dataset.line = line;
+  metroSvg.appendChild(path);
+});
+
+// draw stations
+const stationEls = {};
+Object.entries(stations).forEach(([id, s]) => {
+  const g = document.createElementNS(NS,'g');
+  g.setAttribute('class','station' + (s.local ? ' local' : ''));
+  g.setAttribute('transform', `translate(${s.x},${s.y})`);
+  g.dataset.id = id;
+  const c = document.createElementNS(NS,'circle');
+  c.setAttribute('r', 9);
+  c.setAttribute('fill', s.local ? '#3a2f14' : '#1a2130');
+  c.setAttribute('stroke', s.local ? '#fbbf24' : lineColors[s.line]);
+  c.setAttribute('stroke-width', '2');
+  g.appendChild(c);
+  const t = document.createElementNS(NS,'text');
+  t.setAttribute('text-anchor','middle');
+  t.setAttribute('y', 24);
+  t.textContent = s.name;
+  g.appendChild(t);
+  g.addEventListener('click', () => focusStation(id));
+  metroSvg.appendChild(g);
+  stationEls[id] = g;
+});
+
+function focusStation(id) {
+  const target = stations[id];
+  Object.entries(stationEls).forEach(([sid, el]) => {
+    const isTarget = sid === id;
+    el.classList.toggle('dim', !isTarget);
+    el.classList.toggle('hl', isTarget);
+  });
+  document.querySelectorAll('.metro-line').forEach(l => {
+    l.classList.toggle('dim', l.dataset.line !== target.line);
+  });
+}
+
+// ================= TOGGLE =================
+function show(view) {
+  document.getElementById('p10').style.display = view === 'p10' ? 'block' : 'none';
+  document.getElementById('metro').style.display = view === 'metro' ? 'block' : 'none';
+  document.getElementById('p10hint').style.display = view === 'p10' ? 'block' : 'none';
+  document.getElementById('btnP10').classList.toggle('active', view === 'p10');
+  document.getElementById('btnMetro').classList.toggle('active', view === 'metro');
+}
+</script>
+</body>
+</html>
