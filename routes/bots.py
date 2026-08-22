@@ -10,7 +10,7 @@ How it works:
   - DeCloud also appends each turn to data/bot-chats/<bot>.jsonl so history
     renders instantly without touching Hermes session internals.
 """
-import os, re, json, shutil, subprocess, datetime
+import os, re, json, shutil, subprocess, datetime, uuid
 from pathlib import Path
 from flask import Blueprint, jsonify, request
 
@@ -179,6 +179,7 @@ def list_bots():
             'description': meta.get('description', ''),
             'color': meta.get('color', '#7c6ff0'),
             'emoji': meta.get('emoji', '🤖'),
+            'avatar_seed': meta.get('avatar_seed', ''),
             'model': profiles.get(name) or meta.get('model', ''),
             'has_profile': (Path(HERMES_HOME) / 'profiles' / name).exists(),
             'protected': name in _PROTECTED,
@@ -245,6 +246,19 @@ def delete_bot(name):
     except Exception:
         pass
     return jsonify({'ok': True})
+
+
+@bp.route('/api/bots/<name>/avatar', methods=['POST'])
+def reroll_avatar(name):
+    """Re-roll a bot's procedural avatar (store a new random seed)."""
+    if not HERMES_HOME:
+        return _not_configured()
+    if not _profile_ok(name) or name not in _load_registry():
+        return jsonify({'error': 'Not found'}), 404
+    reg = _load_registry()
+    reg[name]['avatar_seed'] = uuid.uuid4().hex[:12]
+    _save_registry(reg)
+    return jsonify({'ok': True, 'avatar_seed': reg[name]['avatar_seed']})
 
 
 @bp.route('/api/bots/<name>/chat', methods=['POST'])

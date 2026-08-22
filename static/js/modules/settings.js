@@ -11,6 +11,7 @@ function switchSettingsTab(tabId) {
   if (panelId === 'st-panel-logs') loadSettingsLogs();
   if (panelId === 'st-panel-about') loadAbout();
   if (panelId === 'st-panel-paths') loadPaths();
+  if (panelId === 'st-panel-ai') loadTitleModel();
 }
 
 function loadAbout() {
@@ -47,6 +48,38 @@ function loadPaths() {
     document.getElementById('path-files').value = d.files || '';
     document.getElementById('path-music').value = d.music || '';
   }).catch(function() {});
+}
+
+function loadTitleModel() {
+  fetch('/api/settings/title-model').then(function(r) { return r.json(); }).then(function(d) {
+    document.getElementById('title-model').value = d.title_model || '';
+  }).catch(function() {});
+}
+
+function saveTitleModel() {
+  var model = document.getElementById('title-model').value.trim();
+  var note = document.getElementById('title-model-note');
+  fetch('/api/settings/title-model', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title_model: model })
+  }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+  .then(function(res) {
+    if (note) {
+      if (res.ok) {
+        note.textContent = '✓ Saved';
+        note.className = 'settings-note settings-note-ok';
+      } else {
+        note.textContent = '✗ ' + (res.d.error || 'Save failed');
+        note.className = 'settings-note settings-note-err';
+      }
+    }
+  }).catch(function() {
+    if (note) {
+      note.textContent = '✗ Network error';
+      note.className = 'settings-note settings-note-err';
+    }
+  });
 }
 
 function savePaths() {

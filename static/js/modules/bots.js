@@ -3,6 +3,9 @@
 
 let botsState = { list: [], active: null, loading: false };
 
+// Inject procedural-avatar animation styles once.
+if (window.DeCloudAvatar) window.DeCloudAvatar.injectStyles();
+
 // ─── History/back-button support ────────────────────────────────
 // Bot chats push #bot/<name>; popstate returns to the roster.
 window.addEventListener('popstate', () => {
@@ -49,7 +52,7 @@ function botsRenderRoster(el) {
   }
   el.innerHTML = botsState.list.map(b => `
     <div class="bot-card" data-bot="${b.name}" onclick="botsOpen('${b.name}')">
-      <div class="bot-avatar" style="background:${b.color}">${b.emoji}</div>
+      ${botAvatar(b, '')}
       <div class="bot-info">
         <div class="bot-name">${esc(b.title)}
           <span class="bot-model">${esc(b.model || 'no model')}</span></div>
@@ -57,6 +60,8 @@ function botsRenderRoster(el) {
       </div>
       ${b.last_ts ? `<span class="bot-ts">${esc(b.last_ts.slice(11,16))}</span>` : ''}
       ${b.protected ? '<span class="bot-tag-protected" title="Core profile">core</span>' : ''}
+      <button class="bot-reroll" title="Randomize avatar"
+        onclick="event.stopPropagation(); botsRerollAvatar('${b.name}')">🎲</button>
       <button class="bot-delete" title="Delete bot"
         onclick="event.stopPropagation(); botsDelete('${b.name}')">✕</button>
     </div>`).join('');
@@ -65,6 +70,39 @@ function botsRenderRoster(el) {
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g,
     c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Procedural avatar (deterministic per bot). Uses the stored avatar_seed if
+// present (so it can be re-rolled), else falls back to the bot name. Falls
+// back to the emoji circle if DeCloudAvatar3D isn't loaded.
+function botAvatar(b, cls) {
+  if (window.DeCloudAvatar3D) {
+    const seed = b.avatar_seed || b.name;
+    const svg = window.DeCloudAvatar3D.svg(seed, 40);
+    return `<span class="bot-avatar ${cls || ''}">${svg}</span>`;
+  }
+  return `<div class="bot-avatar ${cls || ''}" style="background:${b.color}">${b.emoji}</div>`;
+}
+
+// Re-roll a bot's avatar with a fun spin animation.
+async function botsRerollAvatar(name) {
+  const card = document.querySelector(`.bot-card[data-bot="${name}"] .bot-avatar`);
+  if (card) {
+    card.style.transition = 'transform 0.5s cubic-bezier(.2,.8,.2,1)';
+    card.style.transform = 'rotate(360deg) scale(0.6)';
+  }
+  try {
+    const r = await fetch(`/api/bots/${name}/avatar`, { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    await botsLoad();
+  } catch (e) {
+    alert(e.message);
+  }
+  if (card) {
+    // reset transform after reload (element is replaced anyway)
+    card.style.transform = '';
+  }
 }
 
 async function botsOpen(name, fromPop) {
@@ -83,7 +121,7 @@ async function botsOpen(name, fromPop) {
     <div class="bot-chat-wrap">
       <div class="bot-chat-header" style="border-color:${bot.color}">
         <button class="back-btn" onclick="botsClose()">‹ Bots</button>
-        <div class="bot-avatar sm" style="background:${bot.color}">${bot.emoji}</div>
+        ${botAvatar(bot, 'sm')}
         <div class="bot-info"><div class="bot-name">${esc(bot.title)}</div>
         <div class="bot-model">${esc(bot.model || '')}</div></div>
         <button class="bot-chat-clear" onclick="botsClear('${name}')">Clear</button>
@@ -140,7 +178,7 @@ function botsMentionSuggest(inp, others) {
       bar.style.display = 'flex';
       bar.innerHTML = hits.map(b =>
         `<button class="bot-mention-pick" onclick="botsMentionSet('${b.name}')">` +
-        `<span class="bot-avatar xs" style="background:${b.color}">${b.emoji}</span> @${b.name}</button>`
+        `${botAvatar(b, 'xs')} @${b.name}</button>`
       ).join('');
       return;
     }
@@ -336,6 +374,27 @@ async function botsCreate() {
 
 // Hook into screen switching: refresh roster when Agents screen opens
 const _origShowAgents = typeof showScreen === 'function' ? showScreen : null;
+
+// ─── Static agent cards (Nika / Pengy) → procedural avatars ──────
+function botsInitStaticAgents() {
+  if (!window.DeCloudAvatar3D) return;
+  const map = { nika: 'Nika', pengy: 'Pengy' };
+  Object.entries(map).forEach(([cls, name]) => {
+    const el = document.querySelector(`.agent-avatar.${cls}`);
+    if (el && !el.dataset.avatarized) {
+      el.dataset.avatarized = '1';
+      el.innerHTML = window.DeCloudAvatar3D.svg(name, 40);
+      el.style.background = 'transparent';
+      el.style.fontSize = '0';
+    }
+  });
+}
+// Run on load and whenever the agents screen is shown.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', botsInitStaticAgents);
+} else {
+  botsInitStaticAgents();
+}
 
 // ─── Routines (per-bot scheduled jobs) ──────────────────────────
 async function botsLoadRoutines(name) {

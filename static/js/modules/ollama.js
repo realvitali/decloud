@@ -123,6 +123,13 @@ function newChat() {
   currentChatId = null;
   currentChatTitle = null;
   ollamaChatHistory = [];
+  // Reset to the default model (first in the list) so a new chat doesn't
+  // inherit the previous chat's model.
+  const sel = document.getElementById('ollama-model-select');
+  if (sel && sel.options.length > 0) {
+    ollamaCurrentModel = sel.options[0].value;
+    sel.value = ollamaCurrentModel;
+  }
   document.getElementById('ollama-messages').innerHTML = '<div class="ollama-welcome">Start a new conversation~</div>';
   closeOllamaDrawer();
   renderChatList();
@@ -137,6 +144,20 @@ async function openChat(id) {
     currentChatId = chat.id;
     currentChatTitle = chat.title;
     ollamaChatHistory = chat.messages || [];
+    // Restore this chat's own model (don't leak the previous chat's model).
+    if (chat.model) {
+      ollamaCurrentModel = chat.model;
+      const sel = document.getElementById('ollama-model-select');
+      if (sel) {
+        // If the model isn't in the list yet, add it so the select reflects it.
+        if (![...sel.options].some(o => o.value === chat.model)) {
+          const opt = document.createElement('option');
+          opt.value = chat.model; opt.textContent = chat.model;
+          sel.appendChild(opt);
+        }
+        sel.value = chat.model;
+      }
+    }
     renderChatMessages();
     closeOllamaDrawer();
     renderChatList();
@@ -228,22 +249,28 @@ async function nukeChat(id) {
   } catch (e) { /* silent */ }
 }
 
-// ── Auto-title after first user message ────────────────────
+// ── Auto-title: first message, then refresh every ~10 turns ─────
+let ollamaTitleTurnCount = 0; // user turns since last title refresh
+
 async function autoTitle() {
   if (!currentChatId) return;
-  if (currentChatTitle && currentChatTitle !== 'New Chat') return;
-  const firstUser = ollamaChatHistory.find(m => m.role === 'user');
-  if (!firstUser) return;
-  const title = firstUser.content.slice(0, 50).trim();
+  const userTurns = ollamaChatHistory.filter(m => m.role === 'user').length;
+  // Title on the first message, then refresh every 10 user turns.
+  const shouldTitle = userTurns === 1 || (userTurns - ollamaTitleTurnCount) >= 10;
+  if (!shouldTitle) return;
+  ollamaTitleTurnCount = userTurns;
   try {
     const r = await fetch('/api/ollama/chats/' + currentChatId + '/title', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: title || 'New Chat' }),
+      body: JSON.stringify({}),
     });
     if (r.ok) {
-      currentChatTitle = title || 'New Chat';
-      loadChatList();
+      const d = await r.json();
+      if (d.title) {
+        currentChatTitle = d.title;
+        loadChatList();
+      }
     }
   } catch (e) { /* silent */ }
 }
@@ -342,10 +369,8 @@ async function sendOllamaMessage() {
 
   // Save chat (creates chat id if needed) before generating
   await saveChat();
-  // Auto-title if first user message
-  if (ollamaChatHistory.filter(m => m.role === 'user').length === 1) {
-    autoTitle();
-  }
+  // Auto-title on first message, then refresh every ~10 turns.
+  autoTitle();
 
   const apiMessages = [...ollamaChatHistory];
 
