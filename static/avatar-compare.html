@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeCloud Avatars — 2D vs 3D comparison</title>
+<style>
+  :root { --bg:#0b0f14; --card:#141a22; --border:#232c38; --text:#e6edf3; --muted:#8b98a5; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  header { padding:28px 32px 8px; }
+  h1 { margin:0 0 4px; font-size:22px; font-weight:600; }
+  .sub { color:var(--muted); font-size:13px; }
+  .controls { padding:16px 32px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .controls input { background:var(--card); border:1px solid var(--border); color:var(--text); padding:9px 12px; border-radius:8px; font-size:14px; width:220px; }
+  .controls input:focus { outline:none; border-color:#3b82f6; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:20px; padding:16px 32px 40px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:20px; display:flex; flex-direction:column; align-items:center; gap:12px; }
+  .card .name { font-size:13px; font-weight:600; }
+  .card .shape { font-size:11px; color:var(--muted); text-transform:capitalize; }
+  .card .tag { font-size:10px; color:var(--muted); opacity:0.7; }
+  .row { display:flex; gap:8px; }
+  .row .mini { width:48px; height:48px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>DeCloud Avatars — 2D vs 3D</h1>
+  <div class="sub">Left = flat 2D (old). Right = 3D superellipsoid with shading (new). Same name → same avatar.</div>
+</header>
+<div class="controls">
+  <input id="name" type="text" value="Alpha" placeholder="Agent name" spellcheck="false">
+  <span class="sub">Type a name — both regenerate live.</span>
+</div>
+<div class="grid" id="grid"></div>
+
+<script src="/static/js/avatar.js"></script>
+<script src="/static/js/avatar3d.js"></script>
+<script>
+  DeCloudAvatar.injectStyles();
+  DeCloudAvatar3D.injectStyles();
+  const grid = document.getElementById('grid');
+  const input = document.getElementById('name');
+
+  function show(name) {
+    const d2 = DeCloudAvatar.generate(name);
+    const d3 = DeCloudAvatar3D.generate(name);
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="row">
+        <span class="mini">${DeCloudAvatar.render(d2, 48)}</span>
+        <span class="mini">${DeCloudAvatar3D.render(d3, 48)}</span>
+      </div>
+      <div class="name">${name}</div>
+      <div class="shape">2D:${d2.shape} · 3D:${d3.shape}</div>`;
+    grid.appendChild(card);
+  }
+
+  ['Alpha','Beta','Muse','Test Bee','Sentinel','Pengy','Grok','Nova','Citrus','Kirby','Freddy','Sunee'].forEach(show);
+
+  input.addEventListener('input', () => {
+    grid.innerHTML = '';
+    show(input.value || 'Agent');
+  });
+</script>
+</body>
+</html>
