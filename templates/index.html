@@ -412,6 +412,7 @@
   </div>
   <div class="settings-tabs">
     <button class="settings-tab active" id="st-tab-appearance" onclick="switchSettingsTab('st-tab-appearance')">Appearance</button>
+    <button class="settings-tab" id="st-tab-ai" onclick="switchSettingsTab('st-tab-ai')">AI</button>
     <button class="settings-tab" id="st-tab-paths" onclick="switchSettingsTab('st-tab-paths')">Paths</button>
     <button class="settings-tab" id="st-tab-network" onclick="switchSettingsTab('st-tab-network')">Devices</button>
     <button class="settings-tab" id="st-tab-telemetry" onclick="switchSettingsTab('st-tab-telemetry')">Usage</button>
@@ -441,6 +442,19 @@
           <span>Voice button color</span>
           <span class="settings-value">Matches theme</span>
         </div>
+      </div>
+    </div>
+    <!-- AI -->
+    <div class="settings-panel" id="st-panel-ai" style="display:none">
+      <div class="settings-group">
+        <div class="settings-label">Chat Title Model</div>
+        <div class="settings-row">
+          <span>Model for auto-titling chats</span>
+          <input type="text" class="settings-input" id="title-model" placeholder="e.g. qwen3:8b">
+        </div>
+        <div class="settings-hint">A small model (3b or under) is recommended — title generation is a tiny task, and a big model is slow and wasteful. Leave blank to use the chat's own model.</div>
+        <button class="settings-save-btn" onclick="saveTitleModel()">Save</button>
+        <div class="settings-note" id="title-model-note"></div>
       </div>
     </div>
     <!-- Paths -->
@@ -963,6 +977,7 @@ import * as CANNON from 'cannon-es';
 window.CANNON = CANNON;
 </script>
 <script src="/static/js/thinking-orbs.js"></script>
+<script src="/static/js/avatar3d.js"></script>
 <script src="/static/js/modules/auth.js?v=91"></script>
 <script src="/static/js/modules/onboarding.js?v=91"></script>
 <script src="/static/js/modules/core.js?v=91"></script>

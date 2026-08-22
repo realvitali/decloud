@@ -88,3 +88,37 @@ def settings_paths():
     if not _update_env_file(updates):
         return jsonify({'error': 'could not write .env (check permissions)'}), 500
     return jsonify({'status': 'saved', 'note': 'restart required'})
+
+
+def _load_settings():
+    settings = {}
+    if SETTINGS_FILE.exists():
+        try:
+            settings = json.loads(SETTINGS_FILE.read_text())
+        except Exception:
+            settings = {}
+    return settings
+
+
+def _save_settings(settings):
+    SETTINGS_FILE.write_text(json.dumps(settings, indent=2))
+
+
+@bp.route('/api/settings/title-model', methods=['GET', 'POST'])
+def settings_title_model():
+    """Get/set the model used for auto-generating chat titles.
+
+    A small model (3b or under) is recommended — title generation is a tiny
+    task and a big model is wasteful and slow.
+    """
+    if request.method == 'GET':
+        settings = _load_settings()
+        return jsonify({'title_model': settings.get('title_model', '')})
+    data = request.get_json(silent=True) or {}
+    model = (data.get('title_model') or '').strip()
+    if len(model) > 128:
+        return jsonify({'error': 'model name too long'}), 400
+    settings = _load_settings()
+    settings['title_model'] = model
+    _save_settings(settings)
+    return jsonify({'title_model': model})

@@ -80,10 +80,23 @@ def _run_ollama_job(job_id, model, messages, temperature, top_p, max_tokens):
             'options': {
                 'temperature': temperature,
                 'top_p': top_p,
-            }
+                # Anti-degeneration: these stop the "this this and and and"
+                # repetition loops and mashed/duplicated output that happen
+                # when a model runs with no repeat penalty and a truncated
+                # context window.
+                'repeat_penalty': 1.15,
+                'repeat_last_n': 256,
+                'num_ctx': 8192,
+            },
+            # Keep the model resident so back-to-back turns don't pay a
+            # full reload each time (the "takes forever" symptom).
+            'keep_alive': '30m',
         }
         if max_tokens > 0:
             payload['options']['num_predict'] = max_tokens
+        else:
+            # Cap runaway generations so a repetition loop can't run forever.
+            payload['options']['num_predict'] = 2048
 
         resp = _requests.post(f'{OLLAMA_URL}/api/chat', json=payload, stream=True, timeout=300)
         with job['lock']:
@@ -162,7 +175,7 @@ def ollama_chat():
     data = request.get_json(silent=True) or {}
     model = data.get('model', 'qwen2.5:14b-instruct')
     messages = data.get('messages', [])
-    temperature = data.get('temperature', 0.7)
+    temperature = data.get('temperature', 0.6)
     top_p = data.get('top_p', 0.9)
     max_tokens = data.get('max_tokens', 0)
 
@@ -466,7 +479,12 @@ def chats_nuke(chat_id):
 
 @bp.route('/api/ollama/chats/<chat_id>/title', methods=['POST'])
 def chats_autogen_title(chat_id):
-    """Auto-generate a 3-5 word title from the first user message via Ollama."""
+    """Auto-generate a concise title from the conversation via a small model.
+
+    Uses the configured title model (settings.json → title_model), falling back
+    to the chat's model, then DECLOUD_LLM_MODEL. A small model (3b or under) is
+    recommended for speed.
+    """
     if not _valid_chat_id(chat_id):
         return jsonify({'error': 'invalid chat id'}), 400
     path = _chat_path(chat_id)
@@ -477,26 +495,41 @@ def chats_autogen_title(chat_id):
         chat_data = _load_chat_file(path)
         messages = chat_data.get('messages', [])
 
-        # find first user message
-        first_user = ''
-        for m in messages:
-            if m.get('role') == 'user' and m.get('content'):
-                first_user = m['content']
-                break
+        # Build a compact transcript of the conversation (last N turns).
+        turns = [m for m in messages if m.get('role') in ('user', 'assistant') and m.get('content')]
+        if not turns:
+            return jsonify({'error': 'no messages found'}), 400
+        # Use the first user message plus a few recent turns for context.
+        first_user = next((m['content'] for m in turns if m['role'] == 'user'), '')
         if not first_user:
             return jsonify({'error': 'no user message found'}), 400
+        recent = turns[-6:]
+        transcript = '\n'.join(
+            f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content'][:200]}"
+            for m in recent
+        )
 
-        # ask Ollama to generate a concise title
+        # Resolve the title model: configured setting → chat model → env default.
+        title_model = ''
+        try:
+            from shared import SETTINGS_FILE
+            if SETTINGS_FILE.exists():
+                title_model = json.loads(SETTINGS_FILE.read_text()).get('title_model', '')
+        except Exception:
+            pass
+        if not title_model:
+            title_model = chat_data.get('model') or os.environ.get('DECLOUD_LLM_MODEL', 'llama3.2')
+
         prompt = (
-            'Generate a concise 3-5 word title for the following user message. '
+            'Write a short title (3-6 words) for this conversation. '
             'Reply with ONLY the title, no quotes, no punctuation, no explanation.\n\n'
-            f'User message: {first_user[:500]}'
+            f'Conversation:\n{transcript}'
         )
         try:
             resp = _requests.post(
                 f'{OLLAMA_URL}/api/chat',
                 json={
-                    'model': chat_data.get('model') or os.environ.get('DECLOUD_LLM_MODEL', 'llama3.2'),
+                    'model': title_model,
                     'messages': [{'role': 'user', 'content': prompt}],
                     'stream': False,
                     'options': {'temperature': 0.3, 'num_predict': 30},
@@ -505,12 +538,10 @@ def chats_autogen_title(chat_id):
             )
             if resp.status_code == 200:
                 title = resp.json().get('message', {}).get('content', '').strip()
-                # clean up: take first line, strip quotes/punctuation
                 title = title.split('\n')[0].strip().strip('"\'`.,!?')
-                # enforce 3-5 words
                 words = title.split()
-                if len(words) > 5:
-                    title = ' '.join(words[:5])
+                if len(words) > 6:
+                    title = ' '.join(words[:6])
                 if not title:
                     title = 'Untitled Chat'
             else:
