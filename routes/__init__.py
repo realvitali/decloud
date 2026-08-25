@@ -62,6 +62,9 @@ def register_blueprints(app, sock):
     from .musicgen import bp as musicgen_bp
     app.register_blueprint(musicgen_bp)
 
+    from .models import bp as models_bp
+    app.register_blueprint(models_bp)
+
     # WebSocket routes (need sock instance)
     if sock is not None:
         from .terminal import register as register_terminal

@@ -11,8 +11,8 @@
   <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=94">
-  <link rel="stylesheet" href="/static/css/onboarding.css?v=94">
+  <link rel="stylesheet" href="/static/css/app.css?v=95">
+  <link rel="stylesheet" href="/static/css/onboarding.css?v=95">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
   <title>DeCloud</title>
 </head>
@@ -342,6 +342,24 @@
     <h2 id="screen-title-system" class="screen-title"><span class="screen-title-icon"></span> System Monitor</h2>
   </div>
   <div class="system-content" id="system-content"><p>Loading...</p></div>
+  <div class="models-content">
+    <div class="models-specs" id="models-specs">Checking hardware…</div>
+    <div class="models-add">
+      <input type="text" id="models-add-input" class="models-add-input"
+             placeholder="Paste any HuggingFace link or owner/repo…">
+      <select id="models-add-category" class="models-add-select">
+        <option value="chat">Chat</option>
+        <option value="image">Image</option>
+        <option value="video">Video</option>
+        <option value="music">Music</option>
+      </select>
+      <button class="models-add-btn" onclick="modelsAnalyzeCustom()">Analyze</button>
+    </div>
+    <div id="models-analyzed"></div>
+    <div id="models-downloads"></div>
+    <div class="comfy-gallery-header" style="margin-top:8px">Recommended for this machine</div>
+    <div id="models-catalog"></div>
+  </div>
 </div>
 
 <!-- ═══ COMMAND TERMINAL ═══ -->
@@ -1033,30 +1051,31 @@ import * as CANNON from 'cannon-es';
 window.CANNON = CANNON;
 </script>
 <script src="/static/js/thinking-orbs.js"></script>
-<script src="/static/js/modules/auth.js?v=94"></script>
-<script src="/static/js/modules/onboarding.js?v=94"></script>
-<script src="/static/js/modules/core.js?v=94"></script>
-<script src="/static/js/modules/media-session.js?v=94"></script>
-<script src="/static/js/modules/home.js?v=94"></script>
- <script src="/static/js/modules/liquid.js?v=94"></script>
- <script src="/static/js/modules/musicgen.js?v=94"></script>
-<script src="/static/js/modules/projects.js?v=94"></script>
-<script src="/static/js/modules/audiobooks.js?v=94"></script>
-<script src="/static/js/modules/lego.js?v=94"></script>
-<script src="/static/js/modules/terminal.js?v=94"></script>
-<script src="/static/js/modules/osint.js?v=94"></script>
-<script src="/static/js/modules/universe.js?v=94"></script>
-<script src="/static/js/modules/system.js?v=94"></script>
-<script src="/static/js/modules/ollama.js?v=94"></script>
-<script src="/static/js/modules/comfy.js?v=94"></script>
-<script src="/static/js/modules/lego3d.js?v=94"></script>
-<script src="/static/js/modules/voice.js?v=94"></script>
-<script src="/static/js/modules/journal.js?v=94"></script>
-<script src="/static/js/modules/legos3d.js?v=94"></script>
-<script src="/static/js/modules/settings.js?v=94"></script>
-<script src="/static/js/modules/telemetry.js?v=94"></script>
-<script src="/static/js/modules/desktop.js?v=94"></script>
-<script src="/static/js/modules/music.js?v=94"></script>
+<script src="/static/js/modules/auth.js?v=95"></script>
+<script src="/static/js/modules/onboarding.js?v=95"></script>
+<script src="/static/js/modules/core.js?v=95"></script>
+<script src="/static/js/modules/media-session.js?v=95"></script>
+<script src="/static/js/modules/home.js?v=95"></script>
+ <script src="/static/js/modules/liquid.js?v=95"></script>
+ <script src="/static/js/modules/musicgen.js?v=95"></script>
+ <script src="/static/js/modules/models.js?v=95"></script>
+<script src="/static/js/modules/projects.js?v=95"></script>
+<script src="/static/js/modules/audiobooks.js?v=95"></script>
+<script src="/static/js/modules/lego.js?v=95"></script>
+<script src="/static/js/modules/terminal.js?v=95"></script>
+<script src="/static/js/modules/osint.js?v=95"></script>
+<script src="/static/js/modules/universe.js?v=95"></script>
+<script src="/static/js/modules/system.js?v=95"></script>
+<script src="/static/js/modules/ollama.js?v=95"></script>
+<script src="/static/js/modules/comfy.js?v=95"></script>
+<script src="/static/js/modules/lego3d.js?v=95"></script>
+<script src="/static/js/modules/voice.js?v=95"></script>
+<script src="/static/js/modules/journal.js?v=95"></script>
+<script src="/static/js/modules/legos3d.js?v=95"></script>
+<script src="/static/js/modules/settings.js?v=95"></script>
+<script src="/static/js/modules/telemetry.js?v=95"></script>
+<script src="/static/js/modules/desktop.js?v=95"></script>
+<script src="/static/js/modules/music.js?v=95"></script>
 
 <!-- ═══ ONBOARDING OVERLAY ═══ -->
 <div id="onboarding-overlay" class="onboarding-overlay" style="display:none">
