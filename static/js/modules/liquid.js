@@ -338,6 +338,7 @@
             showScreen(sub.screen);
             if (sub.id === 'ollama') { location.hash = '#ollama'; loadOllamaModels(); }
             if (sub.id === 'comfy') { location.hash = '#comfy'; loadComfyStatus(); loadComfyModels(); loadComfyGallery(); }
+            if (sub.id === 'musicgen') { location.hash = '#musicgen'; loadMusicGen(); }
             if (sub.id === 'agents') { location.hash = '#agents'; }
           }, 50);
         });

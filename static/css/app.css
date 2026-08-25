@@ -5126,3 +5126,97 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
   font-weight: 600;
   color: var(--text);
 }
+
+/* ─── Music Generator ─── */
+.musicgen-content {
+  padding: 16px;
+  padding-bottom: 60px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+.musicgen-status {
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+.musicgen-status.online {
+  background: rgba(34, 197, 94, 0.1);
+  color: rgb(22, 163, 74);
+}
+.musicgen-status.offline {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--red, #ef4444);
+}
+.musicgen-form {
+  margin-bottom: 24px;
+}
+.musicgen-field {
+  margin-bottom: 12px;
+}
+.musicgen-field label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.musicgen-params {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.musicgen-progress {
+  margin: 12px 0;
+}
+.musicgen-library {
+  border-top: 1px solid var(--hairline);
+  padding-top: 16px;
+}
+.musicgen-song {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.musicgen-song-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.musicgen-song-title {
+  font-weight: 600;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.musicgen-song-meta {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.musicgen-song-lyrics {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin: 6px 0;
+  line-height: 1.4;
+  white-space: pre-line;
+}
+.musicgen-player {
+  width: 100%;
+  margin: 6px 0;
+}
+.musicgen-song-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.musicgen-song-actions .settings-export-btn {
+  margin-top: 0;
+  flex: 1;
+  text-align: center;
+  text-decoration: none;
+}

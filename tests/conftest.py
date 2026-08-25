@@ -17,7 +17,8 @@ os.environ.setdefault('DECLOUD_FILES_DIR', str(_TMP / 'files'))
 os.environ.setdefault('DECLOUD_MUSIC_DIR', str(_TMP / 'music'))
 os.environ.setdefault('DECLOUD_PIPER_DIR', str(_TMP / 'piper'))
 os.environ.setdefault('DECLOUD_HOST', '127.0.0.1')
-for _d in ('books', 'files', 'music', 'piper'):
+os.environ.setdefault('DECLOUD_MUSICGEN_DIR', str(_TMP / 'musicgen'))
+for _d in ('books', 'files', 'music', 'piper', 'musicgen'):
     (_TMP / _d).mkdir(parents=True, exist_ok=True)
 
 TEST_PASSCODE = os.environ['DECLOUD_PIN']
