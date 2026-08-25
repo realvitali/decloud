@@ -11,8 +11,8 @@
   <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=93">
-  <link rel="stylesheet" href="/static/css/onboarding.css?v=93">
+  <link rel="stylesheet" href="/static/css/app.css?v=94">
+  <link rel="stylesheet" href="/static/css/onboarding.css?v=94">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
   <title>DeCloud</title>
 </head>
@@ -713,6 +713,65 @@
   </div>
 </div>
 
+<!-- ═══ MUSIC GENERATOR (local MiniMax Music 3 via ComfyUI) ═══ -->
+<div id="musicgen-screen" class="screen">
+  <div class="app-header">
+    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <h2 class="screen-title"><span class="screen-title-icon">🎵</span> Music</h2>
+  </div>
+  <div class="musicgen-content">
+    <div class="musicgen-status" id="musicgen-status">Checking…</div>
+    <div id="musicgen-setup-hint" class="empty-state" style="display:none">
+      <div class="empty-icon">🎵</div>
+      <h3>Music needs a workflow</h3>
+      <p>Music generates songs locally with MiniMax Music 3 running in ComfyUI.</p>
+      <p class="empty-hint">1. Install the MiniMax Music 3 nodes in ComfyUI</p>
+      <p class="empty-hint">2. Load the text-to-music workflow and test it once</p>
+      <p class="empty-hint">3. In ComfyUI: enable dev mode → Save (API format)</p>
+      <p class="empty-hint">4. Put the JSON in the DeCloud app folder as <b>musicgen_workflow.json</b></p>
+    </div>
+    <div class="musicgen-form">
+      <div class="musicgen-field">
+        <label>Describe the song</label>
+        <textarea id="musicgen-prompt" class="comfy-prompt" rows="2"
+          placeholder="e.g. Lo-fi hip hop beat with warm piano and vinyl crackle, chill and nostalgic"></textarea>
+      </div>
+      <div class="musicgen-field">
+        <label>Lyrics (optional — leave empty for instrumental)</label>
+        <textarea id="musicgen-lyrics" class="comfy-prompt" rows="3"
+          placeholder="Verse 1&#10;..."></textarea>
+      </div>
+      <div class="musicgen-params">
+        <div class="comfy-param">
+          <label>Duration</label>
+          <select id="musicgen-duration">
+            <option value="">Workflow default</option>
+            <option value="30">30s</option>
+            <option value="45">45s</option>
+            <option value="60">60s</option>
+          </select>
+        </div>
+        <div class="comfy-param">
+          <label>Mode</label>
+          <select id="musicgen-instrumental">
+            <option value="auto">Auto (lyrics → vocal)</option>
+            <option value="true">Instrumental</option>
+          </select>
+        </div>
+      </div>
+      <button class="comfy-generate-btn" id="musicgen-generate-btn" onclick="musicGenGenerate()">Generate Song</button>
+      <div class="musicgen-progress" id="musicgen-progress" style="display:none">
+        <div class="comfy-progress-text" id="musicgen-progress-text">Queued…</div>
+        <div class="comfy-progress-bar"><div class="comfy-progress-fill" id="musicgen-progress-fill"></div></div>
+      </div>
+    </div>
+    <div class="musicgen-library">
+      <div class="comfy-gallery-header">Your Songs</div>
+      <div id="musicgen-history"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ PROJECT DETAIL ═══ -->
 <div id="project-screen" class="screen">
   <div class="app-header">
@@ -974,29 +1033,30 @@ import * as CANNON from 'cannon-es';
 window.CANNON = CANNON;
 </script>
 <script src="/static/js/thinking-orbs.js"></script>
-<script src="/static/js/modules/auth.js?v=93"></script>
-<script src="/static/js/modules/onboarding.js?v=93"></script>
-<script src="/static/js/modules/core.js?v=93"></script>
-<script src="/static/js/modules/media-session.js?v=93"></script>
-<script src="/static/js/modules/home.js?v=93"></script>
- <script src="/static/js/modules/liquid.js?v=93"></script>
-<script src="/static/js/modules/projects.js?v=93"></script>
-<script src="/static/js/modules/audiobooks.js?v=93"></script>
-<script src="/static/js/modules/lego.js?v=93"></script>
-<script src="/static/js/modules/terminal.js?v=93"></script>
-<script src="/static/js/modules/osint.js?v=93"></script>
-<script src="/static/js/modules/universe.js?v=93"></script>
-<script src="/static/js/modules/system.js?v=93"></script>
-<script src="/static/js/modules/ollama.js?v=93"></script>
-<script src="/static/js/modules/comfy.js?v=93"></script>
-<script src="/static/js/modules/lego3d.js?v=93"></script>
-<script src="/static/js/modules/voice.js?v=93"></script>
-<script src="/static/js/modules/journal.js?v=93"></script>
-<script src="/static/js/modules/legos3d.js?v=93"></script>
-<script src="/static/js/modules/settings.js?v=93"></script>
-<script src="/static/js/modules/telemetry.js?v=93"></script>
-<script src="/static/js/modules/desktop.js?v=93"></script>
-<script src="/static/js/modules/music.js?v=93"></script>
+<script src="/static/js/modules/auth.js?v=94"></script>
+<script src="/static/js/modules/onboarding.js?v=94"></script>
+<script src="/static/js/modules/core.js?v=94"></script>
+<script src="/static/js/modules/media-session.js?v=94"></script>
+<script src="/static/js/modules/home.js?v=94"></script>
+ <script src="/static/js/modules/liquid.js?v=94"></script>
+ <script src="/static/js/modules/musicgen.js?v=94"></script>
+<script src="/static/js/modules/projects.js?v=94"></script>
+<script src="/static/js/modules/audiobooks.js?v=94"></script>
+<script src="/static/js/modules/lego.js?v=94"></script>
+<script src="/static/js/modules/terminal.js?v=94"></script>
+<script src="/static/js/modules/osint.js?v=94"></script>
+<script src="/static/js/modules/universe.js?v=94"></script>
+<script src="/static/js/modules/system.js?v=94"></script>
+<script src="/static/js/modules/ollama.js?v=94"></script>
+<script src="/static/js/modules/comfy.js?v=94"></script>
+<script src="/static/js/modules/lego3d.js?v=94"></script>
+<script src="/static/js/modules/voice.js?v=94"></script>
+<script src="/static/js/modules/journal.js?v=94"></script>
+<script src="/static/js/modules/legos3d.js?v=94"></script>
+<script src="/static/js/modules/settings.js?v=94"></script>
+<script src="/static/js/modules/telemetry.js?v=94"></script>
+<script src="/static/js/modules/desktop.js?v=94"></script>
+<script src="/static/js/modules/music.js?v=94"></script>
 
 <!-- ═══ ONBOARDING OVERLAY ═══ -->
 <div id="onboarding-overlay" class="onboarding-overlay" style="display:none">

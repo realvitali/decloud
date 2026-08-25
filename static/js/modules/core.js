@@ -120,6 +120,7 @@ const APPS = [
 const AI_SUBAPPS = [
   { id: 'ollama',  svg: ICONS.brain,  label: 'AI Chat',  color: '#8b5cf6', screen: 'ollama-screen' },
   { id: 'comfy',   svg: ICONS.image,  label: 'Generate', color: '#ec4899', screen: 'comfy-screen' },
+  { id: 'musicgen', svg: ICONS.music, label: 'Music',    color: '#f43f5e', screen: 'musicgen-screen' },
   { id: 'agents',  svg: ICONS.bot,    label: 'Agents',  color: '#34d399', screen: 'agents-screen' },
 ];
 

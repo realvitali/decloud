@@ -487,6 +487,7 @@ function openAISubApp(id, screen) {
     showScreen(screen);
     if (id === 'ollama') { location.hash = '#ollama'; loadOllamaModels(); }
     if (id === 'comfy') { location.hash = '#comfy'; loadComfyStatus(); loadComfyModels(); loadComfyGallery(); }
+    if (id === 'musicgen') { location.hash = '#musicgen'; loadMusicGen(); }
     if (id === 'agents') { location.hash = '#agents'; }
   }, 50);
 }
