@@ -11,6 +11,10 @@ A self-hosted PWA dashboard for audiobooks, AI chat, file browsing, system monit
 - **📁 Files** — Fast file browser with thumbnail previews, image gallery
 - **🎨 Generate** — AI image generation via ComfyUI (FLUX, SDXL, etc)
 - **📊 System Monitor** — CPU, RAM, GPU, network stats in real time
+- **🧠 AI Model Advisor** — reads your hardware, scores chat/image/video/music
+  models from HuggingFace (real file sizes, not guesses), and downloads them
+  into the right app folders — split GGUF archives merge automatically and
+  chat models import straight into Ollama. No terminal needed.
 - **🖥️ Terminal** — Full interactive web terminal (WebSocket-based)
 - **🎵 Music** — Browse and play your local music library
 - **🔐 Privacy Scanner** — Optional OSINT tool to find and remove your data from broker sites
@@ -135,6 +139,22 @@ No changes to `app.py` needed.
 ```bash
 # Install: https://ollama.com
 ollama pull llama3.2
+```
+
+### AI Model Advisor (HuggingFace downloads)
+
+In the System screen, DeCloud shows which models actually fit your machine
+(based on real file sizes from HuggingFace) with **Get** buttons that
+download into the right place:
+
+- **Chat** → `~/Models/chat` and auto-imported into Ollama (they appear in
+  AI Chat right away; split GGUF archives are merged for you)
+- **Image / Video / Music** → your ComfyUI models folders
+- Paste any `huggingface.co/...` link to analyze any repo
+
+```env
+DECLOUD_MODELS_DIR=~/Models            # where chat models download
+DECLOUD_COMFY_MODELS_DIR=~/ComfyUI/models   # image/video/music target
 ```
 
 ### ComfyUI (Image Generation)
