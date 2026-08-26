@@ -148,3 +148,34 @@ class TestStatus:
         assert 'comfy_online' in d
         assert 'workflow_configured' in d
         assert 'history_count' in d
+
+
+class TestComfyLifecycle:
+    def test_auth_required(self, client):
+        assert client.post('/api/comfy/start').status_code == 401
+        assert client.post('/api/comfy/stop').status_code == 401
+        assert client.get('/api/comfy/log').status_code == 401
+
+    def test_start_not_installed(self, client, auth_headers, monkeypatch):
+        import routes.comfy as comfy_module
+        monkeypatch.setattr(comfy_module, '_comfy_strategy', lambda: (None, []))
+        monkeypatch.setattr(comfy_module, '_comfy_online', lambda: False)
+        r = client.post('/api/comfy/start', headers=auth_headers)
+        assert r.status_code == 409
+        assert r.get_json()['code'] == 'NOT_INSTALLED'
+
+    def test_start_already_running(self, client, auth_headers, monkeypatch):
+        import routes.comfy as comfy_module
+        monkeypatch.setattr(comfy_module, '_comfy_online', lambda: True)
+        r = client.post('/api/comfy/start', headers=auth_headers)
+        assert r.status_code == 200
+        assert 'already running' in r.get_json()['message']
+
+    def test_strategy_detection(self, monkeypatch, tmp_path):
+        import routes.comfy as comfy_module
+        # env cmd wins
+        monkeypatch.setenv('DECLOUD_COMFY_CMD', '/usr/bin/python /opt/comfy/main.py --listen')
+        monkeypatch.setattr(comfy_module.subprocess, 'run', lambda *a, **k: type('R', (), {'returncode': 1})())
+        strategy, argv = comfy_module._comfy_strategy()
+        assert strategy == 'cmd'
+        assert argv[0] == '/usr/bin/python'

@@ -15,7 +15,9 @@ async function musicGenCheckStatus() {
     const r = await fetch('/api/musicgen/status');
     const d = await r.json();
     if (!d.comfy_online) {
-      bar.textContent = 'ComfyUI is offline — start it to generate songs.';
+      bar.innerHTML = 'ComfyUI is offline — ' +
+        '<button class="models-get-btn" style="margin-left:10px" onclick="comfyStart()">Start ComfyUI</button>' +
+        '<button class="models-get-btn" style="margin-left:6px;background:var(--glass);color:var(--text);border:1px solid var(--glass-border)" onclick="musicGenCheckStatus()">Check again</button>';
       bar.className = 'musicgen-status offline';
       return;
     }

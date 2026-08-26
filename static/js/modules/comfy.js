@@ -7,11 +7,14 @@ async function loadComfyStatus() {
     const d = await r.json();
     const bar = document.getElementById('comfy-status-bar');
     if (!d.online) {
-      bar.innerHTML = 'ComfyUI offline';
+      bar.innerHTML = 'ComfyUI offline ' +
+        '<button class="models-get-btn" style="margin-left:10px" onclick="comfyStart()">Start ComfyUI</button>' +
+        '<button class="models-get-btn" style="margin-left:6px;background:var(--glass);color:var(--text);border:1px solid var(--glass-border)" onclick="loadComfyStatus()">Check again</button>';
       bar.className = 'comfy-status-bar offline';
       document.getElementById('comfy-generate-btn').disabled = true;
       const hint = document.getElementById('comfy-offline-hint');
-      if (hint) hint.style.display = '';
+      if (hint) hint.style.display = 'none';
+      comfyShowLog();
       return;
     }
     const hint = document.getElementById('comfy-offline-hint');
@@ -139,3 +142,63 @@ setInterval(() => {
 }, 5000);
 
 // ─── Long-press to save ─────────────────────────────────
+
+// ─── ComfyUI lifecycle (start/stop/log from the UI) ─────────
+async function comfyStart() {
+  const bar = document.getElementById('comfy-status-bar');
+  bar.innerHTML = 'Starting ComfyUI… (usually 20-60s)';
+  try {
+    const r = await fetch('/api/comfy/start', { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) {
+      bar.innerHTML = escapeHtml(d.error || 'Could not start ComfyUI');
+      return;
+    }
+    comfyPollUntilOnline(0);
+  } catch (e) {
+    bar.innerHTML = 'Could not reach the server: ' + escapeHtml(e.message || 'network');
+  }
+}
+
+async function comfyPollUntilOnline(attempt) {
+  if (attempt > 30) {
+    loadComfyStatus();
+    comfyShowLog();
+    return;
+  }
+  try {
+    const r = await fetch('/api/comfy/status');
+    const d = await r.json();
+    if (d.online) { loadComfyStatus(); return; }
+  } catch (e) {}
+  setTimeout(() => comfyPollUntilOnline(attempt + 1), 2000);
+}
+
+async function comfyStop() {
+  if (!confirm('Stop ComfyUI? Image and music generation will pause.')) return;
+  try {
+    const r = await fetch('/api/comfy/stop', { method: 'POST' });
+    const d = await r.json();
+    alert(d.message || d.error || 'Done');
+    loadComfyStatus();
+  } catch (e) {}
+}
+
+async function comfyShowLog() {
+  try {
+    const r = await fetch('/api/comfy/log');
+    const d = await r.json();
+    const hint = document.getElementById('comfy-offline-hint');
+    if (!hint || !d.log || !d.log.length) return;
+    hint.style.display = '';
+    hint.innerHTML = '<div class="empty-icon">🖥️</div>' +
+      '<h3>ComfyUI is starting (or failed to start)</h3>' +
+      '<p class="empty-hint">Last lines from its log:</p>' +
+      '<pre class="musicgen-song-lyrics" style="text-align:left;max-height:140px;overflow:auto">' +
+      escapeHtml(d.log.slice(-12).join('\n')) + '</pre>' +
+      (d.online ? '<p class="empty-hint">It is online now.</p>' : '');
+  } catch (e) {}
+}
+
+window.comfyStart = comfyStart;
+window.comfyStop = comfyStop;
