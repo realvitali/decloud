@@ -1,10 +1,62 @@
 """ComfyUI image generation routes."""
 from flask import Blueprint, jsonify, request
-import json, time
+import json, os, shlex, shutil, signal, subprocess, time
 from pathlib import Path
-from shared import _requests, COMFY_URL, COMFY_OUTPUT, COMFY_INPUT
+from shared import _requests, COMFY_URL, COMFY_OUTPUT, COMFY_INPUT, BASE_DIR
 
 bp = Blueprint('comfy', __name__)
+
+# ─── ComfyUI lifecycle (start/stop from the UI — no SSH needed) ───
+COMFY_PID_FILE = BASE_DIR / 'comfy.pid'
+COMFY_LOG_FILE = BASE_DIR / 'comfy.log'
+
+
+def _comfy_strategy() -> tuple:
+    """How ComfyUI should be started on this machine.
+
+    Returns (strategy, argv) where strategy is one of:
+      'systemd'  — a comfyui user unit exists; argv = systemctl args
+      'cmd'      — DECLOUD_COMFY_CMD from .env; argv = shell-split cmd
+      'main.py'  — found a ComfyUI checkout; argv = python main.py
+      None       — nothing found; the UI shows setup guidance
+    """
+    # 1. systemd user unit
+    try:
+        r = subprocess.run(['systemctl', '--user', 'cat', 'comfyui.service'],
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            return 'systemd', ['systemctl', '--user', 'start', 'comfyui']
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+    # 2. Explicit command from .env
+    cmd = os.environ.get('DECLOUD_COMFY_CMD', '').strip()
+    if cmd:
+        try:
+            argv = shlex.split(cmd)
+            if argv:
+                return 'cmd', argv
+        except ValueError:
+            pass
+
+    # 3. A standard ComfyUI checkout
+    for root in (Path.home() / 'ComfyUI', BASE_DIR.parent / 'ComfyUI'):
+        main_py = root / 'main.py'
+        if main_py.exists():
+            venv_py = root / 'venv' / 'bin' / 'python'
+            python = str(venv_py) if venv_py.exists() else (shutil.which('python3') or 'python3')
+            return 'main.py', [python, str(main_py)]
+
+    return None, []
+
+
+def _comfy_online() -> bool:
+    try:
+        r = _requests.get(f'{COMFY_URL}/system_stats', timeout=3)
+        return r.status_code == 200
+    except Exception:
+        return False
+
 
 @bp.route('/api/comfy/models')
 def comfy_models():
@@ -22,9 +74,90 @@ def comfy_models():
     except Exception as e:
         return jsonify({'error': str(e)}), 503
 
+@bp.route('/api/comfy/start', methods=['POST'])
+def comfy_start():
+    """Start ComfyUI with whatever launcher this machine has."""
+    if _comfy_online():
+        return jsonify({'ok': True, 'message': 'ComfyUI is already running'})
+
+    strategy, argv = _comfy_strategy()
+    if not argv:
+        return jsonify({
+            'error': 'ComfyUI is not installed where DeCloud can find it. '
+                     'Install ComfyUI, or set DECLOUD_COMFY_CMD in .env to '
+                     'the command that starts it.',
+            'code': 'NOT_INSTALLED',
+        }), 409
+
+    try:
+        if strategy == 'systemd':
+            subprocess.run(argv, capture_output=True, text=True, timeout=30)
+        else:
+            # Detached launch, output to comfy.log so the UI can show it
+            log_f = open(COMFY_LOG_FILE, 'ab')
+            cwd = None
+            if strategy == 'main.py':
+                cwd = str(Path(argv[1]).parent)
+            proc = subprocess.Popen(
+                argv, cwd=cwd, start_new_session=True,
+                stdout=log_f, stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+            )
+            COMFY_PID_FILE.write_text(str(proc.pid))
+    except OSError as e:
+        return jsonify({'error': f'could not start ComfyUI: {e}'}), 500
+
+    return jsonify({'ok': True, 'message': f'Starting ComfyUI ({strategy}) — '
+                                          'it usually takes 20-60s to come up',
+                    'strategy': strategy})
+
+
+@bp.route('/api/comfy/stop', methods=['POST'])
+def comfy_stop():
+    """Stop ComfyUI if DeCloud started it (or a systemd unit exists)."""
+    strategy, _ = _comfy_strategy()
+    if strategy == 'systemd':
+        subprocess.run(['systemctl', '--user', 'stop', 'comfyui'],
+                       capture_output=True, text=True, timeout=30)
+        return jsonify({'ok': True, 'message': 'ComfyUI service stopped'})
+
+    if COMFY_PID_FILE.exists():
+        try:
+            pid = int(COMFY_PID_FILE.read_text().strip())
+            os.kill(pid, signal.SIGTERM)
+            time.sleep(2)
+            try:
+                os.kill(pid, 0)
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            COMFY_PID_FILE.unlink(missing_ok=True)
+            return jsonify({'ok': True, 'message': 'ComfyUI stopped'})
+        except (OSError, ValueError) as e:
+            return jsonify({'error': f'could not stop ComfyUI: {e}'}), 500
+
+    return jsonify({'error': 'ComfyUI was started outside DeCloud — stop it '
+                             'with systemctl or the terminal'}), 409
+
+
+@bp.route('/api/comfy/log')
+def comfy_log():
+    """Tail the ComfyUI launch log so startup failures are visible."""
+    lines = []
+    if COMFY_LOG_FILE.exists():
+        try:
+            lines = COMFY_LOG_FILE.read_text(errors='replace').splitlines()[-80:]
+        except OSError:
+            pass
+    strategy, _ = _comfy_strategy()
+    return jsonify({'log': lines, 'strategy': strategy or None,
+                    'online': _comfy_online()})
+
+
 @bp.route('/api/comfy/status')
 def comfy_status():
     """Get ComfyUI queue status and system stats."""
+    strategy, _ = _comfy_strategy()
     try:
         r = _requests.get(f'{COMFY_URL}/system_stats', timeout=5)
         sys = r.json()
@@ -32,6 +165,7 @@ def comfy_status():
         queue = r2.json()
         return jsonify({
             'online': True,
+            'strategy': strategy,
             'vram_total': sys['devices'][0]['vram_total'],
             'vram_free': sys['devices'][0]['vram_free'],
             'gpu': sys['devices'][0]['name'],
