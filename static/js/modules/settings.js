@@ -13,6 +13,7 @@ function switchSettingsTab(tabId) {
   if (panelId === 'st-panel-paths') loadPaths();
   if (panelId === 'st-panel-ai') loadTitleModel();
   if (panelId === 'st-panel-appearance') loadExperimentalToggle();
+  if (panelId === 'st-panel-learn') renderLearnDocs();
 }
 
 // ─── Experimental apps toggle ────────────────────────────
@@ -26,6 +27,38 @@ function setExperimentalApps(on) {
 function loadExperimentalToggle() {
   var el = document.getElementById('exp-apps-toggle');
   if (el) el.checked = showExperimentalApps();
+}
+
+// ─── Learn tab (per-app docs) ────────────────────────────
+var APP_DOCS = [
+  { id: 'books', name: 'Books', status: 'stable', what: 'Your audiobook and ebook library.', how: 'Point the Books path (Settings → Paths) at a folder of .epub/.pdf/.txt files. Tap a book to open the reader; use Read/Listen to switch between text and audio.' },
+  { id: 'music', name: 'Music', status: 'stable', what: 'Local music player.', how: 'Point the Music path at a folder of audio files. Tap a song to play; the player bar has play/pause, seek, and volume.' },
+  { id: 'files', name: 'Files', status: 'stable', what: 'Browse files on the host machine.', how: 'Point the Files path at a directory. Navigate folders, tap a file to preview or download it.' },
+  { id: 'ai-chat', name: 'AI Chat', status: 'stable', what: 'Chat with a local Ollama model.', how: 'Pick a model from the dropdown and type. Conversations are saved; clear them anytime. Runs fully local — nothing leaves the machine.' },
+  { id: 'ai-gen', name: 'Generate', status: 'stable', what: 'Generate images with ComfyUI.', how: 'Enter a prompt and generate. Requires ComfyUI running on the host.' },
+  { id: 'agents', name: 'Agents', status: 'stable', what: 'Manage Hermes agent profiles as chat bots.', how: 'Create a bot (name + model), then chat with it. Each bot is a real Hermes profile.' },
+  { id: 'system', name: 'System', status: 'stable', what: 'Live system monitor.', how: 'View CPU, memory, disk, and GPU usage at a glance.' },
+  { id: 'terminal', name: 'Terminal', status: 'stable', what: 'A web terminal into the host.', how: 'Type shell commands directly. Use with care — it runs as the host user.' },
+  { id: 'privacy', name: 'Privacy Watcher', status: 'stable', what: 'OSINT / privacy monitoring.', how: 'Add profiles to watch; DeCloud surfaces changes and mentions.' },
+  { id: 'journal', name: 'Journal', status: 'experimental', what: 'Voice + text journaling.', how: 'Record a voice memo or type an entry; DeCloud transcribes locally and saves to your vault. Still in development.' },
+  { id: 'legos', name: 'Legos', status: 'experimental', what: 'A 3D building toy.', how: 'Place and stack bricks in a 3D scene. Experimental — expect rough edges.' },
+  { id: 'projects', name: 'Projects', status: 'experimental', what: 'Project tracking.', how: 'Add projects and track status. Experimental — still being built.' },
+  { id: 'voice', name: 'Voice Assistant', status: 'experimental', what: 'Hands-free voice control (the orb on the home screen).', how: 'Tap the orb, speak a command, and DeCloud responds. Still in development — may be unreliable.' },
+];
+
+function renderLearnDocs() {
+  var el = document.getElementById('learn-docs');
+  if (!el) return;
+  el.innerHTML = APP_DOCS.map(function(d) {
+    var badge = d.status === 'experimental'
+      ? '<span class="learn-badge experimental">beta</span>'
+      : '<span class="learn-badge stable">stable</span>';
+    return '<div class="learn-card">' +
+      '<div class="learn-card-head"><span class="learn-card-name">' + escapeHtml(d.name) + '</span>' + badge + '</div>' +
+      '<div class="learn-card-what">' + escapeHtml(d.what) + '</div>' +
+      '<div class="learn-card-how">' + escapeHtml(d.how) + '</div>' +
+      '</div>';
+  }).join('');
 }
 
 function loadAbout() {

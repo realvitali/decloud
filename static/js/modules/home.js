@@ -503,12 +503,13 @@ function showScreen(id) {
   document.getElementById(id)?.classList.add('active');
   // Track app usage
   var appMap = { 'book-screen': 'books', 'music-screen': 'music', 'lego-screen': 'files', 'ollama-screen': 'ai-chat', 'comfy-screen': 'ai-gen', 'agents-screen': 'agents', 'project-screen': 'projects', 'system-screen': 'system', 'terminal-screen': 'terminal', 'osint-screen': 'privacy', 'universe-screen': 'universe', 'journal-screen': 'journal', 'legos-screen': 'legos', 'settings-screen': 'settings' };
-  if (appMap[id]) trackAppOpen(appMap[id]);
-  // Voice orb only shows on home screen
+  if (appMap[id] && typeof trackAppOpen === 'function') trackAppOpen(appMap[id]);
+  // Voice orb only shows on home screen, and only when experimental apps are enabled
   const orb = document.getElementById('voice-orb');
   if (orb) {
-    if (id === 'home-screen' && !voiceOpen) {
-      orb.style.display = '';
+    const expOn = (typeof showExperimentalApps === 'function') ? showExperimentalApps() : false;
+    if (id === 'home-screen' && !(typeof voiceOpen !== 'undefined' && voiceOpen) && expOn) {
+      orb.style.display = 'flex';
     } else {
       orb.style.display = 'none';
     }

@@ -1,6 +1,7 @@
 """System info and network stats routes."""
 from flask import Blueprint, jsonify, request
-import platform, psutil, time
+import platform, psutil, time, subprocess
+from pathlib import Path
 from shared import _network_last, detect_os
 
 bp = Blueprint('system', __name__)
@@ -22,17 +23,50 @@ def system_info():
             pass
 
         osinfo = detect_os()
+        # CPU model (fastfetch-style)
+        cpu_model = platform.processor() or ''
+        if not cpu_model or cpu_model == 'x86_64':
+            try:
+                for line in Path('/proc/cpuinfo').read_text(errors='replace').splitlines():
+                    if line.lower().startswith('model name'):
+                        cpu_model = line.split(':', 1)[1].strip()
+                        break
+            except OSError:
+                pass
+        # GPU (NVIDIA via nvidia-smi, else lspci)
+        gpu = ''
+        try:
+            out = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'],
+                                 capture_output=True, text=True, timeout=3).stdout.strip()
+            if out:
+                gpu = out.splitlines()[0]
+        except Exception:
+            pass
+        if not gpu:
+            try:
+                out = subprocess.run(['lspci'], capture_output=True, text=True, timeout=3).stdout
+                for line in out.splitlines():
+                    if 'VGA' in line or '3D' in line or 'Display' in line:
+                        gpu = line.split(': ', 1)[1].strip()
+                        break
+            except Exception:
+                pass
+        disk = psutil.disk_usage('/')
         return jsonify({
             'hostname': platform.node(),
             'os': osinfo['name'],
             'os_version': osinfo['version'],
             'os_kernel': osinfo['kernel'],
+            'cpu_model': cpu_model,
+            'gpu': gpu,
             'cpu_percent': psutil.cpu_percent(interval=0.5),
             'cpu_cores': psutil.cpu_count(),
             'ram_total': vm.total,
             'ram_used': vm.used,
             'ram_percent': vm.percent,
-            'disk_percent': psutil.disk_usage('/').percent,
+            'disk_total': disk.total,
+            'disk_used': disk.used,
+            'disk_percent': disk.percent,
             'uptime': f'{hours}h {mins}m',
             'temps': temps,
         })

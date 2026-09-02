@@ -39,17 +39,17 @@ The installer:
 2. Installs all dependencies
 3. Creates a `.env` config file with a random secret key
 4. Sets up a systemd service (auto-starts on boot, auto-restarts on crash)
-5. Starts a secure tunnel via Tailscale Funnel
+5. Starts a secure tunnel via Tailscale Serve (tailnet-only)
 6. Prints the URL + QR code for your phone
 
 ### Access from anywhere
 
-DeCloud uses **Tailscale Funnel** for secure remote access:
+DeCloud uses **Tailscale Serve** for secure remote access:
 
 - **Permanent URL**: `https://your-machine.tail1234.ts.net`
 - **No port forwarding** — works behind NAT/firewalls
 - **End-to-end encrypted** — WireGuard + TLS 1.3
-- **Friends don't need Tailscale** — they just open the link
+- **Tailnet-only** — only devices on your own Tailscale network can reach it
 
 The first time you open DeCloud, enter your passcode to unlock (tap ✓ after typing).
 
@@ -202,7 +202,7 @@ never break your machine:
   exponential backoff after repeated failures.
 - **Localhost by default** — the app binds to 127.0.0.1 unless you
   explicitly set `DECLOUD_HOST`; binding wider prints a loud warning.
-- **Tailscale Funnel only** — no third-party relay fallbacks. End-to-end
+- **Tailscale Serve only** — tailnet-only, no third-party relay fallbacks. End-to-end
   encrypted tunnel, no open ports. (cloudflared works manually if you
   prefer.)
 - **Hardened shell** — quick commands run shell-free from a fixed

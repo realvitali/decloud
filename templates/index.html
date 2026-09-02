@@ -11,8 +11,8 @@
   <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=93">
-  <link rel="stylesheet" href="/static/css/onboarding.css?v=93">
+  <link rel="stylesheet" href="/static/css/app.css?v=97">
+  <link rel="stylesheet" href="/static/css/onboarding.css?v=97">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
   <title>DeCloud</title>
 </head>
@@ -438,16 +438,9 @@
         </div>
       </div>
       <div class="settings-group">
-        <div class="settings-label">Voice Orb</div>
-        <div class="settings-row">
-          <span>Voice button color</span>
-          <span class="settings-value">Matches theme</span>
-        </div>
-      </div>
-      <div class="settings-group">
         <div class="settings-label">Experimental Apps</div>
         <div class="settings-row">
-          <span>Show beta / work-in-progress apps (Journal, Legos, Projects)</span>
+          <span>Show beta / work-in-progress apps (Journal, Legos, Projects, Voice)</span>
           <label class="settings-toggle"><input type="checkbox" id="exp-apps-toggle" onchange="setExperimentalApps(this.checked)"><span class="settings-toggle-slider"></span></label>
         </div>
         <div class="settings-hint">These apps are still in development. Hidden by default so the home screen stays clean.</div>
@@ -484,6 +477,14 @@
         </div>
         <button class="settings-save-btn" onclick="savePaths()">Save Paths</button>
         <div class="settings-note" id="paths-save-note">Restart required for path changes to take effect.</div>
+      </div>
+    </div>
+    <!-- Learn -->
+    <div class="settings-panel" id="st-panel-learn" style="display:none">
+      <div class="settings-group">
+        <div class="settings-label">App Guide</div>
+        <div class="settings-hint">What each app does and how to use it. Updated alongside the apps themselves.</div>
+        <div id="learn-docs" class="learn-docs">Loading...</div>
       </div>
     </div>
     <!-- Devices -->
@@ -987,29 +988,29 @@ window.CANNON = CANNON;
 </script>
 <script src="/static/js/thinking-orbs.js"></script>
 <script src="/static/js/avatar3d.js"></script>
-<script src="/static/js/modules/auth.js?v=93"></script>
-<script src="/static/js/modules/onboarding.js?v=93"></script>
-<script src="/static/js/modules/core.js?v=93"></script>
-<script src="/static/js/modules/media-session.js?v=93"></script>
-<script src="/static/js/modules/home.js?v=93"></script>
-<script src="/static/js/modules/projects.js?v=93"></script>
-<script src="/static/js/modules/audiobooks.js?v=93"></script>
-<script src="/static/js/modules/lego.js?v=93"></script>
-<script src="/static/js/modules/terminal.js?v=93"></script>
-<script src="/static/js/modules/osint.js?v=93"></script>
-<script src="/static/js/modules/universe.js?v=93"></script>
-<script src="/static/js/modules/system.js?v=93"></script>
-<script src="/static/js/modules/ollama.js?v=93"></script>
-<script src="/static/js/modules/comfy.js?v=93"></script>
-<script src="/static/js/modules/lego3d.js?v=93"></script>
-<script src="/static/js/modules/voice.js?v=93"></script>
-<script src="/static/js/modules/journal.js?v=93"></script>
-<script src="/static/js/modules/legos3d.js?v=93"></script>
-<script src="/static/js/modules/settings.js?v=93"></script>
-<script src="/static/js/modules/telemetry.js?v=93"></script>
-<script src="/static/js/modules/desktop.js?v=93"></script>
-<script src="/static/js/modules/bots.js?v=93"></script>
-<script src="/static/js/modules/music.js?v=93"></script>
+<script src="/static/js/modules/auth.js?v=97"></script>
+<script src="/static/js/modules/onboarding.js?v=97"></script>
+<script src="/static/js/modules/core.js?v=97"></script>
+<script src="/static/js/modules/media-session.js?v=97"></script>
+<script src="/static/js/modules/home.js?v=97"></script>
+<script src="/static/js/modules/projects.js?v=97"></script>
+<script src="/static/js/modules/audiobooks.js?v=97"></script>
+<script src="/static/js/modules/lego.js?v=97"></script>
+<script src="/static/js/modules/terminal.js?v=97"></script>
+<script src="/static/js/modules/osint.js?v=97"></script>
+<script src="/static/js/modules/universe.js?v=97"></script>
+<script src="/static/js/modules/system.js?v=97"></script>
+<script src="/static/js/modules/ollama.js?v=97"></script>
+<script src="/static/js/modules/comfy.js?v=97"></script>
+<script src="/static/js/modules/lego3d.js?v=97"></script>
+<script src="/static/js/modules/voice.js?v=97"></script>
+<script src="/static/js/modules/journal.js?v=97"></script>
+<script src="/static/js/modules/legos3d.js?v=97"></script>
+<script src="/static/js/modules/settings.js?v=97"></script>
+<script src="/static/js/modules/telemetry.js?v=97"></script>
+<script src="/static/js/modules/desktop.js?v=97"></script>
+<script src="/static/js/modules/bots.js?v=97"></script>
+<script src="/static/js/modules/music.js?v=97"></script>
 
 <!-- ═══ ONBOARDING OVERLAY ═══ -->
 <div id="onboarding-overlay" class="onboarding-overlay" style="display:none">
@@ -1038,7 +1039,7 @@ window.CANNON = CANNON;
     <!-- Step 2: Secure by default -->
     <div class="onboarding-step" data-step="2">
       <h1>Secure by Default</h1>
-      <p>DeCloud binds to <strong>localhost only</strong> — zero exposed ports. Remote access is through a tunnel (Tailscale Funnel, localhost.run, or Cloudflare), so your machine is never directly reachable.</p>
+      <p>DeCloud binds to <strong>localhost only</strong> — zero exposed ports. Remote access is through a tunnel (Tailscale Serve or Cloudflare), so your machine is never directly reachable.</p>
       <p>All API endpoints require a <strong>PIN</strong>. No accounts, no passwords to leak.</p>
     </div>
 
