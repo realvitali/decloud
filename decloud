@@ -23,12 +23,12 @@ get_tunnel_url() {
         return 0
     fi
 
-    # Tailscale Funnel is the only supported tunnel. We deliberately do
+    # Tailscale Serve (tailnet-only) is the default. We deliberately do
     # NOT fall back to third-party relays (localhost.run etc.): those
     # terminate TLS on someone else's box and forward plaintext HTTP,
     # which contradicts DeCloud's privacy story.
     if command -v tailscale &>/dev/null && tailscale status &>/dev/null; then
-        URL=$(tailscale funnel status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
+        URL=$(tailscale serve status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
         if [ -n "$URL" ]; then
             echo "$URL" > "$TUNNEL_URL_FILE"
             echo "$URL"
@@ -72,7 +72,7 @@ start_tunnel() {
     # Kill existing tunnel
     stop_tunnel
 
-    echo "Starting Tailscale Funnel..."
+    echo "Starting Tailscale Serve (tailnet-only)..."
     # Check if tailscale is available
     if ! command -v tailscale &>/dev/null; then
         echo "⚠ Tailscale not installed — skipping tunnel."
@@ -92,20 +92,20 @@ start_tunnel() {
         return 1
     fi
 
-    # Start funnel in background
-    setsid nohup tailscale funnel --bg --https=443 http://localhost:$PORT \
+    # Start serve (tailnet-only) in background
+    setsid nohup tailscale serve --bg --https=443 http://localhost:$PORT \
         > "$TUNNEL_LOG" 2>&1 < /dev/null &
     echo $! > "$TUNNEL_PID_FILE"
     disown
 
-    echo "Waiting for funnel..."
+    echo "Waiting for serve..."
     sleep 3
 
-    # Get the funnel URL
-    URL=$(tailscale funnel status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
+    # Get the serve URL
+    URL=$(tailscale serve status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
     if [ -n "$URL" ]; then
         echo "$URL" > "$TUNNEL_URL_FILE"
-        echo "✓ Funnel active: $URL"
+        echo "✓ Serve active (tailnet-only): $URL"
         return 0
     fi
 
@@ -115,18 +115,18 @@ start_tunnel() {
     if [ -n "$HOSTNAME" ] && [ -n "$TAILNET" ]; then
         URL="https://${HOSTNAME}.${TAILNET}"
         echo "$URL" > "$TUNNEL_URL_FILE"
-        echo "✓ Funnel active: $URL"
+        echo "✓ Serve active (tailnet-only): $URL"
         return 0
     fi
 
-    echo "⚠ Funnel failed — check tunnel.log"
+    echo "⚠ Serve failed — check tunnel.log"
     return 1
 }
 
 stop_tunnel() {
-    # Stop Tailscale funnel if running
+    # Stop Tailscale serve if running
     if command -v tailscale &>/dev/null; then
-        tailscale funnel --https=443 off 2>/dev/null || true
+        tailscale serve --https=443 off 2>/dev/null || true
     fi
 
     if [ -f "$TUNNEL_PID_FILE" ]; then
@@ -172,10 +172,38 @@ show_qr() {
     fi
 
     echo ""
-    echo "🔒 The URL is public (https://….ts.net) — anyone who opens it"
-    echo "   still needs the passcode to unlock anything."
-    echo "   For private (tailnet-only) access, see: PERMANENT_TUNNEL.md"
+    echo "🔒 This URL is tailnet-only (https://….ts.net) — reachable only"
+    echo "   from devices on your own Tailscale network."
+    echo "   To opt into PUBLIC access, run: ./decloud share"
     echo ""
+}
+
+# Explicit opt-in: switch from tailnet-only Serve to PUBLIC Funnel.
+# Only use this if you actually want the world to reach your instance.
+share() {
+    if ! command -v tailscale &>/dev/null || ! tailscale status &>/dev/null; then
+        echo "⚠ Tailscale not running — run: sudo tailscale up"
+        return 1
+    fi
+    echo "⚠ Switching DeCloud to PUBLIC access (Tailscale Funnel)."
+    echo "  Anyone on the internet will be able to open the URL."
+    echo "  Your passcode still gates the app, but the login page is public."
+    read -r -p "Continue? [y/N] " ans
+    case "$ans" in
+        y|Y|yes|YES)
+            tailscale serve --https=443 off 2>/dev/null || true
+            setsid nohup tailscale funnel --bg --https=443 http://localhost:$PORT \
+                > "$TUNNEL_LOG" 2>&1 < /dev/null &
+            echo $! > "$TUNNEL_PID_FILE"
+            disown
+            sleep 3
+            URL=$(tailscale funnel status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
+            echo "✓ Funnel active (PUBLIC): ${URL:-see 'tailscale funnel status'}"
+            ;;
+        *)
+            echo "Cancelled — staying tailnet-only."
+            ;;
+    esac
 }
 
 status() {
@@ -229,16 +257,20 @@ case "${1:-}" in
     qr|url)
         show_qr
         ;;
+    share)
+        share
+        ;;
     status)
         status
         ;;
     *)
-        echo "Usage: $0 {start|stop|restart|qr|status|version}"
+        echo "Usage: $0 {start|stop|restart|qr|share|status|version}"
         echo ""
-        echo "  start   — Start app + tunnel"
+        echo "  start   — Start app + tunnel (tailnet-only by default)"
         echo "  stop    — Stop everything"
         echo "  restart — Restart app + tunnel"
         echo "  qr      — Show current tunnel URL + QR code"
+        echo "  share   — Opt into PUBLIC access (Tailscale Funnel)"
         echo "  status  — Show what's running"
         echo "  version — Show DeCloud version"
         exit 1

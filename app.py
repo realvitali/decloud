@@ -65,7 +65,7 @@ if __name__ == '__main__':
     else:
         print('[DeCloud] Bound to localhost only — zero exposed ports.')
     print('[DeCloud] For remote/phone access, start a tunnel:')
-    print(f'[DeCloud]   tailscale funnel {PORT}')
+    print(f'[DeCloud]   tailscale serve {PORT}   (tailnet-only, recommended)')
     print(f'[DeCloud]   (or: cloudflared tunnel --url http://localhost:{PORT})')
     print('[DeCloud] The tunnel provides trusted HTTPS automatically.')
 

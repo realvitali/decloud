@@ -347,9 +347,15 @@ document.addEventListener('click', function(e) {
 });
 
 // ─── App Grid ────────────────────────────────────────────
+function showExperimentalApps() {
+  try { return localStorage.getItem('decloud-show-experimental') === '1'; } catch { return false; }
+}
+
 function buildAppGrid() {
-  document.getElementById('app-grid').innerHTML = APPS.map(app => `
-    <div class="app-icon" data-app-id="${app.id}" onclick="openApp('${app.id}')">
+  const showExp = showExperimentalApps();
+  const apps = APPS.filter(a => !a.experimental || showExp);
+  document.getElementById('app-grid').innerHTML = apps.map(app => `
+    <div class="app-icon${app.experimental ? ' app-experimental' : ''}" data-app-id="${app.id}" onclick="openApp('${app.id}')">
       <div class="app-icon-visual" style="color:${app.color}">${app.svg}</div>
       <div class="app-label">${app.label}</div>
     </div>

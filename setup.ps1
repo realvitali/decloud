@@ -90,8 +90,8 @@ Write-Host ""
 Write-Host "Remote access (optional):" -ForegroundColor Cyan
 Write-Host "  1. Install Tailscale: https://tailscale.com/download/windows"
 Write-Host "  2. In an elevated PowerShell: tailscale up"
-Write-Host "  3. Enable Funnel: tailscale funnel 8899"
-Write-Host "     (Funnel gives a public https://...ts.net URL; the passcode"
-Write-Host "      still protects everything behind it.)"
+Write-Host "  3. Enable Serve (tailnet-only): tailscale serve 8899"
+Write-Host "     (Serve gives a private https://...ts.net URL reachable only"
+Write-Host "      from your own tailnet devices.)"
 Write-Host ""
 Write-Host "Management: .\decloud.ps1 start|stop|status|restart" -ForegroundColor Cyan
