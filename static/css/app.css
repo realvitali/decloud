@@ -11,10 +11,10 @@
   --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 1);
   --card: rgba(255, 255, 255, 0.65);
   --card-hover: rgba(255, 255, 255, 0.85);
-  --accent: #0d9488;
-  --accent-soft: rgba(13, 148, 136, 0.1);
-  --accent-glow: rgba(13, 148, 136, 0.2);
-  --accent-text: #0f766e;
+  --accent: #4b5563;
+  --accent-soft: rgba(75, 85, 99, 0.1);
+  --accent-glow: rgba(75, 85, 99, 0.2);
+  --accent-text: #374151;
   --text: #1a1a2e;
   --text-dim: #6b7280;
   --text-faint: #9ca3af;
@@ -31,12 +31,12 @@
   --modal-bg: rgba(0, 0, 0, 0.2);
   --terminal-bg: rgba(20, 20, 30, 0.92);
   --terminal-text: #a7f3d0;
-  --scrollbar: rgba(13, 148, 136, 0.3);
-  --scrollbar-hover: rgba(13, 148, 136, 0.5);
+  --scrollbar: rgba(75, 85, 99, 0.3);
+  --scrollbar-hover: rgba(75, 85, 99, 0.5);
   --chip-bg: rgba(255, 255, 255, 0.6);
   --chip-border: rgba(0, 0, 0, 0.06);
-  --sparkline-stroke: rgba(13, 148, 136, 0.6);
-  --sparkline-fill: rgba(13, 148, 136, 0.1);
+  --sparkline-stroke: rgba(75, 85, 99, 0.6);
+  --sparkline-fill: rgba(75, 85, 99, 0.1);
 }
 
 /* Dark mode */
@@ -52,10 +52,10 @@
     --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
     --card: rgba(30, 30, 42, 0.5);
     --card-hover: rgba(40, 40, 55, 0.7);
-    --accent: #2dd4bf;
-    --accent-soft: rgba(45, 212, 191, 0.15);
-    --accent-glow: rgba(45, 212, 191, 0.3);
-    --accent-text: #5eead4;
+    --accent: #9ca3af;
+    --accent-soft: rgba(156, 163, 175, 0.15);
+    --accent-glow: rgba(156, 163, 175, 0.3);
+    --accent-text: #d1d5db;
     --text: #e5e7eb;
     --text-dim: #9ca3af;
     --text-faint: #6b7280;
@@ -68,12 +68,12 @@
     --modal-bg: rgba(0, 0, 0, 0.6);
     --terminal-bg: rgba(10, 10, 15, 0.95);
     --terminal-text: #6ee7b7;
-    --scrollbar: rgba(45, 212, 191, 0.3);
+    --scrollbar: rgba(156, 163, 175, 0.3);
     --scrollbar-hover: rgba(45, 212, 191, 0.5);
     --chip-bg: rgba(255, 255, 255, 0.06);
     --chip-border: rgba(255, 255, 255, 0.1);
-    --sparkline-stroke: rgba(45, 212, 191, 0.7);
-    --sparkline-fill: rgba(45, 212, 191, 0.12);
+    --sparkline-stroke: rgba(156, 163, 175, 0.7);
+    --sparkline-fill: rgba(156, 163, 175, 0.12);
   }
 }
 
@@ -2069,7 +2069,7 @@ body {
   flex-shrink: 0;
 }
 
-.agent-avatar.nika { background: linear-gradient(135deg, #0d9488, #14b8a6); }
+.agent-avatar.nika { background: linear-gradient(135deg, #4b5563, #14b8a6); }
 .agent-avatar.hermy { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
 .agent-avatar.decloud { background: linear-gradient(135deg, #10b981, #34d399); }
 .agent-avatar.pengy { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
@@ -3356,7 +3356,7 @@ body {
 }
 .legos-fab:active { transform: scale(0.9); }
 .legos-fab-add {
-  background: linear-gradient(135deg, #0d9488, #2dd4bf);
+  background: linear-gradient(135deg, #4b5563, #9ca3af);
   color: white;
   border-color: transparent;
   box-shadow: 0 4px 20px rgba(99,102,241,0.3);
@@ -3412,8 +3412,8 @@ body {
 }
 
 @keyframes voice-orb-pulse {
-  0%, 100% { box-shadow: 0 4px 20px rgba(13, 148, 136, 0.4), 0 0 0 0 rgba(13, 148, 136, 0.3); }
-  50% { box-shadow: 0 4px 30px rgba(13, 148, 136, 0.5), 0 0 0 12px rgba(13, 148, 136, 0); }
+  0%, 100% { box-shadow: 0 4px 20px rgba(13, 148, 136, 0.4), 0 0 0 0 rgba(75, 85, 99, 0.3); }
+  50% { box-shadow: 0 4px 30px rgba(75, 85, 99, 0.5), 0 0 0 12px rgba(13, 148, 136, 0); }
 }
 
 /* Voice overlay */
@@ -3474,7 +3474,7 @@ body {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #0d9488, #2dd4bf);
+  background: linear-gradient(135deg, #4b5563, #9ca3af);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3502,7 +3502,7 @@ body {
 
 /* States */
 .voice-anim-idle .voice-anim-core {
-  box-shadow: 0 0 20px rgba(13, 148, 136, 0.3);
+  box-shadow: 0 0 20px rgba(75, 85, 99, 0.3);
 }
 
 .voice-anim-listening .voice-anim-core {
@@ -3694,7 +3694,7 @@ body {
 }
 
 .voice-setting-row select:focus {
-  border-color: rgba(13, 148, 136, 0.6);
+  border-color: rgba(75, 85, 99, 0.6);
 }
 
 /* Controls */
@@ -3780,7 +3780,7 @@ body {
   .voice-mode-btn.active {
     background: rgba(13, 148, 136, 0.15);
     border-color: rgba(13, 148, 136, 0.4);
-    color: #0d9488;
+    color: #4b5563;
   }
   .voice-chat-msg.user {
     background: rgba(13, 148, 136, 0.12);
@@ -3796,8 +3796,8 @@ body {
     color: rgba(0, 0, 0, 0.85);
   }
   .voice-chat-send {
-    background: rgba(13, 148, 136, 0.2);
-    color: #0d9488;
+    background: rgba(75, 85, 99, 0.2);
+    color: #4b5563;
   }
   .chat-history-content {
     background: rgba(255, 255, 255, 0.98);
@@ -3842,8 +3842,8 @@ body {
 
 .voice-mode-btn.active {
   background: rgba(13, 148, 136, 0.25);
-  color: #2dd4bf;
-  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.2);
+  color: #9ca3af;
+  box-shadow: 0 2px 8px rgba(75, 85, 99, 0.2);
 }
 
 /* ═══ VOICE VIEW ═══ */
@@ -4006,7 +4006,7 @@ body {
 }
 
 .voice-chat-input:focus {
-  border-color: rgba(13, 148, 136, 0.5);
+  border-color: rgba(75, 85, 99, 0.5);
 }
 
 .voice-chat-input::placeholder {
@@ -4018,8 +4018,8 @@ body {
   height: 48px;
   border: none;
   border-radius: 50%;
-  background: rgba(13, 148, 136, 0.3);
-  color: #2dd4bf;
+  background: rgba(75, 85, 99, 0.3);
+  color: #9ca3af;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -4630,10 +4630,10 @@ body {
   --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   --card: rgba(30, 30, 42, 0.5);
   --card-hover: rgba(40, 40, 55, 0.7);
-  --accent: #2dd4bf;
-  --accent-soft: rgba(45, 212, 191, 0.15);
-  --accent-glow: rgba(45, 212, 191, 0.3);
-  --accent-text: #5eead4;
+  --accent: #9ca3af;
+  --accent-soft: rgba(156, 163, 175, 0.15);
+  --accent-glow: rgba(156, 163, 175, 0.3);
+  --accent-text: #d1d5db;
   --text: #e5e7eb;
   --text-dim: #9ca3af;
   --text-faint: #6b7280;
@@ -4646,12 +4646,12 @@ body {
   --modal-bg: rgba(0, 0, 0, 0.6);
   --terminal-bg: rgba(10, 10, 15, 0.95);
   --terminal-text: #6ee7b7;
-  --scrollbar: rgba(45, 212, 191, 0.3);
+  --scrollbar: rgba(156, 163, 175, 0.3);
   --scrollbar-hover: rgba(45, 212, 191, 0.5);
   --chip-bg: rgba(255, 255, 255, 0.06);
   --chip-border: rgba(255, 255, 255, 0.1);
-  --sparkline-stroke: rgba(45, 212, 191, 0.7);
-  --sparkline-fill: rgba(45, 212, 191, 0.12);
+  --sparkline-stroke: rgba(156, 163, 175, 0.7);
+  --sparkline-fill: rgba(156, 163, 175, 0.12);
 }
 
 /* Forced light mode via data-theme */
@@ -4666,10 +4666,10 @@ body {
   --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 1);
   --card: rgba(255, 255, 255, 0.65);
   --card-hover: rgba(255, 255, 255, 0.85);
-  --accent: #0d9488;
-  --accent-soft: rgba(13, 148, 136, 0.1);
-  --accent-glow: rgba(13, 148, 136, 0.2);
-  --accent-text: #0f766e;
+  --accent: #4b5563;
+  --accent-soft: rgba(75, 85, 99, 0.1);
+  --accent-glow: rgba(75, 85, 99, 0.2);
+  --accent-text: #374151;
   --text: #1a1a2e;
   --text-dim: #6b7280;
   --text-faint: #9ca3af;
@@ -4682,12 +4682,12 @@ body {
   --modal-bg: rgba(0, 0, 0, 0.2);
   --terminal-bg: rgba(20, 20, 30, 0.92);
   --terminal-text: #a7f3d0;
-  --scrollbar: rgba(13, 148, 136, 0.3);
-  --scrollbar-hover: rgba(13, 148, 136, 0.5);
+  --scrollbar: rgba(75, 85, 99, 0.3);
+  --scrollbar-hover: rgba(75, 85, 99, 0.5);
   --chip-bg: rgba(255, 255, 255, 0.6);
   --chip-border: rgba(0, 0, 0, 0.06);
-  --sparkline-stroke: rgba(13, 148, 136, 0.6);
-  --sparkline-fill: rgba(13, 148, 136, 0.1);
+  --sparkline-stroke: rgba(75, 85, 99, 0.6);
+  --sparkline-fill: rgba(75, 85, 99, 0.1);
 }
 
 
