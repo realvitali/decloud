@@ -605,8 +605,8 @@ body {
   padding: 16px 20px 8px;
   position: sticky;
   top: 0;
-  background: var(--surface-solid);
-  border-bottom: 1px solid var(--hairline);
+  background: transparent;
+  border-bottom: none;
   z-index: 10;
 }
 
