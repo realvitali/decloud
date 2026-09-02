@@ -48,8 +48,8 @@ switch ($Command) {
         & $MyInvocation.MyCommand.Path start
     }
     "qr" {
-        Write-Host "Tailscale Funnel URL (run in elevated PowerShell):"
-        Write-Host "  tailscale funnel status"
+        Write-Host "Tailscale Serve URL (run in elevated PowerShell):"
+        Write-Host "  tailscale serve status"
         Write-Host "Passcode: $(Get-Passcode)"
     }
     default {

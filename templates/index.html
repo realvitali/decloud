@@ -414,6 +414,7 @@
     <button class="settings-tab active" id="st-tab-appearance" onclick="switchSettingsTab('st-tab-appearance')">Appearance</button>
     <button class="settings-tab" id="st-tab-ai" onclick="switchSettingsTab('st-tab-ai')">AI</button>
     <button class="settings-tab" id="st-tab-paths" onclick="switchSettingsTab('st-tab-paths')">Paths</button>
+    <button class="settings-tab" id="st-tab-learn" onclick="switchSettingsTab('st-tab-learn')">Learn</button>
     <button class="settings-tab" id="st-tab-network" onclick="switchSettingsTab('st-tab-network')">Devices</button>
     <button class="settings-tab" id="st-tab-telemetry" onclick="switchSettingsTab('st-tab-telemetry')">Usage</button>
     <button class="settings-tab" id="st-tab-logs" onclick="switchSettingsTab('st-tab-logs')">Logs</button>
@@ -442,6 +443,14 @@
           <span>Voice button color</span>
           <span class="settings-value">Matches theme</span>
         </div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-label">Experimental Apps</div>
+        <div class="settings-row">
+          <span>Show beta / work-in-progress apps (Journal, Legos, Projects)</span>
+          <label class="settings-toggle"><input type="checkbox" id="exp-apps-toggle" onchange="setExperimentalApps(this.checked)"><span class="settings-toggle-slider"></span></label>
+        </div>
+        <div class="settings-hint">These apps are still in development. Hidden by default so the home screen stays clean.</div>
       </div>
     </div>
     <!-- AI -->

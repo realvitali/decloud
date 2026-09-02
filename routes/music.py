@@ -37,8 +37,9 @@ def music_list():
             if f.suffix.lower() not in MUSIC_EXTS:
                 continue
             rel = f.relative_to(MUSIC_DIR)
-            # Song name shows subfolder/song format
-            display_name = '/'.join(rel.with_suffix('').parts) if len(rel.parts) > 1 else f.stem
+            # Song name is just the filename stem (no folder prefix) so the
+            # frontend's Artist_Title split works cleanly.
+            display_name = f.stem
             size_mb = f.stat().st_size / (1024 * 1024)
             songs.append({
                 'name': display_name,

@@ -183,8 +183,8 @@ def ollama_chat():
     # a client could push unbounded payloads into a local LLM.
     if not isinstance(messages, list) or not messages:
         return jsonify({'error': 'messages must be a non-empty list'}), 400
-    if len(messages) > 40:
-        return jsonify({'error': 'too many messages (max 40)'}), 400
+    if len(messages) > 200:
+        return jsonify({'error': 'too many messages (max 200)'}), 400
     total_chars = sum(len(str(m.get('content', ''))) for m in messages if isinstance(m, dict))
     if total_chars > 120_000:
         return jsonify({'error': 'conversation too long (max 120k chars)'}), 400

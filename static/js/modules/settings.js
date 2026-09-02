@@ -12,6 +12,20 @@ function switchSettingsTab(tabId) {
   if (panelId === 'st-panel-about') loadAbout();
   if (panelId === 'st-panel-paths') loadPaths();
   if (panelId === 'st-panel-ai') loadTitleModel();
+  if (panelId === 'st-panel-appearance') loadExperimentalToggle();
+}
+
+// ─── Experimental apps toggle ────────────────────────────
+function showExperimentalApps() {
+  try { return localStorage.getItem('decloud-show-experimental') === '1'; } catch { return false; }
+}
+function setExperimentalApps(on) {
+  try { localStorage.setItem('decloud-show-experimental', on ? '1' : '0'); } catch {}
+  if (typeof buildAppGrid === 'function') buildAppGrid();
+}
+function loadExperimentalToggle() {
+  var el = document.getElementById('exp-apps-toggle');
+  if (el) el.checked = showExperimentalApps();
 }
 
 function loadAbout() {

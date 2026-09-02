@@ -56,6 +56,9 @@ def register_blueprints(app, sock):
     from .music import bp as music_bp
     app.register_blueprint(music_bp)
 
+    from .graph import bp as graph_bp
+    app.register_blueprint(graph_bp)
+
     from .version import bp as version_bp
     app.register_blueprint(version_bp)
 
