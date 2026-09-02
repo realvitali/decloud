@@ -4,7 +4,7 @@
 SECURE ARCHITECTURE:
   - App binds to 127.0.0.1 by default (never exposed to the network)
   - Runs plain HTTP on localhost — safe because it's not reachable externally
-  - A tunnel (Tailscale Funnel or cloudflared) provides trusted HTTPS
+  - A tunnel (Tailscale Serve or cloudflared) provides trusted HTTPS
   - The tunnel connects outbound — no inbound ports opened on the machine
   - All API endpoints require passcode authentication
   - Rate limiting on all routes
@@ -47,7 +47,7 @@ if __name__ == '__main__':
     PORT = int(os.environ.get('DECLOUD_PORT', '8899'))
 
     # Bind to localhost by default — never expose directly to the network.
-    # Remote access is provided exclusively by a tunnel (Tailscale Funnel
+    # Remote access is provided exclusively by a tunnel (Tailscale Serve
     # or cloudflared). This means:
     #   - Zero open ports on the machine
     #   - No port scanning attacks possible

@@ -174,36 +174,7 @@ show_qr() {
     echo ""
     echo "🔒 This URL is tailnet-only (https://….ts.net) — reachable only"
     echo "   from devices on your own Tailscale network."
-    echo "   To opt into PUBLIC access, run: ./decloud share"
     echo ""
-}
-
-# Explicit opt-in: switch from tailnet-only Serve to PUBLIC Funnel.
-# Only use this if you actually want the world to reach your instance.
-share() {
-    if ! command -v tailscale &>/dev/null || ! tailscale status &>/dev/null; then
-        echo "⚠ Tailscale not running — run: sudo tailscale up"
-        return 1
-    fi
-    echo "⚠ Switching DeCloud to PUBLIC access (Tailscale Funnel)."
-    echo "  Anyone on the internet will be able to open the URL."
-    echo "  Your passcode still gates the app, but the login page is public."
-    read -r -p "Continue? [y/N] " ans
-    case "$ans" in
-        y|Y|yes|YES)
-            tailscale serve --https=443 off 2>/dev/null || true
-            setsid nohup tailscale funnel --bg --https=443 http://localhost:$PORT \
-                > "$TUNNEL_LOG" 2>&1 < /dev/null &
-            echo $! > "$TUNNEL_PID_FILE"
-            disown
-            sleep 3
-            URL=$(tailscale funnel status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
-            echo "✓ Funnel active (PUBLIC): ${URL:-see 'tailscale funnel status'}"
-            ;;
-        *)
-            echo "Cancelled — staying tailnet-only."
-            ;;
-    esac
 }
 
 status() {
@@ -257,20 +228,16 @@ case "${1:-}" in
     qr|url)
         show_qr
         ;;
-    share)
-        share
-        ;;
     status)
         status
         ;;
     *)
-        echo "Usage: $0 {start|stop|restart|qr|share|status|version}"
+        echo "Usage: $0 {start|stop|restart|qr|status|version}"
         echo ""
-        echo "  start   — Start app + tunnel (tailnet-only by default)"
+        echo "  start   — Start app + tunnel (tailnet-only)"
         echo "  stop    — Stop everything"
         echo "  restart — Restart app + tunnel"
         echo "  qr      — Show current tunnel URL + QR code"
-        echo "  share   — Opt into PUBLIC access (Tailscale Funnel)"
         echo "  status  — Show what's running"
         echo "  version — Show DeCloud version"
         exit 1

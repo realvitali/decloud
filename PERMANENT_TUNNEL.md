@@ -30,17 +30,7 @@ Your URL: `https://your-machine-name.tail1234.ts.net` (reachable only from devic
 - **Free** — 100 devices on free tier
 - **Works on any network** — no port forwarding
 
-## Sharing with Friends/Family
-
-By default, DeCloud is **private to your tailnet**. Friends/family need to be on your tailnet (install Tailscale + your approval) to reach it.
-
-If you *deliberately* want public access (anyone on the internet can open the URL, still gated by your passcode), opt in explicitly:
-
-```bash
-./decloud share
-```
-
-This switches from Serve to Funnel. **Only do this if you actually want public exposure** — for a personal cloud OS, tailnet-only is the safe default.
+DeCloud is **tailnet-only by design** — there is no public Funnel mode. If you want public access, use a Cloudflare Named Tunnel (below) and put your own auth in front of it.
 
 ## Alternative: Cloudflare Named Tunnel
 

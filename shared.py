@@ -213,7 +213,9 @@ def detect_os() -> dict:
             pretty = info.get('PRETTY_NAME') or info.get('NAME') or 'Linux'
             version = info.get('VERSION') or info.get('VERSION_ID') or ''
             name = pretty
-            if version and version not in pretty:
+            # Only append the version if PRETTY_NAME doesn't already carry it
+            # (e.g. "Linux Mint 22.3" already has it; "Debian GNU/Linux" does not).
+            if version and version not in pretty and version.split()[0] not in pretty:
                 name = f'{pretty} {version}'
         except OSError:
             pass

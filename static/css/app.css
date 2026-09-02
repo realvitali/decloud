@@ -1496,6 +1496,51 @@ body {
   box-shadow: var(--glass-shadow), var(--glass-inset);
 }
 
+.spec-tile {
+  background: var(--glass);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--glass-shadow), var(--glass-inset);
+}
+
+.spec-tile-head {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+.spec-tile-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px 24px;
+}
+
+.spec-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.spec-key {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.spec-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .stat-label {
   font-size: 13px;
   color: var(--text-dim);
@@ -3207,7 +3252,7 @@ body {
   box-shadow: var(--glass-shadow), var(--glass-inset);
   cursor: pointer;
   z-index: 9999;
-  display: flex;
+  display: none; /* hidden by default; shown only when experimental apps are enabled */
   align-items: center;
   justify-content: center;
   color: var(--text);
@@ -4572,6 +4617,55 @@ body {
   transition: background 0.2s;
 }
 .settings-export-btn:active { background: var(--glass-hover); }
+
+/* ─── Learn tab (per-app docs) ─────────────────────────── */
+.learn-docs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.learn-card {
+  background: var(--glass);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--glass-shadow), var(--glass-inset);
+}
+.learn-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.learn-card-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.learn-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.learn-badge.stable { color: var(--green); background: color-mix(in srgb, var(--green) 15%, transparent); }
+.learn-badge.experimental { color: var(--orange); background: color-mix(in srgb, var(--orange) 15%, transparent); }
+.learn-card-what {
+  font-size: 0.85rem;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.learn-card-how {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
 
 .settings-feedback-btn {
   margin-top: 8px; padding: 12px 20px;

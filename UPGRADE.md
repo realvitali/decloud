@@ -69,12 +69,12 @@ If it was started via the wrapper instead:
 curl -s http://localhost:8899/api/auth/check
 # open mode:  {"authenticated":true,"open_mode":true}
 # pin mode:   {"authenticated":false,"open_mode":false}  -> expected until login
-./decloud qr            # funnel URL should be unchanged
+./decloud qr            # serve URL should be unchanged
 ```
 
 ## 6. Test from the laptop (the real test)
 
-1. Open the funnel URL in the browser.
+1. Open the serve URL in the browser.
 2. **Hard-refresh once** (Ctrl+Shift+R) — the PWA service worker cache
    version bumped to v90.
 3. Log in with the SAME passcode as before (6–8 digits, tap the new ✓ GO
@@ -113,8 +113,8 @@ and report what failed (paste the tail of `app.log`).
   `?token=` for tunnel use); shell-free allowlisted quick commands (no
   `shell=True` anywhere); login brute-force backoff; security headers
   (CSP, X-Frame-Options, nosniff, Referrer-Policy); the third-party
-  `localhost.run` relay fallback was REMOVED — tunnel is Tailscale Funnel
-  only (or cloudflared, manually).
+  `localhost.run` relay fallback was REMOVED — tunnel is Tailscale Serve
+  only (tailnet-only, or cloudflared manually).
 - **Cross-platform**: real OS detection (deb/rpm/macOS/Windows), Windows
   installer (`setup.ps1`) and wrapper (`decloud.ps1`), PTY terminal
   degrades gracefully on Windows.

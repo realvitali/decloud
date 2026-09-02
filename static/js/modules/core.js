@@ -57,18 +57,50 @@ window.addEventListener('unhandledrejection', function(e) {
 function showCrashRecovery(err) {
   // Only show once per page load
   if (document.getElementById('decloud-crash-overlay')) return;
+  var detailText = (err && err.stack) ? err.stack : (err && err.message ? err.message : String(err));
   var overlay = document.createElement('div');
   overlay.id = 'decloud-crash-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0a0f;color:#e0e0e0;font-family:system-ui,sans-serif;padding:24px;text-align:center';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0a0f;color:#e0e0e0;font-family:system-ui,sans-serif;padding:24px;text-align:center;overflow:auto';
   overlay.innerHTML =
     '<div style="font-size:48px;margin-bottom:16px">X</div>' +
     '<h2 style="margin:0 0 8px;font-size:20px">DeCloud crashed</h2>' +
     '<p style="margin:0 0 20px;opacity:0.7;font-size:14px;max-width:320px">Something went wrong loading the dashboard. A Force Refresh will clear the cache and reload.</p>' +
-    '<button onclick="forceRefresh()" style="background:var(--accent);color:white;border:none;padding:14px 28px;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:12px">Force Refresh</button>' +
-    '<details style="margin-top:16px;opacity:0.5;font-size:12px;max-width:400px;word-break:break-word"><summary>Error details</summary><pre style="text-align:left;white-space:pre-wrap;padding:8px">' +
-    (err && err.stack ? err.stack : (err && err.message ? err.message : String(err))) +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">' +
+    '<button onclick="forceRefresh()" style="background:var(--accent);color:white;border:none;padding:14px 28px;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer">Force Refresh</button>' +
+    '<button onclick="copyCrashDetails(this)" style="background:transparent;color:#e0e0e0;border:1px solid #444;padding:14px 28px;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer">Copy details</button>' +
+    '</div>' +
+    '<details style="margin-top:16px;opacity:0.5;font-size:12px;max-width:400px;word-break:break-word;text-align:left"><summary>Error details</summary><pre id="decloud-crash-details" style="text-align:left;white-space:pre-wrap;padding:8px">' +
+    detailText +
     '</pre></details>';
   document.body.appendChild(overlay);
+  // Stash the text for the copy button
+  window.__decloudCrashDetail = detailText;
+}
+
+function copyCrashDetails(btn) {
+  var text = window.__decloudCrashDetail || '';
+  function done(ok) {
+    if (btn) {
+      btn.textContent = ok ? 'Copied ✓' : 'Copy failed';
+      setTimeout(function() { btn.textContent = 'Copy details'; }, 2000);
+    }
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() { done(true); }, function() { done(false); });
+  } else {
+    // Fallback for older browsers / non-secure contexts
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      done(ok);
+    } catch (e) { done(false); }
+  }
 }
 
 // ─── SVG Icons (Lucide/Feather style) ─────────────────────
