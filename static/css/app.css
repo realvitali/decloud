@@ -605,9 +605,7 @@ body {
   padding: 16px 20px 8px;
   position: sticky;
   top: 0;
-  background: var(--glass);
-  backdrop-filter: blur(var(--blur));
-  -webkit-backdrop-filter: blur(var(--blur));
+  background: var(--surface-solid);
   border-bottom: 1px solid var(--hairline);
   z-index: 10;
 }
@@ -4981,6 +4979,12 @@ body.desktop-mode .screen {
   max-width: 900px;
   margin: 0 auto;
 }
+body.desktop-mode .app-header {
+  max-width: 900px;
+  margin: 0 auto;
+  left: 0;
+  right: 0;
+}
 /* Side-by-side layouts where it makes sense */
 body.desktop-mode .music-content,
 body.desktop-mode #book-list,
@@ -5407,7 +5411,7 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
   border: none; background: transparent; color: var(--text-faint);
   font-size: 13px; padding: 6px 8px; border-radius: 8px; cursor: pointer;
 }
-.bot-reroll:hover { color: var(--accent, #7c6ff0); background: rgba(124,111,240,0.12); }
+.bot-reroll:hover { color: var(--accent); background: var(--accent-soft); }
 
 .bots-empty { text-align: center; padding: 26px 16px; color: var(--text-dim); font-size: 13px; }
 .bots-empty-emoji { font-size: 34px; margin-bottom: 8px; }
