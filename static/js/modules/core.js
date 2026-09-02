@@ -64,7 +64,7 @@ function showCrashRecovery(err) {
     '<div style="font-size:48px;margin-bottom:16px">X</div>' +
     '<h2 style="margin:0 0 8px;font-size:20px">DeCloud crashed</h2>' +
     '<p style="margin:0 0 20px;opacity:0.7;font-size:14px;max-width:320px">Something went wrong loading the dashboard. A Force Refresh will clear the cache and reload.</p>' +
-    '<button onclick="forceRefresh()" style="background:#6366f1;color:white;border:none;padding:14px 28px;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:12px">Force Refresh</button>' +
+    '<button onclick="forceRefresh()" style="background:var(--accent);color:white;border:none;padding:14px 28px;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:12px">Force Refresh</button>' +
     '<details style="margin-top:16px;opacity:0.5;font-size:12px;max-width:400px;word-break:break-word"><summary>Error details</summary><pre style="text-align:left;white-space:pre-wrap;padding:8px">' +
     (err && err.stack ? err.stack : (err && err.message ? err.message : String(err))) +
     '</pre></details>';

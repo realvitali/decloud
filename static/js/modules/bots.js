@@ -296,7 +296,7 @@ async function botsDelete(name) {
 function botsShowCreate() {
   const screen = document.getElementById('agents-content-inner') || document.querySelector('.agents-content');
   botsState.rosterHTML = screen.innerHTML;
-  const palette = ['#7c6ff0','#34d399','#f59e0b','#ef4444','#06b6d4','#ec4899','#84cc16','#a78bfa'];
+  const palette = ['#0d9488','#34d399','#f59e0b','#ef4444','#06b6d4','#ec4899','#84cc16','#2dd4bf'];
   const emojis = ['🤖','🦊','🐸','🐙','🦉','🐝','🦜','🐺','🐼','🔮','⚡','🧪','📚','🛠️','🎯','🧭'];
   screen.innerHTML = `
     <div class="bot-create">
@@ -321,7 +321,7 @@ function botsShowCreate() {
       </div>
       <div class="bot-field">Color
         <div class="bot-color-row" id="nb-colors">
-          ${palette.map(c => `<button type="button" class="bot-color-btn${c==='#7c6ff0'?' sel':''}" data-c="${c}" style="background:${c}"></button>`).join('')}
+          ${palette.map(c => `<button type="button" class="bot-color-btn${c==='#0d9488'?' sel':''}" data-c="${c}" style="background:${c}"></button>`).join('')}
         </div>
       </div>
       <button class="bot-create-btn" id="nb-submit" onclick="botsCreate()">Create Bot</button>
@@ -347,7 +347,7 @@ async function botsCreate() {
   const description = (document.getElementById('nb-desc').value || '').trim();
   const model = (document.getElementById('nb-model').value || '').trim();
   const emoji = document.querySelector('#nb-emojis .sel')?.dataset.e || '🤖';
-  const color = document.querySelector('#nb-colors .sel')?.dataset.c || '#7c6ff0';
+  const color = document.querySelector('#nb-colors .sel')?.dataset.c || '#0d9488';
   const btn = document.getElementById('nb-submit');
   if (!name) { alert('Name required'); return; }
   btn.disabled = true; btn.textContent = 'Creating…';
