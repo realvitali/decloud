@@ -356,7 +356,7 @@ function buildAppGrid() {
   const apps = APPS.filter(a => !a.experimental || showExp);
   document.getElementById('app-grid').innerHTML = apps.map(app => `
     <div class="app-icon${app.experimental ? ' app-experimental' : ''}" data-app-id="${app.id}" onclick="openApp('${app.id}')">
-      <div class="app-icon-visual" style="color:${app.color}">${app.svg}</div>
+      <div class="app-icon-visual">${app.svg}</div>
       <div class="app-label">${app.label}</div>
     </div>
   `).join('');
@@ -462,7 +462,7 @@ function openAISpread() {
     const x = cx + dx - itemSize / 2;
     const y = cy + dy - itemSize / 2;
     return '<div class="ai-spread-item" style="left:' + (cx - itemSize/2) + 'px;top:' + (cy - itemSize/2) + 'px;--tx:' + dx + 'px;--ty:' + dy + 'px;--delay:' + (i * 0.07) + 's" onclick="event.stopPropagation(); openAISubApp(\'' + sub.id + '\',\'' + sub.screen + '\')">' +
-      '<div class="ai-spread-item-visual" style="color:' + sub.color + '">' + sub.svg + '</div>' +
+      '<div class="ai-spread-item-visual">' + sub.svg + '</div>' +
       '<div class="ai-spread-item-label">' + sub.label + '</div>' +
     '</div>';
   }).join('');
