@@ -63,6 +63,3 @@ def register_blueprints(app, sock):
     if sock is not None:
         from .terminal import register as register_terminal
         register_terminal(sock)
-
-        from .voice import register as register_voice
-        register_voice(sock)

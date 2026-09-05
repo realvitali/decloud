@@ -42,6 +42,18 @@ window.fetch = function(input, init) {
   return _originalFetch.call(this, input, init);
 };
 
+// ─── Shared helpers (single source of truth) ──────────────────────
+// escapeHtml must escape quotes too, because it's used inside HTML
+// attribute values (e.g. onclick="...'${escapeHtml(id)}'", href="...").
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // ─── Crash Recovery (runs before anything else can break) ──
 window.addEventListener('error', function(e) {
   // Ignore errors from Safari's native share sheet / visibility changes
@@ -107,10 +119,10 @@ const APPS = [
   { id: 'audiobooks', svg: ICONS.book,    label: 'Books',     color: '#6366f1', screen: 'book-screen' },
   { id: 'music',      svg: ICONS.music,   label: 'Music',     color: '#ec4899', screen: 'music-screen' },
   { id: 'files',      svg: ICONS.lego,    label: 'Files',     color: '#f59e0b', screen: 'lego-screen' },
-  { id: 'journal',    svg: ICONS.universe, label: 'Journal',  color: '#a855f7', screen: 'journal-screen' },
+  { id: 'journal',    svg: ICONS.universe, label: 'Journal',  color: '#a855f7', screen: 'journal-screen', experimental: true },
   { id: 'ai',         svg: ICONS.brain,   label: 'AI',        color: '#8b5cf6', screen: null, spread: true },
-  { id: 'legos',      svg: ICONS.brick,   label: 'Legos',     color: '#ef4444', screen: 'legos-screen' },
-  { id: 'projects',   svg: ICONS.layers,  label: 'Projects',  color: '#0ea5e9', screen: 'project-screen' },
+  { id: 'legos',      svg: ICONS.brick,   label: 'Legos',     color: '#ef4444', screen: 'legos-screen', experimental: true },
+  { id: 'projects',   svg: ICONS.layers,  label: 'Projects',  color: '#0ea5e9', screen: 'project-screen', experimental: true },
   { id: 'system',     svg: ICONS.activity,label: 'System',    color: '#4ade80', screen: 'system-screen' },
   { id: 'terminal',   svg: ICONS.terminal,label: 'Terminal',  color: '#fbbf24', screen: 'terminal-screen' },
   { id: 'settings',   svg: ICONS.settings, label: 'Settings', color: '#6b7280', screen: 'settings-screen' },
@@ -119,9 +131,16 @@ const APPS = [
 // AI sub-apps (shown in radial spread)
 const AI_SUBAPPS = [
   { id: 'ollama',  svg: ICONS.brain,  label: 'AI Chat',  color: '#8b5cf6', screen: 'ollama-screen' },
-  { id: 'comfy',   svg: ICONS.image,  label: 'Generate', color: '#ec4899', screen: 'comfy-screen' },
+  { id: 'comfy',   svg: ICONS.image,  label: 'Generate', color: '#ec4899', screen: 'comfy-screen', experimental: true },
   { id: 'agents',  svg: ICONS.bot,    label: 'Agents',  color: '#34d399', screen: 'agents-screen' },
 ];
+
+// Experimental apps are hidden by default; enable in Settings → Appearance.
+let experimentalApps = false;
+
+function visibleApps(list) {
+  return list.filter(a => !a.experimental || experimentalApps);
+}
 
 // ─── Projects (data-driven; add your own in Settings) ─────────
 const PROJECTS = [

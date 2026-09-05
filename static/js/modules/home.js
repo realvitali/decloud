@@ -1,40 +1,62 @@
 // ===== Module: home =====
 
+function agentAvatarStyle(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return `background:linear-gradient(135deg,hsl(${h},60%,45%),hsl(${(h + 40) % 360},70%,60%))`;
+}
+
 async function loadAgents() {
+  const listEl = document.getElementById('agents-list');
+  if (!listEl) return;
   try {
     const r = await fetch('/api/agents');
-    if (!r.ok) {
-      throw new Error(`HTTP ${r.status}`);
-    }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
+    const agents = data.agents || [];
 
-    // Update status dots
-    for (const a of data.agents || []) {
-      const el = document.getElementById(`status-${a.id}`);
-      if (el) {
-        el.className = `agent-status ${a.status}`;
-        el.textContent = '●';
+    if (!agents.length) {
+      listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🤖</div><h3>No agents found</h3><p>Set DECLOUD_HERMES_HOME in .env to enable agent management.</p></div>';
+      return;
+    }
+
+    listEl.innerHTML = agents.map(a => {
+      const name = a.name || a.id || '?';
+      const tag = a.platform && a.platform !== 'this machine' ? `<span class="agent-tag">${escapeHtml(a.platform)}</span>` : '';
+      const platformLine = [a.profile && a.profile !== 'local' ? 'Hermes · ' + a.profile : '', a.model].filter(Boolean).map(escapeHtml).join(' · ') || 'this machine';
+      const hasJobs = a.jobs && a.jobs.length;
+      const note = a.profile === 'local' ? 'This workstation — always on' : 'No cron jobs configured';
+      return `
+      <div class="agent-card" onclick="toggleAgentDetail('${escapeHtml(a.id)}')">
+        <div class="agent-header">
+          <div class="agent-avatar" style="${agentAvatarStyle(name)}">${escapeHtml(name.charAt(0).toUpperCase())}</div>
+          <div class="agent-info">
+            <div class="agent-name">${escapeHtml(name)} ${tag}</div>
+            <div class="agent-platform">${platformLine}</div>
+          </div>
+          <div class="agent-status ${escapeHtml(a.status || 'unknown')}">●</div>
+          <div class="agent-expand" id="expand-${escapeHtml(a.id)}">▼</div>
+        </div>
+        <div class="agent-detail" id="agent-${escapeHtml(a.id)}">
+          ${hasJobs ? `<div class="agent-jobs" id="jobs-${escapeHtml(a.id)}"></div>` : `<div class="agent-note">${note}</div>`}
+        </div>
+      </div>`;
+    }).join('');
+
+    for (const a of agents) {
+      if (a.jobs && a.jobs.length) {
+        const jobsEl = document.getElementById(`jobs-${a.id}`);
+        if (jobsEl) renderJobs(jobsEl, a.jobs, a.profile || 'default');
       }
     }
 
-    // Render jobs (generic — works with any agent config)
-    if (data.default?.jobs) {
-      const jobsEl = document.getElementById('jobs-default') || document.getElementById('jobs-nika');
-      if (jobsEl) renderJobs(jobsEl, data.default.jobs, 'default');
-    }
-
-    // Restore open state
     for (const [id, open] of Object.entries(agentDetailsOpen)) {
       const detail = document.getElementById(`agent-${id}`);
       if (detail) detail.classList.toggle('open', open);
     }
   } catch(e) {
     console.error('loadAgents failed', e);
-    // Show empty state instead of hanging
-    const container = document.getElementById('jobs-default') || document.getElementById('jobs-nika');
-    if (container) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">🤖</div><h3>Agents not configured</h3><p>Set DECLOUD_HERMES_HOME in .env to enable agent management.</p></div>';
-    }
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🤖</div><h3>Agents not configured</h3><p>Set DECLOUD_HERMES_HOME in .env to enable agent management.</p></div>';
   }
 }
 
@@ -348,12 +370,16 @@ document.addEventListener('click', function(e) {
 
 // ─── App Grid ────────────────────────────────────────────
 function buildAppGrid() {
-  document.getElementById('app-grid').innerHTML = APPS.map(app => `
+  document.getElementById('app-grid').innerHTML = visibleApps(APPS).map(app => `
     <div class="app-icon" data-app-id="${app.id}" onclick="openApp('${app.id}')">
       <div class="app-icon-visual" style="color:${app.color}">${app.svg}</div>
       <div class="app-label">${app.label}</div>
     </div>
   `).join('');
+}
+
+function applyExperimentalApps() {
+  buildAppGrid();
 }
 
 function openApp(id) {
@@ -411,8 +437,9 @@ function openAISpread() {
 
   const itemSize = 72;
   const margin = 16;
-  const subapps = AI_SUBAPPS;
+  const subapps = visibleApps(AI_SUBAPPS);
   const n = subapps.length;
+  if (n === 0) { closeAISpread(); return; }
 
   // Fan direction: away from screen center
   const screenCx = window.innerWidth / 2;

@@ -76,6 +76,26 @@ if ! command -v qrencode &>/dev/null; then
     fi
 fi
 
+# ─── Install ffmpeg (audio: Whisper STT + Piper TTS) ─────────────
+if ! command -v ffmpeg &>/dev/null; then
+    echo "→ Installing ffmpeg (for voice)..."
+    if [ "$OS_TYPE" = "macos" ]; then
+        command -v brew &>/dev/null && brew install ffmpeg 2>/dev/null || echo "  (optional — skipped)"
+    elif command -v dnf &>/dev/null; then
+        sudo dnf install -y ffmpeg 2>/dev/null || echo "  (optional — skipped)"
+    elif command -v apt-get &>/dev/null; then
+        sudo apt-get install -y ffmpeg 2>/dev/null || echo "  (optional — skipped)"
+    elif command -v pacman &>/dev/null; then
+        sudo pacman -S --noconfirm ffmpeg 2>/dev/null || echo "  (optional — skipped)"
+    elif command -v zypper &>/dev/null; then
+        sudo zypper install -y ffmpeg 2>/dev/null || echo "  (optional — skipped)"
+    else
+        echo "  (ffmpeg not found — install it manually for voice)"
+    fi
+else
+    echo "✓ ffmpeg ready"
+fi
+
 # ─── Install tunnel client (for secure HTTPS access from phone) ──
 # localhost.run is primary — free, no account, no interstitial page.
 # Just needs SSH (pre-installed on macOS/Linux/WSL).
@@ -136,12 +156,44 @@ if [ ! -f .env ]; then
     # Generate a random 8-digit passcode for app access (longer = harder
     # to brute-force; the app warns if you shorten it below 8 characters)
     PIN=$($PYBIN -c "import secrets; print(''.join(str(secrets.randbelow(10)) for _ in range(8)))")
-    echo "DECLOUD_PIN=$PIN" >> .env
+    # Idempotent: replace any existing DECLOUD_PIN line, else append.
+    if grep -q '^DECLOUD_PIN=' .env 2>/dev/null; then
+        if [ "$OS_TYPE" = "macos" ]; then
+            sed -i '' "s/^DECLOUD_PIN=.*/DECLOUD_PIN=$PIN/" .env
+        else
+            sed -i "s/^DECLOUD_PIN=.*/DECLOUD_PIN=$PIN/" .env
+        fi
+    else
+        echo "DECLOUD_PIN=$PIN" >> .env
+    fi
     echo "✓ .env created (edit it to customize paths)"
 fi
 
 # Lock down .env — contains PIN, SECRET_KEY, and any user-supplied tokens.
 chmod 600 .env 2>/dev/null || true
+
+# ─── Piper TTS voices (downloaded so speech works out of the box) ──
+PIPER_DIR=$(grep '^DECLOUD_PIPER_DIR=' .env 2>/dev/null | cut -d= -f2- | sed 's/^"//;s/"$//')
+if [ -z "$PIPER_DIR" ]; then
+    PIPER_DIR="$HOME/.local/share/piper"
+fi
+PIPER_DIR=$(eval echo "$PIPER_DIR")  # expand ~
+mkdir -p "$PIPER_DIR"
+_fetch_voice() {
+    local name="$1" quality="$2"
+    local base="https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/${name}/${quality}/en_US-${name}-${quality}"
+    if [ ! -f "$PIPER_DIR/en_US-${name}-${quality}.onnx" ]; then
+        echo "→ Downloading Piper voice ${name} (${quality})…"
+        curl -sSL "${base}.onnx" -o "$PIPER_DIR/en_US-${name}-${quality}.onnx" \
+            || echo "  (voice ${name} download failed — speech will use browser TTS)"
+    fi
+    if [ ! -f "$PIPER_DIR/en_US-${name}-${quality}.onnx.json" ]; then
+        curl -sSL "${base}.onnx.json" -o "$PIPER_DIR/en_US-${name}-${quality}.onnx.json" 2>/dev/null || true
+    fi
+}
+_fetch_voice "lessac" "high"
+_fetch_voice "lessac" "medium"
+_fetch_voice "kathleen" "low"
 
 # ─── SSL certs not needed — tunnel handles HTTPS ────────────────
 # The app runs HTTP on localhost only (not exposed). The cloudflared

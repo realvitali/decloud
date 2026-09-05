@@ -1,12 +1,12 @@
-"""Version info route for About panel."""
-import os
+"""Version info route for About panel.
+
+Single source of truth: VERSION below, which must match CHANGELOG[0].
+`date` shown in the About panel is the release date of that entry.
+"""
 import json
-from pathlib import Path
 from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
-
-VERSION_FILE = Path(__file__).parent.parent / 'version.json'
 
 VERSION = "0.0.2"
 
@@ -53,12 +53,20 @@ CHANGELOG = [
 ]
 
 
+def _current_entry():
+    """Changelog entry matching VERSION; falls back to the newest entry."""
+    for entry in CHANGELOG:
+        if entry.get('version') == VERSION:
+            return entry
+    return CHANGELOG[0] if CHANGELOG else {"version": VERSION, "date": "", "changes": []}
+
+
 @bp.route('/api/version')
 def get_version():
     """Return current version and changelog."""
-    current = CHANGELOG[0] if CHANGELOG else {"version": "0.0.0", "date": "", "changes": []}
+    current = _current_entry()
     return jsonify({
         "version": current["version"],
         "date": current["date"],
-        "changelog": CHANGELOG
+        "changelog": CHANGELOG,
     })

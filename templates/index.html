@@ -11,8 +11,8 @@
   <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=91">
-  <link rel="stylesheet" href="/static/css/onboarding.css?v=91">
+  <link rel="stylesheet" href="/static/css/app.css?v=103">
+  <link rel="stylesheet" href="/static/css/onboarding.css?v=103">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
   <title>DeCloud</title>
 </head>
@@ -109,7 +109,6 @@
           <div class="music-player-artist" id="music-player-artist"></div>
         </div>
         <div class="music-player-time"><span id="music-current">0:00</span> / <span id="music-duration">0:00</span></div>
-        </div>
       </div>
       <div class="music-progress-bar" id="music-progress-bar" onclick="seekMusic(event)">
         <div class="music-progress-fill" id="music-progress-fill"></div>
@@ -152,6 +151,13 @@
     <button class="mode-btn" id="audio-mode-btn" onclick="setReaderMode('audio')">Listen</button>
   </div>
 
+  <!-- Audio generation progress banner -->
+  <div class="gen-banner" id="gen-banner" style="display:none;margin:12px 16px 0">
+    <div class="gen-banner-title">Generating audiobook…</div>
+    <div class="gen-progress-bar"><div class="gen-progress-fill" id="gen-progress-fill"></div></div>
+    <div class="gen-banner-sub" id="gen-banner-sub">0%</div>
+  </div>
+
   <!-- Chapter nav -->
   <div class="chapter-nav" id="chapter-nav">
     <button class="chapter-nav-btn" id="prev-ch-btn" onclick="openPrevChapter()"><span class="nav-arrow prev"></span> Prev</button>
@@ -170,7 +176,7 @@
       </div>
       <button class="reader-ctrl-btn sofar-btn" onclick="openSummary()" title="Summarize what you've read so far"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg> So Far</button>
     </div>
-    <div class="reader-text" id="reader-text" onclick="handleReaderTap(event)">Loading...</div>
+    <div class="reader-text" id="reader-text">Loading...</div>
     <div class="bookmark-list-panel" id="bookmark-panel" style="display:none">
       <div class="bookmark-panel-header">
         <span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Bookmarks</span>
@@ -208,7 +214,6 @@
     <select id="chapter-dropdown" onchange="onChapterDropdownChange(this.value)"></select>
     <div id="chapter-buttons" style="display:none"></div>
   </div>
-</div>
 </div>
 
 <!-- ═══ LEGO FILE BROWSER ═══ -->
@@ -266,71 +271,7 @@
       <div class="activity-list" id="activity-list"><span class="text-dim">Loading...</span></div>
     </div>
 
-    <!-- Nika / Signal -->
-    <div class="agent-card" onclick="toggleAgentDetail('nika')">
-      <div class="agent-header">
-        <div class="agent-avatar nika">N</div>
-        <div class="agent-info">
-          <div class="agent-name">Nika <span class="agent-tag">Signal</span></div>
-          <div class="agent-platform">Hermes · agent2 · minimax-m2.7</div>
-        </div>
-        <div class="agent-status" id="status-nika">●</div>
-        <div class="agent-expand" id="expand-nika">▼</div>
-      </div>
-      <div class="agent-detail" id="agent-nika">
-        <div class="agent-jobs" id="jobs-nika">Loading...</div>
-      </div>
-    </div>
-
-    <!-- Hermy -->
-    <div class="agent-card" onclick="toggleAgentDetail('hermy')">
-      <div class="agent-header">
-        <div class="agent-avatar hermy">H</div>
-        <div class="agent-info">
-          <div class="agent-name">Hermy <span class="agent-tag">Telegram</span></div>
-          <div class="agent-platform">Hermes · agent2</div>
-        </div>
-        <div class="agent-status" id="status-hermy">●</div>
-        <div class="agent-expand" id="expand-hermy">▼</div>
-      </div>
-      <div class="agent-detail" id="agent-hermy">
-        <div class="agent-note">Same agent as Nika, different channel</div>
-        <div class="agent-jobs" id="jobs-hermy"></div>
-      </div>
-    </div>
-
-    <!-- DeCloud (OpenClaw) -->
-    <div class="agent-card" onclick="toggleAgentDetail('decloud')">
-      <div class="agent-header">
-        <div class="agent-avatar decloud">C</div>
-        <div class="agent-info">
-          <div class="agent-name">DeCloud <span class="agent-tag">OpenClaw</span></div>
-          <div class="agent-platform">OpenClaw · this machine</div>
-        </div>
-        <div class="agent-status ready">●</div>
-        <div class="agent-expand" id="expand-decloud">▼</div>
-      </div>
-      <div class="agent-detail" id="agent-decloud">
-        <div class="agent-note">This workstation — always on</div>
-      </div>
-    </div>
-
-    <!-- Pengy (Telegram) -->
-    <div class="agent-card" onclick="toggleAgentDetail('pengy')">
-      <div class="agent-header">
-        <div class="agent-avatar pengy">P</div>
-        <div class="agent-info">
-          <div class="agent-name">Pengy <span class="agent-tag">Telegram</span></div>
-          <div class="agent-platform">Hermes · pengy</div>
-        </div>
-        <div class="agent-status" id="status-pengy">●</div>
-        <div class="agent-expand" id="expand-pengy">▼</div>
-      </div>
-      <div class="agent-detail" id="agent-pengy">
-        <div class="agent-note">No cron jobs configured</div>
-        <div class="agent-jobs" id="jobs-pengy"></div>
-      </div>
-    </div>
+    <div id="agents-list"></div>
 
   </div>
 </div>
@@ -441,6 +382,7 @@
   </div>
   <div class="settings-tabs">
     <button class="settings-tab active" id="st-tab-appearance" onclick="switchSettingsTab('st-tab-appearance')">Appearance</button>
+    <button class="settings-tab" id="st-tab-voice" onclick="switchSettingsTab('st-tab-voice')">Voice</button>
     <button class="settings-tab" id="st-tab-paths" onclick="switchSettingsTab('st-tab-paths')">Paths</button>
     <button class="settings-tab" id="st-tab-network" onclick="switchSettingsTab('st-tab-network')">Devices</button>
     <button class="settings-tab" id="st-tab-telemetry" onclick="switchSettingsTab('st-tab-telemetry')">Usage</button>
@@ -471,6 +413,141 @@
           <span class="settings-value">Matches theme</span>
         </div>
       </div>
+      <div class="settings-group">
+        <div class="settings-label">Experimental Apps</div>
+        <div class="settings-row">
+          <span>Show hidden apps</span>
+          <input type="checkbox" id="experimental-toggle" onchange="setExperimentalApps(this.checked)">
+        </div>
+        <div class="settings-note">Legos, Projects, Journal and AI Image Generation are hidden by default.</div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-label">Passcode</div>
+        <div class="settings-row">
+          <span>Current</span>
+          <input type="password" id="pin-current" class="settings-input" placeholder="Current passcode" autocomplete="off">
+        </div>
+        <div class="settings-row">
+          <span>New</span>
+          <input type="password" id="pin-new" class="settings-input" placeholder="8+ characters" autocomplete="off">
+        </div>
+        <div class="settings-row">
+          <span>Confirm</span>
+          <input type="password" id="pin-confirm" class="settings-input" placeholder="Repeat new passcode" autocomplete="off">
+        </div>
+        <button class="settings-save-btn" onclick="changePin()">Change Passcode</button>
+        <div class="settings-note" id="pin-note">Changing your passcode signs out all devices.</div>
+      </div>
+    </div>
+    <!-- Voice -->
+    <div class="settings-panel" id="st-panel-voice" style="display:none">
+      <div class="settings-group">
+        <div class="settings-label">Your Voice Assistant</div>
+        <div class="settings-row">
+          <span>Name</span>
+          <input type="text" id="voicecfg-name" class="settings-input" placeholder="DeCloud" maxlength="40">
+        </div>
+        <button class="settings-save-btn" onclick="saveVoiceConfig()">Save Name</button>
+        <div class="settings-note" id="voice-setup-status">Checking…</div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-label">Memory</div>
+        <button class="settings-save-btn" onclick="clearVoiceMemory()">Clear conversation memory</button>
+        <div class="settings-note">The agent remembers your conversation across sessions. Clear it to start fresh.</div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-label">Access Level</div>
+        <div class="settings-row">
+          <span>What the agent can do</span>
+          <select id="voicecfg-access" class="settings-input" onchange="voiceAccessChanged()">
+            <option value="talk">Talk — chat &amp; view only</option>
+            <option value="basic">Basic — create files (non-destructive)</option>
+            <option value="full">Full — unrestricted access</option>
+          </select>
+        </div>
+        <div class="settings-note" id="voice-access-note">Talk mode can read system info but never changes anything. Basic can create and move files. Full can run any command.</div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-label">Speech-to-Text (STT)</div>
+        <div class="settings-row">
+          <span>Engine</span>
+          <select id="voicecfg-stt" class="settings-input" onchange="saveVoiceConfig()"></select>
+        </div>
+        <div class="settings-note">Browser speech is instant and needs no install. Whisper is fully offline and private.</div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-label">Brain</div>
+        <div class="settings-note" id="voice-brain-status">Checking…</div>
+        <div class="settings-row">
+          <span>Hermes path</span>
+          <input type="text" id="voicecfg-hermes-home" class="settings-input" placeholder="~/.hermes">
+        </div>
+        <button class="settings-save-btn" onclick="saveHermesHome()">Save Hermes path</button>
+        <div class="settings-note">The agent uses Hermes (smart, agentic) if it's installed — otherwise it falls back to the LLM below.</div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-label">Brain (LLM fallback)</div>
+        <div class="settings-row">
+          <span>Provider</span>
+          <select id="voicecfg-backend" class="settings-input" onchange="voiceBackendChanged()">
+            <option value="local">Local (Ollama)</option>
+            <option value="cloud">Cloud API</option>
+          </select>
+        </div>
+        <div id="voicecfg-local-block">
+          <div class="settings-row">
+            <span>Model</span>
+            <select id="voicecfg-local-model" class="settings-input" onchange="saveVoiceConfig()"></select>
+          </div>
+          <div class="settings-row">
+            <span>Actions</span>
+            <span class="settings-value" style="display:flex;gap:8px">
+              <button class="settings-save-btn" style="margin:0" onclick="installOllama()">Install Ollama</button>
+              <button class="settings-save-btn" style="margin:0" onclick="pullOllamaModel()">Download model</button>
+            </span>
+          </div>
+          <div class="settings-note" id="voice-ollama-note">Local models run on this machine — private, no API costs.</div>
+        </div>
+        <div id="voicecfg-cloud-block">
+          <div class="settings-row">
+            <span>Provider</span>
+            <select id="voicecfg-cloud-provider" class="settings-input" onchange="voiceCloudProviderChanged()">
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="openai-compatible">OpenAI-compatible</option>
+            </select>
+          </div>
+          <div class="settings-row">
+            <span>Model</span>
+            <input type="text" id="voicecfg-cloud-model" class="settings-input" placeholder="gpt-4o-mini">
+          </div>
+          <div class="settings-row" id="voicecfg-cloud-base-row" style="display:none">
+            <span>Base URL</span>
+            <input type="text" id="voicecfg-cloud-base" class="settings-input" placeholder="https://api.example.com/v1">
+          </div>
+          <div class="settings-row">
+            <span>API key</span>
+            <input type="password" id="voicecfg-api-key" class="settings-input" placeholder="sk-…">
+          </div>
+          <div class="settings-note" id="voice-api-key-note">Your key is stored in .env on this machine only.</div>
+          <button class="settings-save-btn" onclick="saveVoiceConfig()">Save Cloud Settings</button>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-label">Text-to-Speech (TTS)</div>
+        <div class="settings-row">
+          <span>Voice</span>
+          <select id="voicecfg-tts" class="settings-input" onchange="saveVoiceConfig()"></select>
+        </div>
+        <button class="settings-save-btn" onclick="installVoice()">Download voice</button>
+        <div class="settings-note" id="voice-tts-note">Piper voices are downloaded on demand.</div>
+      </div>
     </div>
     <!-- Paths -->
     <div class="settings-panel" id="st-panel-paths" style="display:none">
@@ -482,14 +559,14 @@
         </div>
         <div class="settings-row">
           <span>Files</span>
-          <input type="text" class="settings-input" id="path-files" placeholder="~/Files">
+          <input type="text" class="settings-input" id="path-files" placeholder="~">
         </div>
         <div class="settings-row">
           <span>Music</span>
-          <input type="text" class="settings-input" id="path-music" placeholder="~/Music/decloud-music">
+          <input type="text" class="settings-input" id="path-music" placeholder="~/Music">
         </div>
         <button class="settings-save-btn" onclick="savePaths()">Save Paths</button>
-        <div class="settings-note" id="paths-save-note">Restart required for path changes to take effect.</div>
+        <div class="settings-note" id="paths-save-note">Changes apply immediately and persist across restarts.</div>
       </div>
     </div>
     <!-- Devices -->
@@ -722,19 +799,6 @@
   <div class="project-detail-content" id="project-detail-content"></div>
 </div>
 
-<!-- ═══ SETTINGS ═══ -->
-
-<!-- ═══ SETTINGS ═══ -->
-    <div id="settings-logs" class="settings-tab-content">
-      <div class="settings-section">
-        <h3>Recent Logs</h3>
-        <div id="logs-list" class="logs-list"></div>
-        <button class="settings-btn" onclick="exportLogs()">Export All Logs</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- ═══ BOOK SETTINGS MODAL ═══ -->
 <div id="settings-modal" class="modal">
   <div class="modal-content">
@@ -778,6 +842,7 @@
 
 <audio id="audio-player" preload="auto"></audio>
 <audio id="preview-player" preload="none"></audio>
+<audio id="voice-tts-player" preload="auto"></audio>
 
 <!-- ═══ SUMMARY MODAL ═══ -->
 <div id="summary-modal" class="modal">
@@ -853,6 +918,12 @@
       <!-- Status text -->
       <div id="voice-status" class="voice-status">Listening...</div>
 
+      <!-- Microphone permission -->
+      <button id="voice-perm-btn" class="voice-perm-btn" style="display:none" onclick="requestMicPermission()">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        Enable microphone
+      </button>
+
       <!-- Transcript (user speech, transient — clears each turn) -->
       <div id="voice-transcript" class="voice-transcript"></div>
 
@@ -862,7 +933,7 @@
       <!-- Capabilities -->
       <div id="voice-capabilities" class="voice-capabilities">
         <button class="voice-caps-toggle" onclick="toggleCapabilities()">
-          What can Vui do? &#9656;
+          What can I say? &#9656;
         </button>
         <div id="voice-caps-list" class="voice-caps-list">
           <div class="voice-cap-item"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Read system stats (CPU, RAM, GPU, disk)</span></div>
@@ -884,45 +955,6 @@
         </div>
       </div>
 
-      <!-- Settings -->
-      <div id="voice-settings" class="voice-settings" style="display:none">
-        <div class="voice-setting-row">
-          <label>STT Engine</label>
-          <select id="voice-stt-select" onchange="saveVoiceSettings()"></select>
-        </div>
-        <div class="voice-setting-row">
-          <label>LLM Model</label>
-          <select id="voice-llm-select" onchange="saveVoiceSettings()"></select>
-        </div>
-        <div class="voice-setting-row">
-          <label>TTS Engine</label>
-          <select id="voice-tts-select" onchange="saveVoiceSettings()"></select>
-        </div>
-        <div class="voice-setting-row" style="border-top:1px solid rgba(255,255,255,0.1);padding-top:12px;margin-top:8px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="voice-hermes-toggle" onchange="saveVoiceSettings()" style="width:18px;height:18px;accent-color:#6366f1">
-            Use Hermes (full agent mode)
-          </label>
-          <small style="opacity:0.6;font-size:11px;margin-top:4px;display:block">Talk to Hermes directly. Your voice goes to Whisper STT, then to the Hermes agent, and you get a voice reply. Full agent context, can build things.</small>
-        </div>
-        <div class="voice-setting-row" style="border-top:1px solid rgba(255,255,255,0.1);padding-top:12px;margin-top:8px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="voice-vui-toggle" onchange="saveVoiceSettings()" style="width:18px;height:18px;accent-color:#6366f1">
-            Use Vui (full-duplex voice AI)
-          </label>
-          <small style="opacity:0.6;font-size:11px;margin-top:4px;display:block">Vui handles STT+LLM+TTS in one pass with a neural voice. Overrides the settings above.</small>
-        </div>
-        <div class="voice-setting-row" id="vui-voice-picker" style="display:none;padding-top:12px;margin-top:4px">
-          <label>Vui Voice</label>
-          <select id="voice-vui-voice" onchange="switchVuiVoice()" style="width:100%;margin-top:4px">
-            <option value="abraham">Abraham</option>
-            <option value="harry">Harry</option>
-            <option value="maeve">Maeve</option>
-            <option value="rhian">Rhian</option>
-          </select>
-          <small style="opacity:0.6;font-size:11px;margin-top:2px;display:block">Pick the neural voice persona for Vui.</small>
-        </div>
-      </div>
     </div>
 
     <!-- Text View -->
@@ -939,10 +971,6 @@
       <button id="voice-mute-btn" class="voice-control-btn" onclick="toggleMute()">
         <span class="voice-control-icon" id="voice-mute-icon"></span>
         <span class="voice-control-label" id="voice-mute-label">Mute</span>
-      </button>
-      <button class="voice-control-btn voice-settings-btn" onclick="toggleVoiceSettings()">
-        <span class="voice-control-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
-        <span class="voice-control-label">Settings</span>
       </button>
       <button class="voice-control-btn voice-close-btn" onclick="closeVoice()">
         <span class="voice-control-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
@@ -963,6 +991,27 @@
   </div>
 </div>
 
+<!-- ═══ FULL ACCESS CONFIRMATION MODAL ═══ -->
+<div id="full-access-modal" class="full-access-modal" style="display:none">
+  <div class="full-access-content">
+    <div class="full-access-title">⚠️ Unrestricted access</div>
+    <p>Full access lets the voice agent run <strong>any shell command</strong> on this machine. It can:</p>
+    <ul>
+      <li>Delete files and folders (<code>rm</code>, <code>shred</code>)</li>
+      <li>Format or wipe disks (<code>mkfs</code>, <code>dd</code>)</li>
+      <li>Change permissions and users (<code>chmod</code>, <code>chown</code>)</li>
+      <li>Install or remove software</li>
+      <li>Shut down or reboot the machine</li>
+      <li>Read and exfiltrate any file it can access</li>
+    </ul>
+    <p style="color:var(--red);font-weight:700">This could permanently break your setup or expose your data.</p>
+    <div class="full-access-buttons">
+      <button class="voice-btn voice-btn-no" onclick="fullAccessConfirm(false)">Cancel</button>
+      <button class="voice-btn voice-btn-yes" style="background:rgba(239,68,68,0.25);border-color:rgba(239,68,68,0.5);color:#f87171" onclick="fullAccessConfirm(true)">I understand — enable Full access</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
@@ -974,28 +1023,28 @@ import * as CANNON from 'cannon-es';
 window.CANNON = CANNON;
 </script>
 <script src="/static/js/thinking-orbs.js"></script>
-<script src="/static/js/modules/auth.js?v=91"></script>
-<script src="/static/js/modules/onboarding.js?v=91"></script>
-<script src="/static/js/modules/core.js?v=91"></script>
-<script src="/static/js/modules/media-session.js?v=91"></script>
-<script src="/static/js/modules/home.js?v=91"></script>
-<script src="/static/js/modules/projects.js?v=91"></script>
-<script src="/static/js/modules/audiobooks.js?v=91"></script>
-<script src="/static/js/modules/lego.js?v=91"></script>
-<script src="/static/js/modules/terminal.js?v=91"></script>
-<script src="/static/js/modules/osint.js?v=91"></script>
-<script src="/static/js/modules/universe.js?v=91"></script>
-<script src="/static/js/modules/system.js?v=91"></script>
-<script src="/static/js/modules/ollama.js?v=91"></script>
-<script src="/static/js/modules/comfy.js?v=91"></script>
-<script src="/static/js/modules/lego3d.js?v=91"></script>
-<script src="/static/js/modules/voice.js?v=91"></script>
-<script src="/static/js/modules/journal.js?v=91"></script>
-<script src="/static/js/modules/legos3d.js?v=91"></script>
-<script src="/static/js/modules/settings.js?v=91"></script>
-<script src="/static/js/modules/telemetry.js?v=91"></script>
-<script src="/static/js/modules/desktop.js?v=91"></script>
-<script src="/static/js/modules/music.js?v=91"></script>
+<script src="/static/js/modules/auth.js?v=103"></script>
+<script src="/static/js/modules/onboarding.js?v=103"></script>
+<script src="/static/js/modules/core.js?v=103"></script>
+<script src="/static/js/modules/media-session.js?v=103"></script>
+<script src="/static/js/modules/home.js?v=103"></script>
+<script src="/static/js/modules/projects.js?v=103"></script>
+<script src="/static/js/modules/audiobooks.js?v=103"></script>
+<script src="/static/js/modules/lego.js?v=103"></script>
+<script src="/static/js/modules/terminal.js?v=103"></script>
+<script src="/static/js/modules/osint.js?v=103"></script>
+<script src="/static/js/modules/universe.js?v=103"></script>
+<script src="/static/js/modules/system.js?v=103"></script>
+<script src="/static/js/modules/ollama.js?v=103"></script>
+<script src="/static/js/modules/comfy.js?v=103"></script>
+<script src="/static/js/modules/lego3d.js?v=103"></script>
+<script src="/static/js/modules/voice.js?v=103"></script>
+<script src="/static/js/modules/journal.js?v=103"></script>
+<script src="/static/js/modules/legos3d.js?v=103"></script>
+<script src="/static/js/modules/settings.js?v=103"></script>
+<script src="/static/js/modules/telemetry.js?v=103"></script>
+<script src="/static/js/modules/desktop.js?v=103"></script>
+<script src="/static/js/modules/music.js?v=103"></script>
 
 <!-- ═══ ONBOARDING OVERLAY ═══ -->
 <div id="onboarding-overlay" class="onboarding-overlay" style="display:none">
@@ -1006,7 +1055,11 @@ window.CANNON = CANNON;
     <div class="onboarding-step active" data-step="0">
       <h1>Welcome to DeCloud</h1>
       <p>DeCloud is your personal cloud — a self-hosted dashboard for audiobooks, AI chat, files, music, and more. No accounts, no tracking, no cloud fees. Just your machine, your data, your control.</p>
-      <p style="font-size:0.85em;opacity:0.6">Experimental alpha — things might break. Report bugs on GitHub.</p>
+      <div class="onboarding-name">
+        <label for="agent-name-input">Name your AI companion</label>
+        <input type="text" id="agent-name-input" placeholder="DeCloud" maxlength="40" autocomplete="off" autocapitalize="words">
+      </div>
+      <p style="font-size:0.85em;opacity:0.6">Your voice assistant will answer to this name. Change it anytime in Settings → Voice.</p>
     </div>
 
     <!-- Step 1: What's inside -->

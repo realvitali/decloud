@@ -1,7 +1,7 @@
 """DeCloud — shared state and helpers."""
 from flask import Flask, send_from_directory, jsonify, request, send_file, Response, stream_with_context
 from flask_sock import Sock
-import os, json, subprocess, platform, psutil, uuid, re, time, threading, secrets, hmac
+import os, sys, json, subprocess, platform, psutil, uuid, re, time, threading, secrets, hmac, shutil
 from pathlib import Path
 from functools import lru_cache
 import requests as _requests
@@ -31,6 +31,11 @@ def _load_env_file():
     if not env_path.exists():
         return
     try:
+        # Keys already present in the real environment (e.g. systemd
+        # EnvironmentFile) must NOT be overridden by .env. Everything else
+        # uses last-wins, so a duplicate key in .env resolves to the final
+        # line (correct .env semantics) rather than silently picking the first.
+        external = set(os.environ.keys())
         for raw in env_path.read_text(errors='replace').splitlines():
             line = raw.strip()
             if not line or line.startswith('#') or '=' not in line:
@@ -40,7 +45,7 @@ def _load_env_file():
             val = val.strip()
             if len(val) >= 2 and val[0] == val[-1] and val[0] in ('"', "'"):
                 val = val[1:-1]
-            if key and key not in os.environ:
+            if key and key not in external:
                 os.environ[key] = val
     except Exception:
         pass  # unreadable .env shouldn't crash the app
@@ -290,6 +295,24 @@ BOOKS_DIR = _env_path('DECLOUD_BOOKS_DIR', Path.home() / 'Books')
 AUDIO_DIR = BASE_DIR / 'audio_cache'
 AUDIO_DIR.mkdir(exist_ok=True)
 
+
+def reload_env_paths():
+    """Re-read DECLOUD_*_DIR from the environment into the module globals.
+
+    Called after Settings saves new paths to .env so library changes take
+    effect without an app restart. Code that reads shared.BOOKS_DIR /
+    shared.FILES_DIR / shared.MUSIC_DIR at request time sees the new
+    values immediately."""
+    global BOOKS_DIR, FILES_DIR, MUSIC_DIR, PIPER_DIR
+    BOOKS_DIR = _env_path('DECLOUD_BOOKS_DIR', Path.home() / 'Books')
+    FILES_DIR = _env_path('DECLOUD_FILES_DIR', Path.home())
+    MUSIC_DIR = _env_path('DECLOUD_MUSIC_DIR', Path.home() / 'Music')
+    PIPER_DIR = _env_path('DECLOUD_PIPER_DIR', Path.home() / '.local/share/piper')
+    try:
+        MUSIC_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+
 # Piper TTS voice models directory
 PIPER_DIR = _env_path('DECLOUD_PIPER_DIR', Path.home() / '.local/share/piper')
 
@@ -398,7 +421,7 @@ def get_text_up_to_position(text, word_index):
 
 # ─── File Browser ──────────────────────────────────────────────
 # The directory the Files app browses. Set DECLOUD_FILES_DIR in .env
-FILES_DIR = _env_path('DECLOUD_FILES_DIR', Path.home() / 'Files')
+FILES_DIR = _env_path('DECLOUD_FILES_DIR', Path.home())
 THUMB_CACHE_DIR = BASE_DIR / 'thumb_cache'
 THUMB_CACHE_DIR.mkdir(exist_ok=True)
 THUMB_SIZE = (200, 200)
@@ -433,20 +456,24 @@ def _generate_thumbnail(source_path: Path, size: tuple = THUMB_SIZE) -> Path | N
         return None
 
 def safe_join_browse(base, *parts):
-    """Safely join paths and ensure the result is within the base directory."""
+    """Join parts under base, resolving symlinks, and clamp any result that
+    escapes base. Uses real-path containment (is_relative_to), NOT a string
+    prefix check, so sibling directories with a shared name prefix can't
+    pass the check (e.g. /home/dallas vs /home/dallas2)."""
+    base = Path(base)
     result = base
     for part in parts:
-        if part == '..':
-            result = result.parent
-            if not str(result).startswith(str(base)) and result != base.parent:
-                result = base
-        elif part and part != '.':
+        if part and part != '.':
             result = result / part
-    # Ensure we stay within the mount
-    result = result.resolve()
-    if not str(result).startswith(str(FILES_DIR.resolve())):
-        result = FILES_DIR.resolve()
-    return result
+    base_resolved = base.resolve()
+    result_resolved = result.resolve()
+    try:
+        if result_resolved.is_relative_to(base_resolved):
+            return result_resolved
+    except AttributeError:  # Python < 3.9 fallback
+        if os.path.commonpath([str(base_resolved), str(result_resolved)]) == str(base_resolved):
+            return result_resolved
+    return base_resolved
 
 def format_size(size):
     """Format bytes as human-readable."""
@@ -483,21 +510,31 @@ def get_whisper_model(model_name='base'):
     return _whisper_model
 
 # Available TTS engines
+def piper_bin():
+    """Locate the piper executable (bundled by the piper-tts pip package,
+    or on PATH). Prefers the venv's own binary so it works under systemd
+    where PATH is minimal."""
+    exe = Path(sys.executable).with_name('piper')
+    if exe.exists():
+        return str(exe)
+    return shutil.which('piper') or 'piper'
+
+
 TTS_ENGINES = {
     'piper-lessac-high': {
         'name': 'Piper Lessac (High Quality)',
         'engine': 'piper',
-        'model': 'voices/en_US-lessac-high.onnx',
+        'model': str(PIPER_DIR / 'en_US-lessac-high.onnx'),
     },
     'piper-lessac-medium': {
         'name': 'Piper Lessac (Medium)',
         'engine': 'piper',
-        'model': 'voices/en_US-lessac-medium.onnx',
+        'model': str(PIPER_DIR / 'en_US-lessac-medium.onnx'),
     },
     'piper-kathleen-low': {
         'name': 'Piper Kathleen (Low)',
         'engine': 'piper',
-        'model': 'voices/en_US-kathleen-low.onnx',
+        'model': str(PIPER_DIR / 'en_US-kathleen-low.onnx'),
     },
     'browser': {
         'name': 'Browser Built-in (Instant)',
@@ -514,8 +551,170 @@ STT_ENGINES = {
     'browser': {'name': 'Browser Web Speech (No Install)', 'model': None},
 }
 
-# ─── Vui proxy URL ──────────────────────────────────────────────
-VUI_URL = os.environ.get('DECLOUD_VUI_URL', 'http://127.0.0.1:8081')
+# ─── Voice Agent config (modular engines: STT / LLM / TTS) ───────
+# Persisted in settings.json (non-secret) + .env (cloud API key only).
+# The voice agent reads these at request time so swaps apply immediately.
+VOICE_DEFAULTS = {
+    'agent_name': 'DeCloud',         # user-named companion (set in onboarding)
+    'stt': 'whisper-base',           # engine id from STT_ENGINES
+    'tts': 'piper-lessac-medium',    # engine id from TTS_ENGINES
+    'voice_access': 'basic',         # 'talk' | 'basic' | 'full'
+    'llm_backend': 'local',          # 'local' | 'cloud'
+    'llm_local_model': 'llama3.2',
+    'llm_cloud_provider': 'openai',  # 'openai' | 'anthropic' | 'openai-compatible'
+    'llm_cloud_model': 'gpt-4o-mini',
+    'llm_cloud_base_url': '',        # required for openai-compatible
+}
+
+# Human-friendly default model suggestions for the one-click pull.
+LLM_MODEL_SUGGESTIONS = [
+    'llama3.2:3b',
+    'qwen2.5:3b',
+    'llama3.1:8b',
+    'phi3:mini',
+    'gemma2:2b',
+    'mistral',
+]
+
+
+# ─── Voice Agent conversation memory ────────────────────────────
+VOICE_HISTORY_FILE = BASE_DIR / 'voice_history.json'
+VOICE_HISTORY_MAX = 40  # keep the last N messages in context
+
+
+def load_voice_history():
+    """Return the persisted voice conversation (list of role/content dicts)."""
+    if VOICE_HISTORY_FILE.exists():
+        try:
+            data = json.loads(VOICE_HISTORY_FILE.read_text())
+            if isinstance(data, list):
+                return data
+        except Exception:
+            pass
+    return []
+
+
+def save_voice_history(history):
+    """Persist the voice conversation (bounded to VOICE_HISTORY_MAX)."""
+    try:
+        VOICE_HISTORY_FILE.write_text(json.dumps(history[-VOICE_HISTORY_MAX:]))
+        return True
+    except Exception:
+        return False
+
+
+def reset_voice_history():
+    try:
+        if VOICE_HISTORY_FILE.exists():
+            VOICE_HISTORY_FILE.unlink()
+        return True
+    except Exception:
+        return False
+
+
+def get_voice_config():
+    """Return the current voice config merged over defaults."""
+    cfg = dict(VOICE_DEFAULTS)
+    voice = load_settings().get('voice')
+    if isinstance(voice, dict):
+        for k in VOICE_DEFAULTS:
+            if k in voice:
+                cfg[k] = voice[k]
+    return cfg
+
+
+def set_voice_config(updates):
+    """Persist voice config updates to settings.json. Returns True on success."""
+    settings = load_settings()
+    voice = dict(settings.get('voice') or {})
+    for k, v in updates.items():
+        if k in VOICE_DEFAULTS:
+            voice[k] = v
+    settings['voice'] = voice
+    return save_settings(settings)
+
+
+def _ollama_llm_complete(model, messages, temperature, max_tokens, timeout):
+    payload = {
+        'model': model,
+        'messages': messages,
+        'stream': False,
+        'options': {'temperature': temperature},
+    }
+    if max_tokens:
+        payload['options']['num_predict'] = max_tokens
+    resp = _requests.post(f'{OLLAMA_URL}/api/chat', json=payload, timeout=timeout)
+    resp.raise_for_status()
+    return resp.json().get('message', {}).get('content', '').strip()
+
+
+def _anthropic_llm_complete(api_key, model, messages, temperature, max_tokens, timeout):
+    system = ''
+    msgs = []
+    for m in messages:
+        role = m.get('role', 'user')
+        content = m.get('content', '')
+        if role == 'system':
+            system += content + '\n'
+        elif role in ('user', 'assistant'):
+            msgs.append({'role': role, 'content': content})
+    payload = {
+        'model': model,
+        'messages': msgs,
+        'max_tokens': max_tokens or 1024,
+        'temperature': temperature,
+    }
+    if system.strip():
+        payload['system'] = system.strip()
+    resp = _requests.post(
+        'https://api.anthropic.com/v1/messages',
+        json=payload,
+        headers={'x-api-key': api_key, 'anthropic-version': '2023-06-01'},
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    parts = [b.get('text', '') for b in data.get('content', []) if b.get('type') == 'text']
+    return ''.join(parts).strip()
+
+
+def _openai_llm_complete(base, api_key, model, messages, temperature, max_tokens, timeout):
+    payload = {'model': model, 'messages': messages, 'temperature': temperature}
+    if max_tokens:
+        payload['max_tokens'] = max_tokens
+    resp = _requests.post(
+        f'{base}/chat/completions',
+        json=payload,
+        headers={'Authorization': f'Bearer {api_key}'},
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    return resp.json()['choices'][0]['message']['content'].strip()
+
+
+def llm_complete(messages, temperature=0.3, max_tokens=None, model=None, timeout=60):
+    """Route a chat completion to the configured backend.
+
+    `model` only overrides the local (Ollama) model; cloud models are taken
+    from config. Raises on error so callers can fall back or report it.
+    """
+    cfg = get_voice_config()
+    if cfg.get('llm_backend') == 'cloud':
+        provider = cfg.get('llm_cloud_provider', 'openai')
+        cloud_model = cfg.get('llm_cloud_model') or 'gpt-4o-mini'
+        api_key = os.environ.get('DECLOUD_LLM_API_KEY', '').strip()
+        if not api_key:
+            raise RuntimeError('No API key configured for the cloud LLM')
+        if provider == 'anthropic':
+            return _anthropic_llm_complete(api_key, cloud_model, messages, temperature, max_tokens, timeout)
+        base = 'https://api.openai.com/v1'
+        if provider == 'openai-compatible':
+            base = (cfg.get('llm_cloud_base_url') or '').rstrip('/')
+            if not base:
+                raise RuntimeError('Base URL required for the OpenAI-compatible provider')
+        return _openai_llm_complete(base, api_key, cloud_model, messages, temperature, max_tokens, timeout)
+    local_model = model or cfg.get('llm_local_model') or LLM_MODEL
+    return _ollama_llm_complete(local_model, messages, temperature, max_tokens, timeout)
 
 # ─── Optional modules (set env vars to enable) ──────────────────
 # These features need external tools/config to work.
@@ -533,6 +732,55 @@ _network_last = {'bytes_sent': 0, 'bytes_recv': 0, 'ts': 0}
 
 # ─── Settings ───────────────────────────────────────────────────
 SETTINGS_FILE = BASE_DIR / 'settings.json'
+
+
+def load_settings():
+    """Read settings.json as a dict, tolerating a missing/corrupt file."""
+    if SETTINGS_FILE.exists():
+        try:
+            return json.loads(SETTINGS_FILE.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def save_settings(data):
+    """Persist the settings dict to settings.json. Returns True on success."""
+    try:
+        SETTINGS_FILE.write_text(json.dumps(data, indent=2))
+        return True
+    except Exception:
+        return False
+
+
+def set_env_value(key, value):
+    """Write key=value to .env (preserving other lines) and update the
+    running process environment. Replaces the first occurrence and drops
+    any duplicate lines so a key never appears twice. Used for secrets like
+    the cloud LLM API key and the access passcode."""
+    env_path = BASE_DIR / '.env'
+    try:
+        lines = env_path.read_text(errors='replace').splitlines() if env_path.exists() else []
+    except Exception:
+        return False
+    out = []
+    written = False
+    for line in lines:
+        if line.strip().startswith(key + '='):
+            if not written:
+                out.append(f'{key}={value}')
+                written = True
+            # else: drop duplicate line
+        else:
+            out.append(line)
+    if not written:
+        out.append(f'{key}={value}')
+    try:
+        env_path.write_text('\n'.join(out) + '\n')
+        os.environ[key] = value
+        return True
+    except Exception:
+        return False
 
 # ─── Telemetry ──────────────────────────────────────────────────
 TELEMETRY_DIR = BASE_DIR / 'telemetry'
@@ -578,5 +826,9 @@ def _read_logs(limit=100):
     return log_lines
 
 # ─── Music ──────────────────────────────────────────────────────
-MUSIC_DIR = _env_path('DECLOUD_MUSIC_DIR', Path.home() / 'Music' / 'decloud-music')
+MUSIC_DIR = _env_path('DECLOUD_MUSIC_DIR', Path.home() / 'Music')
+try:
+    MUSIC_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass  # read-only filesystem — music browsing will simply be empty
 MUSIC_EXTS = {'.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac'}

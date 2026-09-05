@@ -1,7 +1,7 @@
 """Settings/theme route."""
 from flask import Blueprint, jsonify, request
-import json
-from shared import BASE_DIR, SETTINGS_FILE, BOOKS_DIR, FILES_DIR, MUSIC_DIR
+import json, os
+import shared
 
 bp = Blueprint('settings', __name__)
 
@@ -13,7 +13,7 @@ _ENV_PATH_KEYS = {
 
 def _update_env_file(updates):
     """Persist DECLOUD_*_DIR values to .env, preserving everything else."""
-    env_path = BASE_DIR / '.env'
+    env_path = shared.BASE_DIR / '.env'
     try:
         lines = env_path.read_text(errors='replace').splitlines() if env_path.exists() else []
     except Exception:
@@ -45,9 +45,9 @@ def _update_env_file(updates):
 def settings_theme():
     if request.method == 'GET':
         theme = 'auto'
-        if SETTINGS_FILE.exists():
+        if shared.SETTINGS_FILE.exists():
             try:
-                theme = json.loads(SETTINGS_FILE.read_text()).get('theme', 'auto')
+                theme = json.loads(shared.SETTINGS_FILE.read_text()).get('theme', 'auto')
             except Exception:
                 pass
         return jsonify({'theme': theme})
@@ -57,23 +57,50 @@ def settings_theme():
     if theme not in ('auto', 'light', 'dark'):
         return jsonify({'error': 'invalid theme'}), 400
     settings = {}
-    if SETTINGS_FILE.exists():
+    if shared.SETTINGS_FILE.exists():
         try:
-            settings = json.loads(SETTINGS_FILE.read_text())
+            settings = json.loads(shared.SETTINGS_FILE.read_text())
         except Exception:
             pass
     settings['theme'] = theme
-    SETTINGS_FILE.write_text(json.dumps(settings, indent=2))
+    shared.SETTINGS_FILE.write_text(json.dumps(settings, indent=2))
     return jsonify({'theme': theme})
+
+
+@bp.route('/api/settings/experimental', methods=['GET', 'POST'])
+def settings_experimental():
+    """Experimental-apps flag (stored in settings.json alongside theme)."""
+    if request.method == 'GET':
+        experimental = False
+        if shared.SETTINGS_FILE.exists():
+            try:
+                experimental = json.loads(shared.SETTINGS_FILE.read_text()).get('experimental', False)
+            except Exception:
+                pass
+        return jsonify({'experimental': experimental})
+    data = request.get_json(silent=True) or {}
+    experimental = bool(data.get('experimental'))
+    settings = {}
+    if shared.SETTINGS_FILE.exists():
+        try:
+            settings = json.loads(shared.SETTINGS_FILE.read_text())
+        except Exception:
+            pass
+    settings['experimental'] = experimental
+    try:
+        shared.SETTINGS_FILE.write_text(json.dumps(settings, indent=2))
+    except Exception:
+        return jsonify({'error': 'could not write settings.json'}), 500
+    return jsonify({'experimental': experimental})
 
 
 @bp.route('/api/settings/paths', methods=['GET', 'POST'])
 def settings_paths():
     if request.method == 'GET':
         paths = {
-            'books': str(BOOKS_DIR),
-            'files': str(FILES_DIR),
-            'music': str(MUSIC_DIR),
+            'books': str(shared.BOOKS_DIR),
+            'files': str(shared.FILES_DIR),
+            'music': str(shared.MUSIC_DIR),
         }
         return jsonify(paths)
     # POST — persist to .env; takes effect after restart
@@ -87,4 +114,11 @@ def settings_paths():
         return jsonify({'error': 'no valid paths provided'}), 400
     if not _update_env_file(updates):
         return jsonify({'error': 'could not write .env (check permissions)'}), 500
-    return jsonify({'status': 'saved', 'note': 'restart required'})
+    # Apply immediately: update the process env + shared globals so the
+    # saved paths take effect without a restart.
+    for field, key in _ENV_PATH_KEYS.items():
+        if field in updates:
+            os.environ[key] = updates[field]
+    from shared import reload_env_paths
+    reload_env_paths()
+    return jsonify({'status': 'saved', 'note': 'Applied immediately'})

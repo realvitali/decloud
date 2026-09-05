@@ -64,3 +64,9 @@ __pycache__/
 settings.json
 run_tts.sh
 .update_meta.json
+
+# Runtime artifacts (never commit)
+*.pid
+tunnel.url
+voice_hermes_session.txt
+voice_history.json
