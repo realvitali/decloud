@@ -43,12 +43,6 @@ function onOllamaModelChange(model) {
   document.getElementById('ollama-messages').innerHTML = '<div class="ollama-welcome">Model switched to ' + model + '~</div>';
 }
 
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
 function simpleMarkdown(text) {
   return escapeHtml(text)
     .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => `<pre class="ollama-code">${escapeHtml(code)}</pre>`)

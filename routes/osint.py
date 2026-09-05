@@ -44,7 +44,7 @@ def osint_create_profile():
     mod = _load_osint()
     if not mod:
         return _not_configured()
-    data = request.json
+    data = request.get_json(silent=True) or {}
     pid = mod.create_profile(data.get('name', ''), data.get('info', {}))
     return jsonify({'id': pid, 'profile': mod.get_profile(pid)})
 
@@ -71,7 +71,7 @@ def osint_delete_profile(pid):
 def osint_run_scan():
     if not _osint_available():
         return _not_configured()
-    data = request.json
+    data = request.get_json(silent=True) or {}
     pid = data.get('profile_id', '')
     deep = data.get('deep', False)
     deep_flag = "--deep" if deep else ""

@@ -1,0 +1,24 @@
+Archived Vui UI markup (was in templates/index.html, voice overlay settings):
+
+```html
+<div class="voice-setting-row" style="border-top:1px solid rgba(255,255,255,0.1);padding-top:12px;margin-top:8px">
+  <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+    <input type="checkbox" id="voice-vui-toggle" onchange="saveVoiceSettings()" style="width:18px;height:18px;accent-color:#6366f1">
+    Use Vui (full-duplex voice AI)
+  </label>
+  <small style="opacity:0.6;font-size:11px;margin-top:4px;display:block">Vui handles STT+LLM+TTS in one pass with a neural voice. Overrides the settings above.</small>
+</div>
+<div class="voice-setting-row" id="vui-voice-picker" style="display:none;padding-top:12px;margin-top:4px">
+  <label>Vui Voice</label>
+  <select id="voice-vui-voice" onchange="switchVuiVoice()" style="width:100%;margin-top:4px">
+    <option value="abraham">Abraham</option>
+    <option value="harry">Harry</option>
+    <option value="maeve">Maeve</option>
+    <option value="rhian">Rhian</option>
+  </select>
+  <small style="opacity:0.6;font-size:11px;margin-top:2px;display:block">Pick the neural voice persona for Vui.</small>
+</div>
+```
+
+Capabilities toggle button text was "What can Vui do? &#9656;" — renamed to
+"What can I say?" in the active template.

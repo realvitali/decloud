@@ -80,6 +80,7 @@ let player = null;
 let audioChapterIdx = 0;
 let transcriptWords = [];
 let pollInterval = null;
+let isGenerating = false;
 
 // ─── Open Book ────────────────────────────────────────────
 async function openBook(bookId, title) {
@@ -667,6 +668,13 @@ function formatTime(sec) {
 }
 
 // ─── Generation Banner ───────────────────────────────────
+function setupPlayer() {
+  player = document.getElementById('audio-player');
+  player.removeEventListener('timeupdate', onTimeUpdate);
+  player.addEventListener('timeupdate', onTimeUpdate);
+  document.getElementById('audio-mode-btn').disabled = false;
+}
+
 function showGenBanner(progress) {
   const banner = document.getElementById('gen-banner');
   banner.style.display = 'block';

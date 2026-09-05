@@ -7,6 +7,9 @@ requests==2.34.2
 websocket-client==1.9.0
 cryptography==46.0.1
 
+# ─── Config parsing (Hermes agents) ──────────────
+pyyaml==6.0.3
+
 # ─── Books (PDF parsing, metadata) ────────────────
 pymupdf==1.28.0
 mutagen==1.48.1

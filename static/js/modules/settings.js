@@ -11,6 +11,7 @@ function switchSettingsTab(tabId) {
   if (panelId === 'st-panel-logs') loadSettingsLogs();
   if (panelId === 'st-panel-about') loadAbout();
   if (panelId === 'st-panel-paths') loadPaths();
+  if (panelId === 'st-panel-voice') loadVoicePanel();
 }
 
 function loadAbout() {
@@ -37,8 +38,25 @@ function loadSettings() {
       btn.classList.toggle('selected', btn.dataset.theme === theme);
     });
   }).catch(function() {});
+  // Load experimental-apps flag
+  fetch('/api/settings/experimental').then(function(r) { return r.json(); }).then(function(d) {
+    experimentalApps = !!d.experimental;
+    var toggle = document.getElementById('experimental-toggle');
+    if (toggle) toggle.checked = experimentalApps;
+    applyExperimentalApps();
+  }).catch(function() {});
   // Apply theme on load
   applyTheme();
+}
+
+function setExperimentalApps(enabled) {
+  experimentalApps = !!enabled;
+  fetch('/api/settings/experimental', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ experimental: experimentalApps })
+  }).catch(function() {});
+  applyExperimentalApps();
 }
 
 function loadPaths() {
@@ -63,7 +81,7 @@ function savePaths() {
     var el = document.getElementById('paths-save-note');
     if (el) {
       if (res.ok) {
-        el.textContent = '✓ Saved — restart DeCloud to apply';
+        el.textContent = '✓ Saved — applied immediately';
         el.className = 'settings-note settings-note-ok';
       } else {
         el.textContent = '✗ ' + (res.d.error || 'Save failed');
@@ -90,6 +108,293 @@ function setTheme(theme) {
   }).then(function() { applyTheme(); });
 }
 
+function changePin() {
+  var current = document.getElementById('pin-current').value.trim();
+  var newPin = document.getElementById('pin-new').value.trim();
+  var confirm = document.getElementById('pin-confirm').value.trim();
+  var note = document.getElementById('pin-note');
+  if (!note) return;
+
+  if (newPin !== confirm) {
+    note.textContent = '✗ New passcodes do not match';
+    note.className = 'settings-note settings-note-err';
+    return;
+  }
+  if (newPin.length < 8) {
+    note.textContent = '✗ New passcode must be at least 8 characters';
+    note.className = 'settings-note settings-note-err';
+    return;
+  }
+
+  fetch('/api/auth/pin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ current_pin: current, new_pin: newPin })
+  }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+  .then(function(res) {
+    if (res.ok) {
+      note.textContent = '✓ Passcode updated — signing out…';
+      note.className = 'settings-note settings-note-ok';
+      document.getElementById('pin-current').value = '';
+      document.getElementById('pin-new').value = '';
+      document.getElementById('pin-confirm').value = '';
+      setTimeout(function() { location.reload(); }, 1500);
+    } else {
+      note.textContent = '✗ ' + (res.d.error || 'Failed to change passcode');
+      note.className = 'settings-note settings-note-err';
+    }
+  }).catch(function() {
+    note.textContent = '✗ Network error';
+    note.className = 'settings-note settings-note-err';
+  });
+}
+
+// ─── Voice Assistant engine config (Settings → Voice) ──────────
+
+var _voiceStatus = null;
+
+function loadVoicePanel() {
+  fetch('/api/voice/status').then(function(r) { return r.json(); }).then(function(d) {
+    _voiceStatus = d;
+    var cfg = d.config || {};
+
+    // Name
+    var nameInput = document.getElementById('voicecfg-name');
+    if (nameInput) nameInput.value = cfg.agent_name || 'DeCloud';
+
+    // Brain (Hermes vs LLM fallback)
+    var hermes = d.hermes || {};
+    var brainEl = document.getElementById('voice-brain-status');
+    if (brainEl) {
+      brainEl.textContent = hermes.available
+        ? '✓ Using Hermes (' + hermes.bin + ')'
+        : '• Hermes not detected — falling back to the LLM below. Set the Hermes path or install Hermes for a smarter agent.';
+    }
+    var hermesHome = document.getElementById('voicecfg-hermes-home');
+    if (hermesHome) hermesHome.value = hermes.home || '~/.hermes';
+
+    // Access level
+    var accessSel = document.getElementById('voicecfg-access');
+    if (accessSel) accessSel.value = cfg.voice_access || 'basic';
+
+    // STT select
+    var sttSel = document.getElementById('voicecfg-stt');
+    if (sttSel) sttSel.innerHTML = (d.engines.stt || []).map(function(e) {
+      return '<option value="' + e.id + '"' + (e.id === cfg.stt ? ' selected' : '') + '>' + escapeHtml(e.name) + '</option>';
+    }).join('');
+
+    // TTS select
+    var ttsSel = document.getElementById('voicecfg-tts');
+    if (ttsSel) ttsSel.innerHTML = (d.engines.tts || []).map(function(e) {
+      var label = e.name + (e.installed === false ? ' (not installed)' : '');
+      return '<option value="' + e.id + '"' + (e.id === cfg.tts ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+    }).join('');
+
+    // Backend
+    var backendSel = document.getElementById('voicecfg-backend');
+    if (backendSel) backendSel.value = cfg.llm_backend || 'local';
+
+    // Local model select
+    var modelSel = document.getElementById('voicecfg-local-model');
+    if (modelSel) {
+      var models = d.models || [];
+      if (models.indexOf(cfg.llm_local_model) === -1 && cfg.llm_local_model) models.push(cfg.llm_local_model);
+      modelSel.innerHTML = models.map(function(m) {
+        return '<option value="' + escapeHtml(m) + '"' + (m === cfg.llm_local_model ? ' selected' : '') + '>' + escapeHtml(m) + '</option>';
+      }).join('') || '<option value="">(no models — install below)</option>';
+    }
+
+    // Cloud fields
+    var cp = document.getElementById('voicecfg-cloud-provider');
+    if (cp) cp.value = cfg.llm_cloud_provider || 'openai';
+    var cm = document.getElementById('voicecfg-cloud-model');
+    if (cm) cm.value = cfg.llm_cloud_model || '';
+    var cb = document.getElementById('voicecfg-cloud-base');
+    if (cb) cb.value = cfg.llm_cloud_base_url || '';
+    var ak = document.getElementById('voicecfg-api-key');
+    if (ak) { ak.value = ''; ak.placeholder = d.api_key && d.api_key.set ? (d.api_key.hint || 'key saved') : 'sk-…'; }
+
+    // Status line
+    renderVoiceSetupStatus(d);
+
+    voiceBackendChanged();
+    voiceCloudProviderChanged();
+  }).catch(function() {
+    var el = document.getElementById('voice-setup-status');
+    if (el) el.textContent = 'Could not load voice settings.';
+  });
+}
+
+function renderVoiceSetupStatus(d) {
+  var el = document.getElementById('voice-setup-status');
+  if (!el) return;
+  var parts = [];
+  parts.push(d.ollama.running
+    ? '✓ Ollama running (local AI ready)'
+    : (d.ollama.installed ? '⚠ Ollama installed but not running' : '• Ollama not installed — use the button below for local AI'));
+  parts.push(d.piper_available ? '✓ Piper TTS ready' : '• Piper TTS missing');
+  parts.push(d.whisper_available ? '✓ Whisper STT ready' : '• Whisper STT not installed (browser speech is default)');
+  parts.push(d.api_key && d.api_key.set ? '✓ Cloud API key saved' : '• No cloud API key');
+  el.textContent = parts.join('  •  ');
+  var ollamaNote = document.getElementById('voice-ollama-note');
+  if (ollamaNote) {
+    var j = d.setup_jobs || {};
+    var active = Object.keys(j).filter(function(k) { return j[k].state === 'running'; });
+    if (active.length) ollamaNote.textContent = j[active[0]].message;
+    else if (!d.ollama.running) ollamaNote.textContent = 'Install Ollama, then download a small model like llama3.2:3b to get started.';
+    else ollamaNote.textContent = 'Local models run on this machine — private, no API costs.';
+  }
+}
+
+function voiceBackendChanged() {
+  var backend = document.getElementById('voicecfg-backend');
+  if (!backend) return;
+  var isCloud = backend.value === 'cloud';
+  var localBlock = document.getElementById('voicecfg-local-block');
+  var cloudBlock = document.getElementById('voicecfg-cloud-block');
+  if (localBlock) localBlock.style.display = isCloud ? 'none' : '';
+  if (cloudBlock) cloudBlock.style.display = isCloud ? '' : 'none';
+}
+
+function clearVoiceMemory() {
+  fetch('/api/voice/reset', { method: 'POST' }).then(function() {
+    loadVoicePanel();
+  }).catch(function() {});
+}
+
+function saveHermesHome() {
+  var val = document.getElementById('voicecfg-hermes-home')?.value.trim();
+  if (!val) return;
+  fetch('/api/voice/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hermes_home: val })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    loadVoicePanel();
+  }).catch(function() {});
+}
+
+function voiceAccessChanged() {
+  var sel = document.getElementById('voicecfg-access');
+  if (!sel) return;
+  if (sel.value === 'full') {
+    // Require explicit confirmation before enabling unrestricted access.
+    document.getElementById('full-access-modal').style.display = 'flex';
+    return;
+  }
+  saveVoiceConfig();
+}
+
+function fullAccessConfirm(approved) {
+  document.getElementById('full-access-modal').style.display = 'none';
+  if (approved) {
+    saveVoiceConfig();
+  } else {
+    // Revert the select back to the previous (safe) value.
+    fetch('/api/voice/config').then(function(r) { return r.json(); }).then(function(d) {
+      var sel = document.getElementById('voicecfg-access');
+      if (sel) sel.value = (d.config && d.config.voice_access) || 'basic';
+    }).catch(function() {});
+  }
+}
+
+function voiceCloudProviderChanged() {
+  var cp = document.getElementById('voicecfg-cloud-provider');
+  var row = document.getElementById('voicecfg-cloud-base-row');
+  if (cp && row) row.style.display = cp.value === 'openai-compatible' ? '' : 'none';
+}
+
+function saveVoiceConfig() {
+  var payload = {
+    agent_name: document.getElementById('voicecfg-name')?.value,
+    stt: document.getElementById('voicecfg-stt')?.value,
+    tts: document.getElementById('voicecfg-tts')?.value,
+    voice_access: document.getElementById('voicecfg-access')?.value,
+    llm_backend: document.getElementById('voicecfg-backend')?.value,
+    llm_local_model: document.getElementById('voicecfg-local-model')?.value,
+    llm_cloud_provider: document.getElementById('voicecfg-cloud-provider')?.value,
+    llm_cloud_model: document.getElementById('voicecfg-cloud-model')?.value,
+    llm_cloud_base_url: document.getElementById('voicecfg-cloud-base')?.value
+  };
+  var apiKey = document.getElementById('voicecfg-api-key')?.value;
+  if (apiKey && apiKey.trim()) payload.api_key = apiKey.trim();
+  fetch('/api/voice/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.config && typeof window.onVoiceConfigChanged === 'function') window.onVoiceConfigChanged(d.config);
+    var note = document.getElementById('voice-api-key-note');
+    if (note) note.textContent = '✓ Saved';
+    setTimeout(function() { if (note) note.textContent = 'Your key is stored in .env on this machine only.'; }, 2000);
+    if (payload.api_key) { var ak = document.getElementById('voicecfg-api-key'); if (ak) ak.value = ''; }
+    if (_voiceStatus) renderVoiceSetupStatus(_voiceStatus);
+  }).catch(function() {
+    var note = document.getElementById('voice-api-key-note');
+    if (note) note.textContent = '✗ Save failed';
+  });
+}
+
+function installOllama() {
+  var note = document.getElementById('voice-ollama-note');
+  if (note) note.textContent = 'Starting Ollama install… (may require your sudo password in the terminal)';
+  fetch('/api/voice/ollama/install', { method: 'POST' }).then(function(r) { return r.json(); }).then(function(d) {
+    if (note) note.textContent = d.status === 'started' ? 'Installing… check back in a minute.' : (d.message || 'Started');
+    pollVoiceSetup();
+  }).catch(function() {
+    if (note) note.textContent = '✗ Could not start install';
+  });
+}
+
+function pullOllamaModel() {
+  var sel = document.getElementById('voicecfg-local-model');
+  var model = sel && sel.value ? sel.value : 'llama3.2:3b';
+  if (!model) return;
+  var note = document.getElementById('voice-ollama-note');
+  if (note) note.textContent = 'Downloading ' + model + '…';
+  fetch('/api/voice/ollama/pull', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: model })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.error) { if (note) note.textContent = '✗ ' + d.error; return; }
+    if (note) note.textContent = 'Downloading ' + model + '… check back in a minute.';
+    pollVoiceSetup();
+  }).catch(function() {
+    if (note) note.textContent = '✗ Could not start download';
+  });
+}
+
+function installVoice() {
+  var sel = document.getElementById('voicecfg-tts');
+  var engine = sel ? sel.value : '';
+  var note = document.getElementById('voice-tts-note');
+  if (!engine) return;
+  if (note) note.textContent = 'Downloading voice…';
+  fetch('/api/voice/tts/install', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ engine: engine })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.error) { if (note) note.textContent = '✗ ' + d.error; return; }
+    if (note) note.textContent = 'Downloading… check back in a minute.';
+    pollVoiceSetup();
+  }).catch(function() {
+    if (note) note.textContent = '✗ Could not start download';
+  });
+}
+
+function pollVoiceSetup() {
+  fetch('/api/voice/status').then(function(r) { return r.json(); }).then(function(d) {
+    _voiceStatus = d;
+    renderVoiceSetupStatus(d);
+    var jobs = d.setup_jobs || {};
+    var active = Object.keys(jobs).filter(function(k) { return jobs[k].state === 'running'; });
+    if (active.length) setTimeout(pollVoiceSetup, 5000);
+    else loadVoicePanel();
+  }).catch(function() {});
+}
+
 function applyTheme() {
   fetch('/api/settings/theme').then(function(r) { return r.json(); }).then(function(d) {
     var theme = d.theme || 'auto';
@@ -102,6 +407,17 @@ function applyTheme() {
   }).catch(function() {});
 }
 
+function devicePlatformLabel(osName, isLocal) {
+  var os = (osName || '').toLowerCase();
+  if (os === 'ios' || os === 'ipados') return 'iOS';
+  if (os === 'macos' || os === 'darwin') return 'macOS';
+  if (os === 'windows') return 'Windows';
+  if (os === 'linux') return isLocal ? 'This device' : 'Linux';
+  if (os === 'android') return 'Android';
+  if (isLocal) return 'This device';
+  return '';
+}
+
 function loadSettingsDevices() {
   fetch('/api/devices').then(function(r) { return r.json(); }).then(function(devices) {
     var el = document.getElementById('settings-devices-list');
@@ -110,12 +426,20 @@ function loadSettingsDevices() {
       el.innerHTML = '<div class="settings-empty">No devices found</div>';
       return;
     }
+    // Tailscale IP row — from this machine's own tailnet IP
+    var self = devices.find(function(d) { return d.is_local; });
+    var ipEl = document.getElementById('settings-tailscale-ip');
+    if (ipEl) ipEl.textContent = (self && self.ip) ? self.ip : '--';
+
     el.innerHTML = devices.map(function(d) {
+      var platform = devicePlatformLabel(d.os, d.is_local);
+      var label = d.is_local ? 'This device' : (d.name || d.ip || 'unknown');
+      var sub = d.dns && d.dns !== d.name ? d.dns : (d.ip || '');
       return '<div class="settings-device-row">' +
-        '<div class="settings-device-icon">' + (d.is_local ? 'Desktop' : 'Mobile') + '</div>' +
-        '<div class="settings-device-info"><div class="settings-device-name">' + escapeHtml(d.name || d.ip) + '</div>' +
-        '<div class="settings-device-ip">' + escapeHtml(d.ip) + '</div></div>' +
-        '<div class="settings-device-status ' + (d.active ? 'online' : 'offline') + '">' + (d.active ? 'connected' : 'offline') + '</div>' +
+        '<div class="settings-device-icon">' + escapeHtml(platform || '·') + '</div>' +
+        '<div class="settings-device-info"><div class="settings-device-name">' + escapeHtml(label) + '</div>' +
+        '<div class="settings-device-ip">' + escapeHtml(sub) + '</div></div>' +
+        '<div class="settings-device-status ' + (d.online ? 'online' : 'offline') + '">' + (d.online ? 'online' : 'offline') + '</div>' +
       '</div>';
     }).join('');
   }).catch(function() {

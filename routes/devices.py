@@ -1,70 +1,104 @@
-"""Devices route."""
-from flask import Blueprint, jsonify, request
-import json, subprocess, time, re
-from pathlib import Path
+"""Devices route — real device list from Tailscale + active connections."""
+from flask import Blueprint, jsonify
+import json, subprocess, time
 import psutil
-from shared import BASE_DIR
 
 bp = Blueprint('devices', __name__)
 
+APP_PORT = int(__import__('os').environ.get('DECLOUD_PORT', '8899'))
+
+
+def _tailscale_status():
+    """Return parsed `tailscale status --json` or {} if unavailable."""
+    try:
+        result = subprocess.run(['tailscale', 'status', '--json'],
+                                capture_output=True, text=True, timeout=5)
+        if result.returncode == 0 and result.stdout.strip():
+            return json.loads(result.stdout)
+    except Exception:
+        pass
+    return {}
+
+
+def _is_ipv4(ip):
+    return bool(ip) and ':' not in ip
+
+
 @bp.route('/api/devices')
 def devices():
-    """Return list of devices that have accessed the DeCloud app."""
-    devices = {}
+    """Return this machine + tailnet peers with real names, OS and status."""
+    out = []
 
-    # 1. Active TCP connections to port 8899
+    ts = _tailscale_status()
+
+    # 1. This machine (Self node)
+    self_node = ts.get('Self') or {}
+    self_ip = ''
+    for ip in (self_node.get('TailscaleIPs') or []):
+        if _is_ipv4(ip):
+            self_ip = ip
+            break
+    out.append({
+        'ip': self_ip,
+        'name': self_node.get('HostName') or 'this machine',
+        'dns': (self_node.get('DNSName') or '').rstrip('.'),
+        'os': self_node.get('OS') or '',
+        'online': True,
+        'is_local': True,
+        'last_seen': '',
+    })
+
+    # 2. Tailnet peers
+    for peer_id, peer in (ts.get('Peer') or {}).items():
+        # Skip infrastructure nodes (not real devices)
+        if peer.get('HostName') == 'funnel-ingress-node':
+            continue
+        ip = ''
+        for candidate in (peer.get('TailscaleIPs') or []):
+            if _is_ipv4(candidate):
+                ip = candidate
+                break
+        if not ip:
+            continue
+        host = peer.get('HostName') or ''
+        dns = (peer.get('DNSName') or '').rstrip('.')
+        # Tailscale's default hostname is 'localhost' — prefer the DNS
+        # machine name (e.g. 'iphone-15-pro-max.tail44f1bb.ts.net').
+        dns_short = dns.split('.')[0] if dns else ''
+        if host and host.lower() not in ('localhost', 'unknown'):
+            name = host
+        else:
+            name = dns_short or host or ip
+        out.append({
+            'ip': ip,
+            'name': name,
+            'dns': dns,
+            'os': peer.get('OS') or '',
+            'online': bool(peer.get('Online')),
+            'is_local': False,
+            'last_seen': peer.get('LastHandshake') or peer.get('LastSeen') or '',
+        })
+
+    # 3. Active connections to the app that aren't tailnet peers
+    #    (LAN clients, localhost browser sessions) — merge by IP.
+    known_ips = {d['ip'] for d in out if d['ip']}
     try:
         for c in psutil.net_connections(kind='inet'):
-            if c.laddr and c.laddr.port == 8899 and c.raddr:
+            if c.laddr and c.laddr.port == APP_PORT and c.raddr:
                 ip = c.raddr.ip
-                if ip not in devices:
-                    devices[ip] = {'ip': ip, 'last_seen': time.strftime('%Y-%m-%d %H:%M:%S'), 'name': ''}
+                if ip in known_ips or ':' in ip:
+                    continue
+                known_ips.add(ip)
+                out.append({
+                    'ip': ip,
+                    'name': '',
+                    'dns': '',
+                    'os': '',
+                    'online': True,
+                    'is_local': False,
+                    'last_seen': time.strftime('%Y-%m-%dT%H:%M:%S'),
+                })
     except (psutil.AccessDenied, PermissionError):
         pass
 
-    # 2. Tailscale devices
-    try:
-        result = subprocess.run(['tailscale', 'status', '--json'], capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            ts = json.loads(result.stdout)
-            for peer_id, peer in ts.get('Peer', {}).items():
-                # Skip funnel ingress nodes (infrastructure, not real devices)
-                if peer.get('HostName') == 'funnel-ingress-node':
-                    continue
-                # Skip IPv6 addresses (use IPv4 only)
-                ip = peer.get('TailscaleIPs', [''])[0] if peer.get('TailscaleIPs') else ''
-                if not ip or ':' in ip:
-                    continue
-                name = peer.get('HostName', '') or peer.get('DNSName', '').rstrip('.') or ''
-                if ip not in devices:
-                    devices[ip] = {'ip': ip, 'last_seen': peer.get('LastSeen', '') or '', 'name': name}
-                else:
-                    if not devices[ip]['name']:
-                        devices[ip]['name'] = name
-    except Exception:
-        pass
-
-    # 3. Parse access logs (nginx + Flask) for IPs
-    log_files = [
-        '/var/log/nginx/access.log',
-        '/var/log/nginx/decloud_access.log',
-        str(BASE_DIR / 'app.log'),
-    ]
-    for lf in log_files:
-        try:
-            p = Path(lf)
-            if not p.exists():
-                continue
-            # read last 200 lines for efficiency
-            lines = p.read_text(errors='replace').splitlines()[-200:]
-            for line in lines:
-                m = re.match(r'(\d{1,3}(?:\.\d{1,3}){3})|([0-9a-fA-F:]+)', line)
-                if not m:
-                    continue
-                ip = m.group(1) or m.group(2)
-                if ip and ip not in devices:
-                    devices[ip] = {'ip': ip, 'last_seen': '', 'name': ''}
-        except Exception:
-            pass
-
-    return jsonify(list(devices.values()))
+    return jsonify(out)

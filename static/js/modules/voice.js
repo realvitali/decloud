@@ -8,11 +8,8 @@ let voiceConversation = [];
 let pendingCommand = null;
 let voiceSettings = {
   stt: 'whisper-base',
-  llm: 'qwen2.5:14b-instruct-q4_K_M',
-  tts: 'piper-lessac-high',
-  vui: false,
-  hermes: false,
-  vuiVoice: 'abraham',
+  llm: 'llama3.2',
+  tts: 'piper-lessac-medium',
 };
 
 // Load settings from localStorage
@@ -21,19 +18,19 @@ try {
   voiceSettings = { ...voiceSettings, ...saved };
 } catch (e) {}
 
-function saveVoiceSettings() {
-  voiceSettings.stt = document.getElementById('voice-stt-select').value;
-  voiceSettings.llm = document.getElementById('voice-llm-select').value;
-  voiceSettings.tts = document.getElementById('voice-tts-select').value;
-  voiceSettings.vui = document.getElementById('voice-vui-toggle').checked;
-  voiceSettings.hermes = document.getElementById('voice-hermes-toggle').checked;
-  // Hermes and Vui are mutually exclusive
-  if (voiceSettings.hermes && voiceSettings.vui) {
-    voiceSettings.vui = false;
-    document.getElementById('voice-vui-toggle').checked = false;
-  }
-  localStorage.setItem('voiceSettings', JSON.stringify(voiceSettings));
-  updateVuiVoicePicker();
+// The server config (Settings → Voice) is the source of truth across
+// devices. Merge it over localStorage so engine swaps persist everywhere.
+async function syncVoiceSettingsFromServer() {
+  try {
+    const r = await fetch('/api/voice/config');
+    const d = await r.json();
+    const cfg = d.config || {};
+    if (cfg.stt) voiceSettings.stt = cfg.stt;
+    if (cfg.tts) voiceSettings.tts = cfg.tts;
+    if (cfg.llm_local_model) voiceSettings.llm = cfg.llm_local_model;
+    delete voiceSettings.hermes; // legacy flag — no longer used
+    localStorage.setItem('voiceSettings', JSON.stringify(voiceSettings));
+  } catch (e) { /* server unreachable — keep localStorage */ }
 }
 
 function toggleVoice() {
@@ -44,25 +41,55 @@ function toggleVoice() {
   }
 }
 
+// ─── Microphone permission ───
+
+function micPermissionGranted() {
+  return sessionStorage.getItem('decloud_mic_granted') === '1';
+}
+
+function showPermissionButton() {
+  const btn = document.getElementById('voice-perm-btn');
+  if (btn) btn.style.display = 'flex';
+  document.getElementById('voice-status').textContent = 'Microphone access needed';
+  setVoiceState('idle');
+}
+
+function hidePermissionButton() {
+  const btn = document.getElementById('voice-perm-btn');
+  if (btn) btn.style.display = 'none';
+}
+
+async function requestMicPermission() {
+  unlockAudio();
+  const status = document.getElementById('voice-status');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop());
+    sessionStorage.setItem('decloud_mic_granted', '1');
+    hidePermissionButton();
+    startAutoListen();
+  } catch (e) {
+    status.textContent = 'Microphone blocked — enable it in your browser settings';
+  }
+}
+
 function openVoice() {
+  unlockAudio();
   voiceOpen = true;
   document.getElementById('voice-overlay').classList.add('active');
   document.getElementById('voice-orb').style.display = 'none';
   setVoiceMode('voice');
   loadVoiceSettings().then(() => {
-    // Auto-start based on mode
-    if (voiceSettings.hermes) {
-      // Hermes mode auto-starts listening
-      setTimeout(() => startHermesRecording(), 500);
-    } else if (voiceSettings.vui && !vuiConnected) {
-      startVuiStreaming();
+    if (micPermissionGranted()) {
+      startAutoListen();
+    } else {
+      showPermissionButton();
     }
   });
 }
 
 function closeVoice() {
   if (autoListenActive) stopAutoListen();
-  if (vuiConnected) stopVuiStreaming();
   voiceOpen = false;
   document.getElementById('voice-overlay').classList.remove('active');
   // Restore orb only if we're on the home screen
@@ -70,11 +97,11 @@ function closeVoice() {
   document.getElementById('voice-orb').style.display = homeActive ? '' : 'none';
   stopListening();
   setVoiceState('idle');
+  hidePermissionButton();
   document.getElementById('voice-transcript').textContent = '';
   document.getElementById('voice-response').textContent = '';
   document.getElementById('voice-response').classList.remove('fade-out');
   document.getElementById('voice-confirm').style.display = 'none';
-  document.getElementById('voice-settings').style.display = 'none';
   // Reset mute state
   micMuted = false;
   updateMuteButton();
@@ -87,7 +114,7 @@ function setVoiceState(state) {
 
   const statusEl = document.getElementById('voice-status');
   const statusMap = {
-    idle: voiceSettings.hermes ? 'Tap to talk' : (voiceSettings.vui ? 'Tap to start' : 'Tap mic to speak'),
+    idle: 'Tap mic to speak',
     listening: 'Listening...',
     thinking: 'Processing...',
     speaking: 'Speaking...',
@@ -118,7 +145,6 @@ function setVoiceMode(mode) {
     voiceView.style.display = 'none';
     textView.style.display = '';
     // Stop voice listening when switching to text
-    if (vuiConnected) stopVuiStreaming();
     if (autoListenActive) stopAutoListen();
     setVoiceState('idle');
   }
@@ -132,35 +158,14 @@ function toggleMute() {
 
   if (voiceMode !== 'voice') return;
 
-  if (voiceSettings.hermes) {
-    // Hermes mode: mute stops recording, unmute starts listening
-    if (micMuted) {
-      stopListening();
-      setVoiceState('idle');
-      document.getElementById('voice-status').textContent = 'Muted';
-    } else {
-      startHermesRecording();
-    }
-  } else if (voiceSettings.vui) {
-    // In Vui mode, mute = stop sending audio (disconnect stream), unmute = restart
-    if (micMuted) {
-      if (vuiConnected) stopVuiStreaming();
-      setVoiceState('idle');
-      document.getElementById('voice-status').textContent = 'Muted';
-    } else {
-      if (!vuiConnected) startVuiStreaming();
-    }
+  if (micMuted) {
+    if (autoListenActive) stopAutoListen();
+    stopListening();
+    setVoiceState('idle');
+    document.getElementById('voice-status').textContent = 'Muted';
   } else {
-    // Non-Vui mode: mute stops any active recording
-    if (micMuted) {
-      if (autoListenActive) stopAutoListen();
-      stopListening();
-      setVoiceState('idle');
-      document.getElementById('voice-status').textContent = 'Muted';
-    } else {
-      // Start auto-listen for hands-free mode
-      startAutoListen();
-    }
+    // Start auto-listen for hands-free mode
+    startAutoListen();
   }
 }
 
@@ -190,7 +195,7 @@ function toggleCapabilities() {
   if (!list || !toggle) return;
   const isOpen = list.classList.toggle('open');
   toggle.classList.toggle('open', isOpen);
-  toggle.innerHTML = isOpen ? 'What can Vui do? &#9662;' : 'What can Vui do? &#9656;';
+  toggle.innerHTML = isOpen ? 'What can I say? &#9662;' : 'What can I say? &#9656;';
 }
 
 // ─── Text chat (in voice overlay) ───
@@ -222,19 +227,11 @@ async function sendVoiceTextMessage() {
   voiceChatHistory.push({ role: 'user', content: text });
   voiceConversation.push({ role: 'user', content: text });
 
-  const apiMessages = [...voiceConversation];
-
-  let fullResponse = '';
-
   try {
-    const resp = await fetch('/api/voice/intent', {
+    const resp = await fetch('/api/voice/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        model: voiceSettings.llm,
-        conversation: apiMessages,
-      }),
+      body: JSON.stringify({ text }),
     });
 
     const data = await resp.json();
@@ -244,18 +241,10 @@ async function sendVoiceTextMessage() {
       return;
     }
 
-    const action = data.action;
-    if (action.action === 'respond' || action.action === 'chat') {
-      const message = action.message || '';
-      fullResponse = message;
-      aiBubble.innerHTML = escapeHtml(message).replace(/\n/g, '<br>');
-      voiceConversation.push({ role: 'assistant', content: message });
-      voiceChatHistory.push({ role: 'assistant', content: message });
-    } else {
-      // Handle other actions (navigate, play, etc.)
-      aiBubble.innerHTML = `Action: ${escapeHtml(action.action)}`;
-      await executeVoiceAction(action);
-    }
+    const message = data.reply || '';
+    aiBubble.innerHTML = escapeHtml(message).replace(/\n/g, '<br>');
+    voiceConversation.push({ role: 'assistant', content: message });
+    voiceChatHistory.push({ role: 'assistant', content: message });
   } catch (e) {
     aiBubble.innerHTML = `<span style="color:#f87171">Error: ${e.message}</span>`;
   }
@@ -289,86 +278,9 @@ function hideChatHistory(event) {
   document.getElementById('chat-history-modal').style.display = 'none';
 }
 
-function toggleVoiceSettings() {
-  const s = document.getElementById('voice-settings');
-  s.style.display = s.style.display === 'none' ? 'flex' : 'none';
-}
-
 async function loadVoiceSettings() {
-  // Populate dropdowns
-  try {
-    const [enginesResp, modelsResp] = await Promise.all([
-      fetch('/api/voice/engines'),
-      fetch('/api/ollama/models'),
-    ]);
-    const engines = await enginesResp.json();
-    const models = await modelsResp.json();
-
-    // STT select
-    const sttSel = document.getElementById('voice-stt-select');
-    sttSel.innerHTML = engines.stt.map(e =>
-      `<option value="${e.id}" ${e.id === voiceSettings.stt ? 'selected' : ''}>${e.name}</option>`
-    ).join('');
-
-    // LLM select
-    const llmSel = document.getElementById('voice-llm-select');
-    llmSel.innerHTML = models.models.map(m =>
-      `<option value="${m.name}" ${m.name === voiceSettings.llm ? 'selected' : ''}>${m.name} (${m.size_human})</option>`
-    ).join('');
-
-    // TTS select
-    const ttsSel = document.getElementById('voice-tts-select');
-    ttsSel.innerHTML = engines.tts.map(e =>
-      `<option value="${e.id}" ${e.id === voiceSettings.tts ? 'selected' : ''}>${e.name}</option>`
-    ).join('');
-
-    // Vui toggle
-    document.getElementById('voice-vui-toggle').checked = voiceSettings.vui || false;
-    // Hermes toggle
-    const hermesToggle = document.getElementById('voice-hermes-toggle');
-    if (hermesToggle) hermesToggle.checked = voiceSettings.hermes || false;
-    updateVuiVoicePicker();
-
-    // Load Vui voices dynamically
-    try {
-      const voicesResp = await fetch('/api/voice/vui/voices');
-      const voicesData = await voicesResp.json();
-      if (voicesData.prompts) {
-        const voiceSel = document.getElementById('voice-vui-voice');
-        voiceSel.innerHTML = voicesData.prompts.map(v =>
-          `<option value="${v.name}" ${v.name === voiceSettings.vuiVoice ? 'selected' : ''}>${v.name.charAt(0).toUpperCase() + v.name.slice(1)}</option>`
-        ).join('');
-      }
-    } catch (e) {
-      console.log('[Vui] Could not fetch voices:', e);
-    }
-  } catch (e) {
-    console.error('Voice settings load error:', e);
-  }
-}
-
-function updateVuiVoicePicker() {
-  const enabled = document.getElementById('voice-vui-toggle').checked;
-  const picker = document.getElementById('vui-voice-picker');
-  if (picker) picker.style.display = enabled ? '' : 'none';
-}
-
-async function switchVuiVoice() {
-  const voiceName = document.getElementById('voice-vui-voice').value;
-  voiceSettings.vuiVoice = voiceName;
-  localStorage.setItem('voiceSettings', JSON.stringify(voiceSettings));
-  console.log('[Vui] Switching voice to:', voiceName);
-  try {
-    const resp = await fetch('/api/voice/vui/voice', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ voice: voiceName }),
-    });
-    const data = await resp.json();
-    console.log('[Vui] Voice switch result:', data);
-  } catch (e) {
-    console.error('[Vui] Voice switch failed:', e);
-  }
+  // Engine config lives in Settings → Voice; just sync it here.
+  await syncVoiceSettingsFromServer();
 }
 
 // ─── Recording ───
@@ -376,18 +288,6 @@ async function switchVuiVoice() {
 async function startListening() {
   if (voiceState === 'listening') {
     stopListening();
-    return;
-  }
-
-  // Check if using browser STT (skip if Vui mode)
-  if (voiceSettings.vui) {
-    startVuiRecording();
-    return;
-  }
-
-  // Hermes mode: record audio, send to /api/voice/hermes (STT+LLM+TTS in one call)
-  if (voiceSettings.hermes) {
-    startHermesRecording();
     return;
   }
 
@@ -444,7 +344,7 @@ function stopListening() {
 function startBrowserSTT() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
-    document.getElementById('voice-status').textContent = 'Browser STT not supported. Use Whisper.';
+    document.getElementById('voice-status').textContent = 'Browser speech not supported — switch STT to Whisper in Settings → Voice.';
     return;
   }
 
@@ -454,6 +354,12 @@ function startBrowserSTT() {
   recognition.lang = 'en-US';
 
   window.browserSTT = { recognition };
+  let gotFinal = false;
+
+  recognition.onstart = () => {
+    setVoiceState('listening');
+    document.getElementById('voice-status').textContent = 'Listening…';
+  };
 
   recognition.onresult = (event) => {
     let interim = '';
@@ -468,330 +374,39 @@ function startBrowserSTT() {
     }
     if (interim) document.getElementById('voice-transcript').textContent = interim;
     if (final) {
+      gotFinal = true;
       document.getElementById('voice-transcript').textContent = final;
       processVoiceCommand(final);
     }
   };
 
   recognition.onerror = (e) => {
-    setVoiceState('idle');
-    document.getElementById('voice-status').textContent = 'Error: ' + e.error;
+    if (e.error === 'no-speech') {
+      setVoiceState('idle');
+      document.getElementById('voice-status').textContent = "Didn't hear anything — try again";
+    } else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      setVoiceState('idle');
+      showPermissionButton();
+    } else {
+      setVoiceState('idle');
+      document.getElementById('voice-status').textContent = 'Speech error: ' + e.error;
+    }
   };
 
   recognition.onend = () => {
-    if (voiceState === 'listening') setVoiceState('thinking');
+    // If recognition ended without producing a final result, don't hang.
+    if (!gotFinal && voiceState === 'listening') {
+      setVoiceState('idle');
+      document.getElementById('voice-status').textContent = "Didn't catch that — tap the mic to try again";
+    }
   };
 
-  recognition.start();
-  setVoiceState('listening');
-}
-
-// ─── Hermes voice mode (STT + LLM + TTS round-trip) ───
-
-async function startHermesRecording() {
   try {
-    voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    voiceAudioChunks = [];
-
-    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
-    voiceRecorder = new MediaRecorder(voiceStream, { mimeType: mime });
-
-    voiceRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) voiceAudioChunks.push(e.data);
-    };
-
-    voiceRecorder.onstop = async () => {
-      const audioBlob = new Blob(voiceAudioChunks, { type: mime });
-      await sendToHermesVoice(audioBlob);
-    };
-
-    voiceRecorder.start();
-    setVoiceState('listening');
-    document.getElementById('voice-transcript').textContent = '';
-    document.getElementById('voice-response').textContent = '';
-    document.getElementById('voice-response').classList.remove('fade-out');
-    document.getElementById('voice-confirm').style.display = 'none';
-  } catch (e) {
-    document.getElementById('voice-status').textContent = 'Mic access denied';
-    console.error('Hermes mic error:', e);
-  }
-}
-
-async function sendToHermesVoice(audioBlob) {
-  setVoiceState('thinking');
-  document.getElementById('voice-status').textContent = 'Processing...';
-
-  const formData = new FormData();
-  formData.append('audio', audioBlob, 'recording.webm');
-  formData.append('stt_model', voiceSettings.stt);
-  formData.append('model', voiceSettings.llm);
-  formData.append('tts_engine', voiceSettings.tts);
-  formData.append('conversation', JSON.stringify(voiceConversation));
-
-  try {
-    const resp = await fetch('/api/voice/hermes', { method: 'POST', body: formData });
-    const data = await resp.json();
-
-    if (data.error) {
-      setVoiceState('idle');
-      document.getElementById('voice-status').textContent = 'Error: ' + data.error;
-      return;
-    }
-
-    const transcript = data.transcript || '';
-    const reply = data.reply || '';
-    const audioUrl = data.audio || '';
-
-    // Show transcript
-    document.getElementById('voice-transcript').textContent = transcript;
-
-    // Show reply text
-    document.getElementById('voice-response').textContent = reply;
-    document.getElementById('voice-response').classList.add('fade-in');
-
-    // Save to conversation history
-    voiceConversation.push({ role: 'user', content: transcript });
-    voiceConversation.push({ role: 'assistant', content: reply });
-
-    // Play TTS audio
-    if (audioUrl) {
-      setVoiceState('speaking');
-      const audio = new Audio(audioUrl);
-      audio.onended = () => {
-        setVoiceState('idle');
-        // Auto-listen for hands-free back-and-forth
-        if (!micMuted && voiceOpen && voiceSettings.hermes) {
-          setTimeout(() => startHermesRecording(), 500);
-        }
-      };
-      audio.onerror = () => setVoiceState('idle');
-      audio.play();
-    } else {
-      setVoiceState('idle');
-    }
+    recognition.start();
   } catch (e) {
     setVoiceState('idle');
-    document.getElementById('voice-status').textContent = 'Error: ' + e.message;
+    document.getElementById('voice-status').textContent = 'Could not start speech: ' + (e.message || e);
   }
-}
-
-// ─── Vui full-duplex mode (WebRTC streaming) ───
-
-let vuiPC = null;
-let vuiWS = null;
-let vuiMicStream = null;
-let vuiRemoteAudio = null;
-let vuiConnected = false;
-let vuiClientId = null;
-
-async function startVuiStreaming() {
-  if (vuiConnected) return;
-
-  try {
-    // Unlock audio context for mobile
-    try {
-      const unlockCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const unlockOsc = unlockCtx.createOscillator();
-      const unlockGain = unlockCtx.createGain();
-      unlockGain.gain.value = 0.0001;
-      unlockOsc.connect(unlockGain);
-      unlockGain.connect(unlockCtx.destination);
-      unlockOsc.start();
-      unlockOsc.stop(unlockCtx.currentTime + 0.001);
-      unlockCtx.resume();
-    } catch (e) {}
-
-    // Get mic
-    vuiMicStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 48000 }
-    });
-
-    // Create client ID
-    vuiClientId = sessionStorage.getItem('vui_cid');
-    if (!vuiClientId) {
-      vuiClientId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
-      sessionStorage.setItem('vui_cid', vuiClientId);
-    }
-
-    // Connect WebSocket to Vui through Flask proxy.
-    // Pass the session token as a query parameter — browsers cannot set
-    // auth headers on WebSocket connections and SameSite cookies are not
-    // sent cross-origin (tunnel URLs).
-    const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const sess = sessionStorage.getItem('decloud_session') || '';
-    vuiWS = new WebSocket(`${wsProto}://${location.host}/api/voice/vui/ws?cid=${encodeURIComponent(vuiClientId)}` +
-      (sess ? `&token=${encodeURIComponent(sess)}` : ''));
-
-    vuiWS.onopen = async () => {
-      console.log('[Vui] WS connected, setting up WebRTC...');
-      setVoiceState('listening');
-      document.getElementById('voice-status').textContent = micMuted ? 'Muted' : 'Listening... just talk';
-      document.getElementById('voice-transcript').textContent = '';
-      document.getElementById('voice-response').textContent = '';
-      document.getElementById('voice-response').classList.remove('fade-out');
-
-      // Setup WebRTC
-      await connectVuiWebRTC();
-      // Send VAD mode on
-      vuiWS.send(JSON.stringify({ type: 'vad_mode', enabled: true }));
-    };
-
-    vuiWS.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        console.log('[Vui WS]', data.type, data.text?.slice(0, 60) || '');
-
-        if (data.type === 'partial' || data.type === 'partial_asr') {
-          // Show live transcript as you speak
-          document.getElementById('voice-transcript').textContent = data.text;
-        } else if (data.type === 'transcription') {
-          document.getElementById('voice-transcript').textContent = data.text;
-          // Clear any previous response, remove fade
-          const respEl = document.getElementById('voice-response');
-          respEl.textContent = '';
-          respEl.classList.remove('fade-out');
-          setVoiceState('thinking');
-          document.getElementById('voice-status').textContent = 'Thinking...';
-        } else if (data.type === 'reply') {
-          const respEl = document.getElementById('voice-response');
-          respEl.classList.remove('fade-out');
-          // Show only current response — replace, not stack
-          const current = respEl.textContent;
-          const sep = data.text && '.,!?;:)]}'.indexOf(data.text[0]) === -1 ? ' ' : '';
-          respEl.textContent = current + sep + data.text;
-          setVoiceState('speaking');
-          document.getElementById('voice-status').textContent = 'Speaking...';
-        } else if (data.type === 'vad_start') {
-          setVoiceState('listening');
-          document.getElementById('voice-status').textContent = 'Listening...';
-          // Clear transcript on new voice activity
-          document.getElementById('voice-transcript').textContent = '';
-        } else if (data.type === 'vad_stop') {
-          setVoiceState('thinking');
-          document.getElementById('voice-status').textContent = 'Processing...';
-        } else if (data.type === 'turn_done') {
-          // Save conversation to history
-          const userText = document.getElementById('voice-transcript').textContent;
-          const aiText = document.getElementById('voice-response').textContent;
-          if (userText) voiceConversation.push({ role: 'user', content: userText });
-          if (aiText) voiceConversation.push({ role: 'assistant', content: aiText });
-          // Clear transcript for next turn
-          document.getElementById('voice-transcript').textContent = '';
-          // Fade out response after 3 seconds
-          const respEl = document.getElementById('voice-response');
-          if (respEl.textContent.trim()) {
-            setTimeout(() => {
-              respEl.classList.add('fade-out');
-            }, 3000);
-          }
-          setVoiceState('listening');
-          document.getElementById('voice-status').textContent = micMuted ? 'Muted' : 'Listening... just talk';
-        } else if (data.type === 'status') {
-          document.getElementById('voice-status').textContent = data.text;
-        } else if (data.type === 'workers_ready') {
-          console.log('[Vui] workers ready');
-          setVoiceState('listening');
-          document.getElementById('voice-status').textContent = 'Listening... just talk';
-        } else if (data.type === 'busy') {
-          setVoiceState('idle');
-          document.getElementById('voice-status').textContent = 'Vui busy: ' + (data.reason || 'session taken');
-        } else if (data.type === 'error') {
-          setVoiceState('idle');
-          document.getElementById('voice-status').textContent = 'Vui: ' + data.text;
-        }
-      } catch (err) {
-        console.error('[Vui WS] parse error', err);
-      }
-    };
-
-    vuiWS.onerror = () => {
-      console.error('[Vui] WS error');
-      document.getElementById('voice-status').textContent = 'Vui connection error';
-    };
-
-    vuiWS.onclose = () => {
-      console.log('[Vui] WS closed');
-      vuiConnected = false;
-      if (voiceState === 'listening' || voiceState === 'thinking') setVoiceState('idle');
-    };
-
-  } catch (e) {
-    document.getElementById('voice-status').textContent = 'Mic access denied';
-    console.error('[Vui] mic error:', e);
-  }
-}
-
-async function connectVuiWebRTC() {
-  if (vuiPC) { vuiPC.close(); vuiPC = null; }
-
-  vuiPC = new RTCPeerConnection({ iceServers: [] });
-  vuiMicStream.getAudioTracks().forEach(t => vuiPC.addTrack(t, vuiMicStream));
-
-  if (!vuiRemoteAudio) {
-    vuiRemoteAudio = document.createElement('audio');
-    vuiRemoteAudio.autoplay = true;
-    vuiRemoteAudio.volume = 1.0;
-    document.body.appendChild(vuiRemoteAudio);
-  }
-
-  vuiPC.ontrack = (e) => {
-    console.log('[Vui] got remote audio track');
-    vuiRemoteAudio.srcObject = e.streams[0];
-    setTimeout(() => {
-      vuiRemoteAudio.play().catch(err => console.warn('[Vui] autoplay blocked:', err));
-    }, 200);
-    console.log('[Vui] remote audio attached, pre-buffering 200ms');
-  };
-
-  const offer = await vuiPC.createOffer();
-
-  // Munge SDP to force high-quality Opus: max bitrate, no DTX, stereo
-  // Use \r?\n to match both \r\n and \n line endings
-  offer.sdp = offer.sdp.replace(
-    /a=fmtp:(\d+) opus\/48000\/2\r?\n/,
-    (match, pt) => match.replace(/\r?\n$/, ';maxaveragebitrate=510000;usedtx=0;stereo=1;cbr=1\r\n')
-  );
-  console.log('[Vui] SDP munged for high-quality Opus');
-
-  await vuiPC.setLocalDescription(offer);
-
-  const resp = await fetch('/api/voice/vui/offer', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sdp: vuiPC.localDescription.sdp, type: vuiPC.localDescription.type }),
-  });
-  const answer = await resp.json();
-  if (answer.error) {
-    console.error('[Vui] offer error:', answer.error);
-    document.getElementById('voice-status').textContent = 'Vui: ' + answer.error;
-    return;
-  }
-
-  // Also munge the answer SDP to force high-quality Opus on the return path
-  if (answer.sdp) {
-    answer.sdp = answer.sdp.replace(
-      /a=fmtp:(\d+) opus\/48000\/2\r?\n/,
-      (match, pt) => match.replace(/\r?\n$/, ';maxaveragebitrate=510000;usedtx=0;stereo=1;cbr=1\r\n')
-    );
-  }
-
-  await vuiPC.setRemoteDescription(new RTCSessionDescription(answer));
-  vuiConnected = true;
-  console.log('[Vui] WebRTC connected (high-quality Opus)');
-}
-
-function stopVuiStreaming() {
-  if (vuiWS) { try { vuiWS.close(); } catch(e){} vuiWS = null; }
-  if (vuiPC) { try { vuiPC.close(); } catch(e){} vuiPC = null; }
-  if (vuiMicStream) { vuiMicStream.getTracks().forEach(t => t.stop()); vuiMicStream = null; }
-  if (vuiRemoteAudio) { try { vuiRemoteAudio.pause(); vuiRemoteAudio.srcObject = null; } catch(e){} }
-  vuiConnected = false;
-  setVoiceState('idle');
-}
-
-async function startVuiRecording() {
-  // For WebRTC streaming mode, just start the stream (no recording needed)
-  await startVuiStreaming();
 }
 
 // ─── Transcription (local Whisper) ───
@@ -809,8 +424,7 @@ async function transcribeAudio(audioBlob) {
     const data = await resp.json();
 
     if (data.error) {
-      setVoiceState('idle');
-      document.getElementById('voice-status').textContent = 'Error: ' + data.error;
+      showVoiceError(data.error, data.hint);
       return;
     }
 
@@ -837,29 +451,37 @@ async function processVoiceCommand(text) {
   voiceConversation.push({ role: 'user', content: text });
 
   try {
-    const resp = await fetch('/api/voice/intent', {
+    const resp = await fetch('/api/voice/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        model: voiceSettings.llm,
-        conversation: voiceConversation,
-      }),
+      body: JSON.stringify({ text }),
     });
 
     const data = await resp.json();
 
     if (data.error) {
-      setVoiceState('idle');
-      document.getElementById('voice-status').textContent = 'Error: ' + data.error;
+      showVoiceError(data.error, data.hint);
       return;
     }
 
-    const action = data.action;
-    await executeVoiceAction(action);
+    const reply = data.reply || '';
+    await speakAndShowReply(reply);
   } catch (e) {
-    setVoiceState('idle');
-    document.getElementById('voice-status').textContent = 'Error: ' + e.message;
+    showVoiceError(e.message || 'Network error', 'Check the logs or try again');
+  }
+}
+
+async function speakAndShowReply(reply) {
+  const responseEl = document.getElementById('voice-response');
+  const text = reply || 'I heard you, but had trouble forming a reply.';
+  responseEl.textContent = text;
+  responseEl.classList.remove('fade-out');
+  clearVoiceError();
+  voiceConversation.push({ role: 'assistant', content: text });
+  await speak(text);
+  setVoiceState('idle');
+  if (responseEl.textContent.trim()) {
+    setTimeout(() => { responseEl.classList.add('fade-out'); }, 3000);
   }
 }
 
@@ -869,6 +491,7 @@ async function executeVoiceAction(action) {
   const responseEl = document.getElementById('voice-response');
   const confirmEl = document.getElementById('voice-confirm');
   const confirmTextEl = document.getElementById('voice-confirm-text');
+  clearVoiceError();
 
   switch (action.action) {
     case 'navigate':
@@ -939,15 +562,24 @@ async function executeVoiceAction(action) {
       // Don't close - let user see the response
       break;
 
+    case 'reset_conversation':
+      voiceConversation = [];
+      voiceChatHistory = [];
+      responseEl.textContent = "Okay, I've forgotten everything. What can I do for you?";
+      await speak("Okay, I've forgotten everything. What can I do for you?");
+      setVoiceState('idle');
+      break;
+
     case 'respond':
     default:
-      responseEl.textContent = action.message || '';
+      const replyText = action.message || '';
+      responseEl.textContent = replyText || 'I heard you, but had trouble forming a reply.';
       responseEl.classList.remove('fade-out');
-      voiceConversation.push({ role: 'assistant', content: action.message || '' });
-      await speak(action.message || '');
+      voiceConversation.push({ role: 'assistant', content: replyText });
+      await speak(replyText);
       setVoiceState('idle');
-      // Fade out response after 3 seconds (non-Vui mode)
-      if (!voiceSettings.vui && responseEl.textContent.trim()) {
+      // Fade out response after 3 seconds
+      if (responseEl.textContent.trim()) {
         setTimeout(() => {
           responseEl.classList.add('fade-out');
         }, 3000);
@@ -1000,25 +632,91 @@ async function confirmVoiceCommand(approved) {
   setVoiceState('idle');
 }
 
+// ─── Error surface ───
+
+function showVoiceError(message, hint) {
+  const responseEl = document.getElementById('voice-response');
+  const statusEl = document.getElementById('voice-status');
+  if (statusEl) statusEl.textContent = '⚠ ' + (hint || 'Something went wrong');
+  if (responseEl) {
+    responseEl.textContent = message || 'Something went wrong';
+    responseEl.classList.remove('fade-out');
+    responseEl.classList.add('error');
+  }
+  setVoiceState('idle');
+}
+
+function clearVoiceError() {
+  const responseEl = document.getElementById('voice-response');
+  if (responseEl) responseEl.classList.remove('error');
+}
+
 // ─── TTS ───
+
+let _audioUnlocked = false;
+
+function unlockAudio() {
+  // Unlock mobile audio on the first user gesture so TTS playback isn't
+  // blocked by the browser's autoplay policy.
+  if (_audioUnlocked) return;
+  _audioUnlocked = true;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    gain.gain.value = 0.0001;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.001);
+    if (ctx.resume) ctx.resume();
+  } catch (e) {}
+  try {
+    const a = document.getElementById('voice-tts-player');
+    if (a) {
+      // iOS only unlocks .play() when the element has a real source, so
+      // feed it a silent WAV clip during the gesture, then clear it.
+      a.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhIQAAAAA=';
+      a.volume = 0;
+      a.play().catch(() => {});
+      setTimeout(() => { a.volume = 1; try { a.removeAttribute('src'); } catch (e) {} }, 120);
+    }
+  } catch (e) {}
+  // Warm up speechSynthesis (needed for the first browser-TTS call on iOS).
+  try {
+    const u = new SpeechSynthesisUtterance('');
+    u.volume = 0;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+
+function browserSpeak(text) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => { if (done) return; done = true; setVoiceState('idle'); resolve(); };
+    try {
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.rate = 1.1;
+      utter.pitch = 1.0;
+      utter.onend = finish;
+      utter.onerror = finish;
+      speechSynthesis.speak(utter);
+      // Safety net — never hang on "speaking".
+      setTimeout(finish, Math.max(3000, text.length * 200));
+    } catch (e) { finish(); }
+  });
+}
 
 async function speak(text) {
   if (!text) return;
   setVoiceState('speaking');
 
-  // Browser TTS
   if (voiceSettings.tts === 'browser') {
-    return new Promise((resolve) => {
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.rate = 1.1;
-      utter.pitch = 1.0;
-      utter.onend = () => { setVoiceState('idle'); resolve(); };
-      utter.onerror = () => { setVoiceState('idle'); resolve(); };
-      speechSynthesis.speak(utter);
-    });
+    return browserSpeak(text);
   }
 
-  // Piper TTS
+  // Piper TTS via a persistent, gesture-unlocked audio element. Falls back
+  // to the browser's voice if Piper is unavailable or playback fails.
   try {
     const resp = await fetch('/api/voice/tts', {
       method: 'POST',
@@ -1029,33 +727,40 @@ async function speak(text) {
     if (resp.ok) {
       const blob = await resp.blob();
       const audioUrl = URL.createObjectURL(blob);
-      const audio = new Audio(audioUrl);
-      // Return a promise that resolves when audio ENDS, not when it starts
-      await new Promise((resolve, reject) => {
-        audio.onended = () => {
-          setVoiceState('idle');
-          URL.revokeObjectURL(audioUrl);
-          resolve();
-        };
-        audio.onerror = () => {
-          setVoiceState('idle');
-          URL.revokeObjectURL(audioUrl);
-          resolve();
-        };
-        audio.play().catch(e => {
-          console.error('Audio play failed:', e);
-          setVoiceState('idle');
-          URL.revokeObjectURL(audioUrl);
-          resolve();
-        });
+      const audio = document.getElementById('voice-tts-player') || new Audio();
+      audio.muted = false;
+      audio.volume = 1.0;
+      let played = false;
+      await new Promise((resolve) => {
+        let settled = false;
+        const finish = (ok) => { if (settled) return; settled = true; played = ok; URL.revokeObjectURL(audioUrl); resolve(); };
+        audio.onended = () => finish(true);
+        audio.onerror = () => finish(false);
+        audio.src = audioUrl;
+        try {
+          const p = audio.play();
+          if (p && p.then) p.catch(() => finish(false));
+        } catch (e) { finish(false); }
+        // Safety net — bail if the browser never signals playback end.
+        setTimeout(() => finish(false), Math.max(6000, text.length * 250));
       });
+      if (played) return;
     } else {
-      setVoiceState('idle');
+      // Surface the reason, then fall back to the browser voice.
+      let detail = '';
+      try {
+        const j = await resp.json();
+        detail = j.error || '';
+        const statusEl = document.getElementById('voice-status');
+        if (statusEl && j.hint) statusEl.textContent = '⚠ ' + j.hint;
+      } catch (e) {}
+      console.warn('Piper TTS unavailable:', detail || resp.status);
     }
   } catch (e) {
-    console.error('TTS error:', e);
-    setVoiceState('idle');
+    console.error('Piper TTS error, falling back to browser:', e);
   }
+
+  return browserSpeak(text);
 }
 
 // ─── Helper functions for actions ───
@@ -1143,7 +848,7 @@ function sendChatFromVoice(message) {
   }
 }
 
-// ─── Push-to-talk: removed — voice is always-on in Vui mode, mute toggle controls mic ───
+// ─── Push-to-talk: removed — mute toggle controls mic ───
 
 // ─── Auto-Listen Mode (continuous conversation with silence detection) ───
 
@@ -1175,13 +880,6 @@ async function toggleAutoListen() {
 }
 
 async function startAutoListen() {
-  // In Vui mode, auto-listen is just starting the stream (Vui handles VAD)
-  if (voiceSettings.vui) {
-    await startVuiStreaming();
-    autoListenActive = true;
-    return;
-  }
-
   if (voiceSettings.stt === 'browser') {
     // For browser STT, use continuous recognition
     startAutoBrowserSTT();
@@ -1265,11 +963,7 @@ function startAutoRecording() {
   autoMediaRecorder.onstop = async () => {
     const audioBlob = new Blob(autoAudioChunks, { type: mime });
     if (audioBlob.size > 1000) { // Only process if we got actual audio
-      if (voiceSettings.vui) {
-        await processVuiVoiceNote(audioBlob);
-      } else {
-        await transcribeAudio(audioBlob);
-      }
+      await transcribeAudio(audioBlob);
     }
   };
 
@@ -1290,11 +984,6 @@ function stopAutoRecording() {
 
 function stopAutoListen() {
   autoListenActive = false;
-
-  if (voiceSettings.vui) {
-    stopVuiStreaming();
-    return;
-  }
 
   if (autoLevelCheckInterval) {
     clearInterval(autoLevelCheckInterval);
