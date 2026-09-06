@@ -8,9 +8,26 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.0.2"
+VERSION = "0.0.3"
 
 CHANGELOG = [
+    {
+        "version": "0.0.3",
+        "date": "2026-09-06",
+        "changes": [
+            "Voice agent: drives Hermes natively with a persistent session (falls back to local Ollama/cloud when Hermes isn't installed)",
+            "Voice agent: modular STT/LLM/TTS engines configurable from Settings → Voice — no terminal needed",
+            "Voice agent: command access tiers (Talk / Basic / Full) with a confirmation for unrestricted access",
+            "Voice agent: remembers your conversation, can be named, and shows clear errors instead of failing silently",
+            "Voice agent: browser or Whisper speech recognition, Piper or browser speech",
+            "Security: fixed open-mode auth bypass on fresh installs (duplicate passcode in .env)",
+            "Security: fixed path traversal in the music and file-browser routes",
+            "UI: voice overlay now matches the black/white minimalism theme",
+            "Settings: change your passcode in-app; library paths apply instantly without restart",
+            "Devices: real Tailscale device list with names, OS, and online status",
+            "Fixes: TTS autoplay on phones, stuck 'speaking' state, book-reader crash, duplicate HTML cleanup",
+        ]
+    },
     {
         "version": "0.0.2",
         "date": "2026-08-19",
