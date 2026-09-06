@@ -5,20 +5,23 @@ Run with: python -m pytest tests/ -v
 import pytest
 import sys
 import os
+import tempfile
 from pathlib import Path
 
 # Add parent dir to path so we can import the app
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+_TMP = Path(tempfile.gettempdir())
+
 # Set test env vars before importing
 os.environ.setdefault('DECLOUD_PORT', '8899')
-os.environ.setdefault('DECLOUD_BOOKS_DIR', '/tmp/test-books')
-os.environ.setdefault('DECLOUD_FILES_DIR', '/tmp/test-files')
+os.environ.setdefault('DECLOUD_BOOKS_DIR', str(_TMP / 'test-books'))
+os.environ.setdefault('DECLOUD_FILES_DIR', str(_TMP / 'test-files'))
 os.environ.setdefault('SECRET_KEY', 'test-secret-key-for-pytest')
 
-# Create test dirs
-Path('/tmp/test-books').mkdir(exist_ok=True)
-Path('/tmp/test-files').mkdir(exist_ok=True)
+# Create test dirs (cross-platform)
+(_TMP / 'test-books').mkdir(exist_ok=True)
+(_TMP / 'test-files').mkdir(exist_ok=True)
 
 from app import app
 
