@@ -85,6 +85,8 @@ Start-Sleep -Seconds 3
 
 Write-Host ""
 Write-Host "DeCloud is running at http://localhost:8899" -ForegroundColor Green
+# Read the passcode from .env so re-runs still print the real value.
+$Passcode = ((Get-Content .env | Where-Object { $_ -match '^DECLOUD_PIN=' }) -replace '^DECLOUD_PIN=', '')
 Write-Host "Access passcode: $Passcode" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Remote access (optional):" -ForegroundColor Cyan

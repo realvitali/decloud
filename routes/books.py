@@ -1,6 +1,6 @@
 """Books library, audio, TTS, summarize, and Q&A routes."""
 from flask import Blueprint, jsonify, request, send_file
-import json, subprocess
+import json, re, subprocess
 from shared import (
     app, BASE_DIR, AUDIO_DIR, VOICES,
     _pdf_text_cache, _pdf_chapters_cache,
@@ -119,6 +119,12 @@ def get_book_text():
     book_id = request.args.get('book')       # e.g. 'Cybernetics_Wiener'
     chapter_idx = request.args.get('chapter') # e.g. '0'
     chapter_file = request.args.get('file')  # fallback: direct file name
+
+    # Reject path traversal in book/file references (they feed glob patterns).
+    if book_id and not shared.is_safe_book_ref(book_id):
+        return jsonify({'error': 'invalid book'}), 400
+    if chapter_file and not shared.is_safe_book_ref(chapter_file):
+        return jsonify({'error': 'invalid file'}), 400
 
     if chapter_file:
         # Search subfolders for the file
@@ -534,7 +540,9 @@ def tts_stop(book_id):
     # checks it between chapters), which is written just above.
     import platform as _platform
     if _platform.system() != 'Windows':
-        subprocess.run(['pkill', '-f', f'tts_worker.*{book_id}'], capture_output=True)
+        # Escape the book id so it can't act as a regex that matches other
+        # processes (e.g. a book id containing '.' or '*').
+        subprocess.run(['pkill', '-f', 'tts_worker.*' + re.escape(book_id)], capture_output=True)
     return jsonify({'status': 'stopped'})
 
 # ─── API: Summarize & Q&A (uses local LLM) ────────────────────

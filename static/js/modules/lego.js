@@ -69,7 +69,7 @@ async function loadLego(path = '', page = 1) {
       const bc = document.getElementById('lego-breadcrumbs');
       bc.innerHTML = data.breadcrumbs.map((b, i) => {
         const isLast = i === data.breadcrumbs.length - 1;
-        return `<span class="lego-crumb ${isLast ? 'active' : ''}" onclick="loadLego('${b.path}')">${b.name}</span>${!isLast ? '<span class="lego-crumb-sep">/</span>' : ''}`;
+        return `<span class="lego-crumb ${isLast ? 'active' : ''}" onclick="loadLego('${escapeHtml(b.path)}')">${escapeHtml(b.name)}</span>${!isLast ? '<span class="lego-crumb-sep">/</span>' : ''}`;
       }).join('') + `<button class="lego-view-toggle" onclick="toggleLegoView()">${legoViewMode === 'grid' ? ICONS.layers : ICONS.terminal}</button><button class="lego-view-toggle" onclick="toggleLegoSort()" style="margin-left:6px" title="Sort: ${legoSortMode}">${legoSortIcon()}</button><button class="lego-view-toggle" onclick="openSwipeMode('${path}')" style="margin-left:6px" title="Swipe mode">${ICONS.image}</button>`;
     }
 
@@ -122,7 +122,7 @@ async function loadLego(path = '', page = 1) {
         return `<div class="lego-card${dimClass}" data-path="${item.path.replace(/"/g, '&quot;')}" onclick="if(!legoLoading)loadLego('${item.path.replace(/'/g, "\\'")}')">
           <div class="lego-thumb-wrap">${thumb}${item.has_images ? '<div class="lego-thumb-badge"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>' : ''}${visitedDot}</div>
           <div class="lego-card-info">
-            <div class="lego-card-name">${item.name}</div>
+            <div class="lego-card-name">${escapeHtml(item.name)}</div>
             <div class="lego-card-meta" id="meta-${CSS.escape(item.path)}">${visited ? `Done ${visitTime} · ` : ''}${countLabel}</div>
           </div>
         </div>`;
@@ -131,13 +131,13 @@ async function loadLego(path = '', page = 1) {
           ? `openLegoImage('${item.path}')`
           : `downloadLegoFile('${item.path}')`;
         const thumb = isImage
-          ? `<img class="lego-thumb" data-src="/api/lego/thumbnail?path=${encodeURIComponent(item.path)}" alt="" loading="lazy" data-save-path="${item.path}" />`
+          ? `<img class="lego-thumb" data-src="/api/lego/thumbnail?path=${encodeURIComponent(item.path)}" alt="" loading="lazy" data-save-path="${escapeHtml(item.path)}" />`
           : `<div class="lego-thumb-placeholder">${getLegoIcon(item.ext)}</div>`;
         return `<div class="lego-card" data-path="${item.path.replace(/"/g, '&quot;')}" onclick="${clickAction}">
           <div class="lego-thumb-wrap">${thumb}</div>
           <div class="lego-card-info">
-            <div class="lego-card-name">${item.name}</div>
-            <div class="lego-card-meta">${item.size_human || ''}</div>
+            <div class="lego-card-name">${escapeHtml(item.name)}</div>
+            <div class="lego-card-meta">${escapeHtml(item.size_human || '')}</div>
           </div>
         </div>`;
       }

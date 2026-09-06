@@ -64,20 +64,20 @@ function renderJobs(container, jobs, profile) {
   container.innerHTML = jobs.map(j => {
     const dot = j.last_status === 'ok' ? 'ok' : j.last_status === 'error' ? 'error' : 'paused';
     const rowClass = j.last_status === 'error' ? 'error' : '';
-    const last = j.last_run ? `Last: ${relTime(j.last_run)}` : '';
-    const next = j.next_run ? `Next: ${relTime(j.next_run)}` : '';
-    const err = j.last_error ? `<div class="job-error">${j.last_error}</div>` : '';
+    const last = j.last_run ? `Last: ${escapeHtml(relTime(j.last_run))}` : '';
+    const next = j.next_run ? `Next: ${escapeHtml(relTime(j.next_run))}` : '';
+    const err = j.last_error ? `<div class="job-error">${escapeHtml(j.last_error)}</div>` : '';
     return `
       <div class="job-row ${rowClass}">
         <div class="job-dot ${dot}"></div>
         <div class="job-info">
-          <div class="job-name">${j.name}</div>
-          <div class="job-schedule">${j.schedule_display}</div>
+          <div class="job-name">${escapeHtml(j.name)}</div>
+          <div class="job-schedule">${escapeHtml(j.schedule_display)}</div>
           ${last ? `<div class="job-last">${last}</div>` : ''}
           ${next ? `<div class="job-next">${next}</div>` : ''}
           ${err}
         </div>
-        <label class="job-toggle" onclick="event.stopPropagation(); toggleJob('${j.id}', !this.previousElementSibling.checked, '${profile}')">
+        <label class="job-toggle" onclick="event.stopPropagation(); toggleJob('${escapeHtml(j.id)}', !this.previousElementSibling.checked, '${escapeHtml(profile)}')">
           <input type="checkbox" ${j.enabled ? 'checked' : ''}>
           <span class="job-toggle-slider"></span>
         </label>
@@ -113,8 +113,8 @@ async function loadActivity() {
       return `
         <div class="activity-item ${ev.dir}">
           <span class="activity-dir ${ev.dir}">${label}</span>
-          <span class="activity-time">${t}</span>
-          <span class="activity-text">${ev.text || ''}</span>
+          <span class="activity-time">${escapeHtml(t)}</span>
+          <span class="activity-text">${escapeHtml(ev.text || '')}</span>
         </div>
       `;
     }).join('');
@@ -347,8 +347,8 @@ function renderNotifications() {
     return '<div class="notif-item">' +
       '<div class="notif-item-icon ' + n.type + '">' + iconSvg + '</div>' +
       '<div class="notif-item-body">' +
-      '<div class="notif-item-text">' + n.text + '</div>' +
-      '<div class="notif-item-time">' + n.time + '</div>' +
+      '<div class="notif-item-text">' + escapeHtml(n.text) + '</div>' +
+      '<div class="notif-item-time">' + escapeHtml(n.time) + '</div>' +
       '</div></div>';
   }).join('');
 }

@@ -21,7 +21,7 @@ async function loadOllamaModels() {
       return;
     }
     const sel = document.getElementById('ollama-model-select');
-    sel.innerHTML = d.models.map(m => `<option value="${m.name}">${m.name} (${m.size_human})</option>`).join('');
+    sel.innerHTML = d.models.map(m => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)} (${escapeHtml(m.size_human)})</option>`).join('');
     // Select default model
     const hasDefault = d.models.some(m => m.name === ollamaCurrentModel);
     if (!hasDefault && d.models.length > 0) ollamaCurrentModel = d.models[0].name;
@@ -40,7 +40,7 @@ function onOllamaModelChange(model) {
   document.getElementById('ollama-model-info').textContent = opt?.text.split('(')[1]?.replace(')','') || '';
   // Clear chat on model switch
   ollamaChatHistory = [];
-  document.getElementById('ollama-messages').innerHTML = '<div class="ollama-welcome">Model switched to ' + model + '~</div>';
+  document.getElementById('ollama-messages').innerHTML = '<div class="ollama-welcome">Model switched to ' + escapeHtml(model) + '~</div>';
 }
 
 function simpleMarkdown(text) {

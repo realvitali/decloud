@@ -5,7 +5,7 @@ flask-limiter==3.1.0
 psutil==7.2.2
 requests==2.34.2
 websocket-client==1.9.0
-cryptography==46.0.1
+cryptography==50.0.0
 
 # ─── Config parsing (Hermes agents) ──────────────
 pyyaml==6.0.3

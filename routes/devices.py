@@ -63,7 +63,7 @@ def devices():
         host = peer.get('HostName') or ''
         dns = (peer.get('DNSName') or '').rstrip('.')
         # Tailscale's default hostname is 'localhost' — prefer the DNS
-        # machine name (e.g. 'iphone-15-pro-max.tail44f1bb.ts.net').
+        # machine name (e.g. 'my-phone.tailxxxx.ts.net').
         dns_short = dns.split('.')[0] if dns else ''
         if host and host.lower() not in ('localhost', 'unknown'):
             name = host

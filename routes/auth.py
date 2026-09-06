@@ -121,6 +121,11 @@ def change_pin():
     if not isinstance(current, str) or not isinstance(new, str):
         return jsonify({'error': 'Invalid request'}), 400
 
+    # In open mode there is no existing passcode to verify, so an
+    # unauthenticated caller could set one and lock the owner out. Refuse.
+    if not shared.DECLOUD_PIN:
+        return jsonify({'error': 'No passcode is set — configure DECLOUD_PIN in .env first.'}), 400
+
     if not hmac.compare_digest(current, shared.DECLOUD_PIN):
         return jsonify({'error': 'Current passcode is incorrect'}), 401
 

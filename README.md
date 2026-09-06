@@ -62,8 +62,8 @@ All configuration is via environment variables in `.env` (see `.env.example`):
 | `DECLOUD_PORT` | `8899` | Port to run on |
 | `DECLOUD_PIN` | *(random)* | Passcode to unlock the app (8+ chars recommended) |
 | `DECLOUD_BOOKS_DIR` | `~/Books` | Where your books live |
-| `DECLOUD_FILES_DIR` | `~/Files` | Directory for the Files browser |
-| `DECLOUD_MUSIC_DIR` | `~/Music/decloud-music` | Music library path |
+| `DECLOUD_FILES_DIR` | `~` (home) | Directory for the Files browser |
+| `DECLOUD_MUSIC_DIR` | `~/Music` | Music library path |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama LLM endpoint |
 | `DECLOUD_LLM_MODEL` | `llama3.2` | Default LLM model |
 | `COMFY_URL` | `http://localhost:8188` | ComfyUI endpoint |

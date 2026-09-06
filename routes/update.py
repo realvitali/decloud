@@ -45,8 +45,10 @@ _REF_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$')
 # Cache for the remote "latest version" lookup (10 minutes)
 _latest_cache = {'ts': 0.0, 'data': None}
 
-GITHUB_RELEASES_URL = 'https://api.github.com/repos/realvitali/decloud/releases/latest'
-GITHUB_TAGS_URL = 'https://api.github.com/repos/realvitali/decloud/tags'
+# Self-update repo. Overridable via env for forks (e.g. DECLOUD_UPDATE_REPO=myorg/decloud).
+UPDATE_REPO = os.environ.get('DECLOUD_UPDATE_REPO', 'realvitali/decloud')
+GITHUB_RELEASES_URL = f'https://api.github.com/repos/{UPDATE_REPO}/releases/latest'
+GITHUB_TAGS_URL = f'https://api.github.com/repos/{UPDATE_REPO}/tags'
 
 # ─── Git helpers (separate functions so tests can patch them) ─────
 

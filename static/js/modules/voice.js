@@ -237,7 +237,7 @@ async function sendVoiceTextMessage() {
     const data = await resp.json();
 
     if (data.error) {
-      aiBubble.innerHTML = `<span style="color:#f87171">Error: ${data.error}</span>`;
+      aiBubble.innerHTML = `<span style="color:#f87171">Error: ${escapeHtml(data.error)}</span>`;
       return;
     }
 
@@ -246,7 +246,7 @@ async function sendVoiceTextMessage() {
     voiceConversation.push({ role: 'assistant', content: message });
     voiceChatHistory.push({ role: 'assistant', content: message });
   } catch (e) {
-    aiBubble.innerHTML = `<span style="color:#f87171">Error: ${e.message}</span>`;
+    aiBubble.innerHTML = `<span style="color:#f87171">Error: ${escapeHtml(e.message)}</span>`;
   }
 
   msgs.scrollTop = msgs.scrollHeight;
