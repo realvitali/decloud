@@ -256,12 +256,10 @@ def _fetch_latest_from_github() -> dict:
             data = None
     return data or {}
 
-# ─── Routes ───────────────────────────────────────────────────────
+# ─── Core logic (shared by the HTTP routes and the `decloud update` CLI) ──
 
-@bp.route('/api/system/update/check', methods=['GET'])
-@limiter.limit("10 per minute")
-def update_check():
-    """Report local state and the newest available version. Read-only."""
+def check_status():
+    """Return the update status dict. Read-only."""
     from routes.version import VERSION
     is_git = _git_available()
     meta = read_update_meta()
@@ -279,7 +277,7 @@ def update_check():
     if is_git and latest.get('tag'):
         update_available = _version_newer(latest['tag'], VERSION)
 
-    return jsonify({
+    return {
         'current_version': VERSION,
         'is_git': is_git,
         'tree_clean': _tree_clean() if is_git else True,
@@ -288,56 +286,54 @@ def update_check():
         'can_rollback': can_rollback,
         'latest': latest,
         'update_available': update_available,
-    })
+    }
 
-@bp.route('/api/system/update', methods=['POST'])
-@limiter.limit("3 per 15 minutes")
-def update_run():
-    """Fetch, verify, and switch to an explicit tag. Returns before the
-    restart happens (the service manager restarts the process)."""
-    data = request.get_json(silent=True) or {}
-    ref = str(data.get('ref') or '').strip()
+
+def perform_update(ref):
+    """Fetch, verify, and switch to an explicit tag. Returns (status, payload)
+    so both the HTTP route and the CLI report identically."""
+    from routes.version import VERSION
 
     if not _REF_PATTERN.match(ref):
-        return jsonify({'error': 'invalid version reference'}), 400
+        return 400, {'error': 'invalid version reference'}
 
     if not _update_lock.acquire(blocking=False):
-        return jsonify({'error': 'an update is already in progress'}), 409
+        return 409, {'error': 'an update is already in progress'}
+
     try:
         # 1. Git install required
         if not _git_available():
-            return jsonify({
+            return 409, {
                 'error': 'updates require a git installation of DeCloud '
                          '(this install has no git repository)',
                 'code': 'NOT_GIT',
-            }), 409
+            }
 
         # 2. Never update a tree the user has modified
         if not _tree_clean():
-            return jsonify({
+            return 409, {
                 'error': 'local changes detected — refusing to update so your '
                          'edits are not lost. Review `git status` over SSH, '
                          'then try again.',
                 'code': 'DIRTY_TREE',
-            }), 409
+            }
 
         prev_sha = _head_sha()
         if not prev_sha:
-            return jsonify({'error': 'could not read current revision'}), 500
+            return 500, {'error': 'could not read current revision'}
 
         # 3. Fetch tags (read-only)
         if not _fetch_tags():
-            return jsonify({'error': 'could not fetch updates from origin '
-                                     '(network or remote problem)'}), 502
+            return 502, {'error': 'could not fetch updates from origin '
+                                  '(network or remote problem)'}
 
         # 4. Resolve the exact target
         target_sha = _resolve_tag_ref(ref)
         if not target_sha:
-            return jsonify({'error': f'version {ref} not found on the remote'}), 404
+            return 404, {'error': f'version {ref} not found on the remote'}
         if target_sha == prev_sha:
-            return jsonify({'error': 'already on this version'}), 409
+            return 409, {'error': 'already on this version'}
 
-        from routes.version import VERSION
         write_update_meta({
             'state': 'prepared',
             'prev_sha': prev_sha,
@@ -350,23 +346,23 @@ def update_run():
         # 5. Switch the working tree (git refuses if anything conflicts)
         if not _checkout(target_sha):
             clear_update_meta()
-            return jsonify({'error': 'checkout failed — your current version '
-                                     'is still running, nothing changed'}), 500
+            return 500, {'error': 'checkout failed — your current version '
+                                  'is still running, nothing changed'}
 
         # 6. Verify the NEW code before restarting
         if not _py_compile_all():
             _rollback_now(prev_sha)
-            return jsonify({'error': 'new version failed syntax checks — '
-                                     'rolled back, you are still on '
-                                     f'{VERSION}'}), 500
+            return 500, {'error': 'new version failed syntax checks — '
+                                  'rolled back, you are still on '
+                                  f'{VERSION}'}
         probe_ok, probe_detail = _boot_probe()
         if not probe_ok:
             _rollback_now(prev_sha)
-            return jsonify({
+            return 500, {
                 'error': f'new version failed the boot test and was rolled '
                          f'back automatically ({probe_detail}). Your current '
                          'version is still running.',
-            }), 500
+            }
 
         # 7. Verified — mark installed and schedule the restart
         meta = read_update_meta()
@@ -376,7 +372,7 @@ def update_run():
 
         restart_requested = _schedule_restart()
 
-        return jsonify({
+        return 200, {
             'ok': True,
             'from': VERSION,
             'to': ref,
@@ -384,36 +380,61 @@ def update_run():
             'message': 'update verified — the app will restart in a moment' if
                        restart_requested else
                        'update verified — restart the app to switch to it',
-        })
+        }
     finally:
         _update_lock.release()
+
+
+def perform_rollback():
+    """Return to the revision that ran before the last update."""
+    if not _update_lock.acquire(blocking=False):
+        return 409, {'error': 'an update is already in progress'}
+    try:
+        meta = read_update_meta()
+        prev_sha = meta.get('prev_sha')
+        if not prev_sha:
+            return 409, {'error': 'no previous version recorded'}
+        head = _head_sha()
+        if head == prev_sha:
+            return 409, {'error': 'already on the previous version'}
+        if not _tree_clean():
+            return 409, {'error': 'local changes detected — refusing to '
+                                  'touch the tree'}
+        if not _checkout(prev_sha):
+            return 500, {'error': 'rollback checkout failed — nothing changed'}
+        meta['state'] = 'rolled_back'
+        meta['ts'] = time.time()
+        write_update_meta(meta)
+        _schedule_restart()
+        return 200, {'ok': True, 'rolled_back_to': prev_sha[:12]}
+    finally:
+        _update_lock.release()
+
+
+# ─── Routes ───────────────────────────────────────────────────────
+
+@bp.route('/api/system/update/check', methods=['GET'])
+@limiter.limit("10 per minute")
+def update_check():
+    """Report local state and the newest available version. Read-only."""
+    return jsonify(check_status())
+
+@bp.route('/api/system/update', methods=['POST'])
+@limiter.limit("3 per 15 minutes")
+def update_run():
+    """Fetch, verify, and switch to an explicit tag. Returns before the
+    restart happens (the service manager restarts the process)."""
+    data = request.get_json(silent=True) or {}
+    ref = str(data.get('ref') or '').strip()
+    code, payload = perform_update(ref)
+    return jsonify(payload), code
 
 @bp.route('/api/system/update/rollback', methods=['POST'])
 @limiter.limit("3 per 15 minutes")
 def update_rollback():
     """Return to the revision that ran before the last update."""
-    if not _update_lock.acquire(blocking=False):
-        return jsonify({'error': 'an update is already in progress'}), 409
-    try:
-        meta = read_update_meta()
-        prev_sha = meta.get('prev_sha')
-        if not prev_sha:
-            return jsonify({'error': 'no previous version recorded'}), 409
-        head = _head_sha()
-        if head == prev_sha:
-            return jsonify({'error': 'already on the previous version'}), 409
-        if not _tree_clean():
-            return jsonify({'error': 'local changes detected — refusing to '
-                                     'touch the tree'}), 409
-        if not _checkout(prev_sha):
-            return jsonify({'error': 'rollback checkout failed — nothing changed'}), 500
-        meta['state'] = 'rolled_back'
-        meta['ts'] = time.time()
-        write_update_meta(meta)
-        _schedule_restart()
-        return jsonify({'ok': True, 'rolled_back_to': prev_sha[:12]})
-    finally:
-        _update_lock.release()
+    code, payload = perform_rollback()
+    return jsonify(payload), code
 
 # ─── Restart + rollback mechanics ─────────────────────────────────
 

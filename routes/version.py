@@ -8,9 +8,18 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.0.6"
+VERSION = "0.1.0"
 
 CHANGELOG = [
+    {
+        "version": "0.1.0",
+        "date": "2026-09-06",
+        "changes": [
+            "Terminal updates: 'decloud update' CLI",
+            "'decloud update' command (check / update / rollback) shares the in-app updater's verified logic",
+            "install.sh symlinks decloud into ~/.local/bin so it's on PATH",
+        ]
+    },
     {
         "version": "0.0.6",
         "date": "2026-09-06",

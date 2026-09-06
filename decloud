@@ -12,7 +12,7 @@ TUNNEL_PID_FILE="$APP_DIR/tunnel.pid"
 APP_PID_FILE="$APP_DIR/app.pid"
 
 # ─── Version ──────────────────────────────────────────────────────
-VERSION="0.0.6"
+VERSION="0.1.0"
 
 # ─── Helpers ────────────────────────────────────────────────────
 
@@ -242,8 +242,12 @@ case "${1:-}" in
     status)
         status
         ;;
+    update|upgrade)
+        shift
+        exec "$APP_DIR/.venv/bin/python" "$APP_DIR/scripts/decloud_update.py" "$@"
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|qr|status|version}"
+        echo "Usage: $0 {start|stop|restart|qr|status|version|update}"
         echo ""
         echo "  start   — Start app + tunnel"
         echo "  stop    — Stop everything"
@@ -251,6 +255,8 @@ case "${1:-}" in
         echo "  qr      — Show current tunnel URL + QR code"
         echo "  status  — Show what's running"
         echo "  version — Show DeCloud version"
+        echo "  update  — Check/apply updates from the terminal"
+        echo "            (update check | update | update rollback | update <version>)"
         exit 1
         ;;
 esac
