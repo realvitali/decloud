@@ -8,9 +8,20 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.0.5"
+VERSION = "0.0.6"
 
 CHANGELOG = [
+    {
+        "version": "0.0.6",
+        "date": "2026-09-06",
+        "changes": [
+            "One-click updates: auto-release pipeline, semver compare, supervised restarts",
+            "Updater only offers genuine upgrades (semver compare — no more downgrade offers)",
+            "GitHub Action auto-creates a git tag + release for each version bump (no manual tagging)",
+            "Manual ./decloud starts now supervise the app so self-update restarts work without systemd",
+            "install.sh warns when the install is not a git checkout (updates need git)",
+        ]
+    },
     {
         "version": "0.0.5",
         "date": "2026-09-06",

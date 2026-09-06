@@ -196,6 +196,29 @@ def clear_update_meta():
 def _normalize_version(v: str) -> str:
     return (v or '').strip().lstrip('vV')
 
+
+def _version_tuple(v: str) -> tuple:
+    """Turn 'x.y.z' (optional 'v' prefix, optional '-suffix') into a sortable
+    tuple so pre-releases rank below final releases and upgrades rank above."""
+    v = _normalize_version(v)
+    core, _, suffix = v.partition('-')
+    nums = [0, 0, 0]
+    for i, part in enumerate(core.split('.')[:3]):
+        try:
+            nums[i] = int(part)
+        except (ValueError, TypeError):
+            nums[i] = 0
+    return (nums[0], nums[1], nums[2], 0 if suffix else 1, suffix)
+
+
+def _version_newer(latest: str, current: str) -> bool:
+    """True only when `latest` is a genuine upgrade over `current` —
+    never a downgrade (e.g. a stale alpha tag must not be offered)."""
+    try:
+        return _version_tuple(latest) > _version_tuple(current)
+    except Exception:
+        return _normalize_version(latest) != _normalize_version(current)
+
 # ─── Remote latest-version lookup (cached, hardcoded host = no SSRF) ──
 
 def _fetch_latest_from_github() -> dict:
@@ -254,8 +277,7 @@ def update_check():
 
     update_available = False
     if is_git and latest.get('tag'):
-        update_available = (_normalize_version(latest['tag'])
-                            != _normalize_version(VERSION))
+        update_available = _version_newer(latest['tag'], VERSION)
 
     return jsonify({
         'current_version': VERSION,

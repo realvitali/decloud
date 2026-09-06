@@ -25,6 +25,18 @@ echo ""
 echo "Detected: $OS_TYPE ($(uname -s) $(uname -r))"
 echo ""
 
+# ─── One-click updates require a git clone ───────────────────────
+# The in-app updater (Settings → About → Check for updates) checks out new
+# versions via git. A ZIP/tarball install works fine but can't self-update.
+if ! git -C "$APP_DIR" rev-parse --is-inside-work-tree &>/dev/null 2>&1; then
+    echo "⚠ This is NOT a git checkout — the in-app updater will be unavailable."
+    echo "  The app installs and runs fine, but for one-click updates reinstall with:"
+    echo ""
+    echo "    git clone https://github.com/realvitali/decloud ~/decloud"
+    echo "    cd ~/decloud && ./install.sh"
+    echo ""
+fi
+
 # ─── Check Python ───────────────────────────────────────────────
 if command -v python3 &>/dev/null; then
     PYBIN=python3
