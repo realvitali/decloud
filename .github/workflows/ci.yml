@@ -7,6 +7,17 @@ on:
     branches: [main]
 
 jobs:
+  version-check:
+    name: version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check version + changelog are in sync
+        run: python scripts/check_version.py
+
   test:
     name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
