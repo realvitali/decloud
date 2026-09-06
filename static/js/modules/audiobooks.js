@@ -25,14 +25,14 @@ async function loadBooks() {
                          b.status === 'generating' ? (total ? `${done}/${total} chapters` : `${done} chapters done`) :
                          total ? `${done}/${total} chapters` : 'Not generated';
       return `
-        <div class="book-item" onclick="openBook('${b.id.replace(/'/g,"\\'")}', '${b.title.replace(/'/g,"\\'")}')">
+        <div class="book-item" data-id="${escapeHtml(b.id)}" data-title="${escapeHtml(b.title)}" onclick="openBook(this.dataset.id, this.dataset.title)">
           <div class="book-item-info">
             <div class="book-item-name">${escapeHtml(b.title)}</div>
             <div class="book-item-meta">${escapeHtml(b.size_mb)} MB &nbsp;•&nbsp; ${escapeHtml(b.voice || 'no voice')}</div>
           </div>
           <div class="book-item-right">
             <div class="book-status ${statusClass}">${statusText}</div>
-            <button class="settings-btn" onclick="event.stopPropagation(); openSettingsForBook('${b.id.replace(/'/g,"\\'")}')" title="Settings">&#9881;</button>
+            <button class="settings-btn" data-id="${escapeHtml(b.id)}" onclick="event.stopPropagation(); openSettingsForBook(this.dataset.id)" title="Settings">&#9881;</button>
           </div>
         </div>
       `;

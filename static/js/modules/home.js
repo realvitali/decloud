@@ -27,7 +27,7 @@ async function loadAgents() {
       const hasJobs = a.jobs && a.jobs.length;
       const note = a.profile === 'local' ? 'This workstation — always on' : 'No cron jobs configured';
       return `
-      <div class="agent-card" onclick="toggleAgentDetail('${escapeHtml(a.id)}')">
+      <div class="agent-card" data-id="${escapeHtml(a.id)}" onclick="toggleAgentDetail(this.dataset.id)">
         <div class="agent-header">
           <div class="agent-avatar" style="${agentAvatarStyle(name)}">${escapeHtml(name.charAt(0).toUpperCase())}</div>
           <div class="agent-info">
@@ -77,7 +77,7 @@ function renderJobs(container, jobs, profile) {
           ${next ? `<div class="job-next">${next}</div>` : ''}
           ${err}
         </div>
-        <label class="job-toggle" onclick="event.stopPropagation(); toggleJob('${escapeHtml(j.id)}', !this.previousElementSibling.checked, '${escapeHtml(profile)}')">
+        <label class="job-toggle" data-id="${escapeHtml(j.id)}" data-profile="${escapeHtml(profile)}" onclick="event.stopPropagation(); toggleJob(this.dataset.id, !this.previousElementSibling.checked, this.dataset.profile)">
           <input type="checkbox" ${j.enabled ? 'checked' : ''}>
           <span class="job-toggle-slider"></span>
         </label>

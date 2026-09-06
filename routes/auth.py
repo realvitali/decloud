@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, request, make_response
 from shared import (
     app, DECLOUD_PIN, limiter, SESSIONS, SESSION_TTL_SECONDS, MAX_SESSIONS,
     _LOGIN_ATTEMPTS, _LOGIN_BACKOFF_WINDOW, _LOGIN_BACKOFF_MAX,
-    _csrf_for_token, _purge_expired_sessions,
+    _csrf_for_token, _purge_expired_sessions, save_sessions,
 )
 import hmac
 import secrets
@@ -57,6 +57,7 @@ def login():
         for old_token, _ in oldest:
             SESSIONS.pop(old_token, None)
     SESSIONS[token] = time.time() + SESSION_TTL_SECONDS
+    save_sessions()
 
     resp = make_response(jsonify({
         'ok': True,
@@ -102,6 +103,7 @@ def logout():
             token = auth_header[7:].strip()
     if token:
         SESSIONS.pop(token, None)
+        save_sessions()
     resp = make_response(jsonify({'ok': True}))
     resp.delete_cookie('decloud_session')
     return resp
@@ -146,5 +148,6 @@ def change_pin():
     global DECLOUD_PIN
     DECLOUD_PIN = new
     SESSIONS.clear()
+    save_sessions()
 
     return jsonify({'ok': True, 'message': 'Passcode updated — please sign in again'})
