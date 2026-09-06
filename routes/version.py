@@ -8,9 +8,21 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 CHANGELOG = [
+    {
+        "version": "0.2.0",
+        "date": "2026-09-06",
+        "changes": [
+            "TUI dashboard: 'decloud tui'",
+            "'decloud tui' opens a brutalist terminal dashboard (system, voice, music, devices, logs)",
+            "Update panel + 'U' action reuse the verified updater",
+            "works even when the app is offline",
+            "Optional 'textual' dependency via requirements-tui.txt (friendly one-line hint if missing)",
+            "Passcode login handled in-TUI and the session is stored in ~/.config/decloud",
+        ]
+    },
     {
         "version": "0.1.0",
         "date": "2026-09-06",
