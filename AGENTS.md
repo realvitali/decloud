@@ -28,9 +28,12 @@ python scripts/bump_version.py patch -m "one-line summary" -c "change one;change
 
 Bump type: `patch` for fixes/polish, `minor` for features, `major` for breaking.
 
-After bumping: run tests, commit, and push. The CI check
-(`scripts/check_version.py`) fails any push where the three spots disagree or
-`CHANGELOG[0].version != VERSION`.
+After bumping: run tests, commit, and push. Two things catch mistakes:
+- The CI check (`scripts/check_version.py`) fails any push where the three
+  spots disagree or `CHANGELOG[0].version != VERSION`.
+- The Release workflow (`.github/workflows/release.yml`) automatically creates
+  the `v<version>` git tag + GitHub release on push — that's what the in-app
+  updater consumes, so **never tag manually**; pushing the bump is enough.
 
 ## Conventions
 

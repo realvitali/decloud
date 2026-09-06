@@ -12,7 +12,7 @@ TUNNEL_PID_FILE="$APP_DIR/tunnel.pid"
 APP_PID_FILE="$APP_DIR/app.pid"
 
 # ─── Version ──────────────────────────────────────────────────────
-VERSION="0.0.5"
+VERSION="0.0.6"
 
 # ─── Helpers ────────────────────────────────────────────────────
 
@@ -46,9 +46,17 @@ start_app() {
         return 0
     fi
     echo "Starting DeCloud app on port $PORT..."
-    source .venv/bin/activate 2>/dev/null || true
-    # Use setsid to fully detach from this shell
-    setsid nohup python app.py > app.log 2>&1 < /dev/null &
+    # Supervise the app: if it exits (crash or a self-update restart), bring
+    # it right back on the new code — one-click updates work even when
+    # systemd/launchd/scheduled-task aren't the thing managing it.
+    setsid env DECLOUD_DIR="$APP_DIR" nohup sh -c '
+        cd "$DECLOUD_DIR" || exit 1
+        . ./.venv/bin/activate 2>/dev/null || true
+        while true; do
+            python app.py
+            sleep 2
+        done
+    ' > app.log 2>&1 < /dev/null &
     echo $! > "$APP_PID_FILE"
     disown
     sleep 2
@@ -62,7 +70,9 @@ start_app() {
 
 stop_app() {
     if [ -f "$APP_PID_FILE" ]; then
-        kill $(cat "$APP_PID_FILE") 2>/dev/null || true
+        PID=$(cat "$APP_PID_FILE")
+        # Kill the whole supervisor process group (shell loop + the app).
+        kill -TERM -- -"$PID" 2>/dev/null || kill -TERM "$PID" 2>/dev/null || true
         rm -f "$APP_PID_FILE"
         echo "App stopped"
     fi

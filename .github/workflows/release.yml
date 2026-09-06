@@ -1,0 +1,73 @@
+name: Release
+
+# Every push to main that bumps VERSION (routes/version.py) automatically
+# creates a matching git tag + GitHub release, which is what the in-app
+# updater (Settings → About → Check for updates) consumes. No manual tagging.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Read version + changelog
+        id: meta
+        run: |
+          python - "$GITHUB_OUTPUT" <<'EOF'
+          import re, sys
+          text = open('routes/version.py').read()
+          m = re.search(r'^VERSION = "([^"]+)"', text, re.MULTILINE)
+          if not m:
+              sys.exit('VERSION not found in routes/version.py')
+          version = m.group(1)
+          seg = text.split('CHANGELOG = [', 1)[1]
+          entry = re.match(r'\s*\{(.*?)\},', seg, re.DOTALL)
+          date = changes = ''
+          if entry:
+              date = (re.search(r'"date":\s*"([^"]+)"', entry.group(1)) or [None, ''])[1]
+              cm = re.search(r'"changes":\s*\[(.*?)\]', entry.group(1), re.DOTALL)
+              changes = cm.group(1) if cm else ''
+          bullets = re.findall(r'"((?:[^"\\]|\\.)*)"', changes)
+          with open('release_body.md', 'w') as f:
+              f.write(f"## Changes in v{version} ({date})\n\n")
+              for b in bullets:
+                  f.write(f"- {b}\n")
+          with open(sys.argv[1], 'a') as out:
+              out.write(f"version={version}\n")
+          EOF
+
+      - name: Check whether the tag already exists
+        id: tag
+        run: |
+          if git rev-parse "v${{ steps.meta.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.tag.outputs.exists == 'false'
+        run: |
+          git tag "v${{ steps.meta.outputs.version }}"
+          git push origin "v${{ steps.meta.outputs.version }}"
+
+      - name: Publish GitHub release
+        if: steps.tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.meta.outputs.version }}
+          name: DeCloud v${{ steps.meta.outputs.version }}
+          body_path: release_body.md
