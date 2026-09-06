@@ -666,7 +666,12 @@ def voice_config():
     if 'llm_cloud_model' in data and isinstance(data['llm_cloud_model'], str):
         updates['llm_cloud_model'] = data['llm_cloud_model'].strip()[:128]
     if 'llm_cloud_base_url' in data and isinstance(data['llm_cloud_base_url'], str):
-        updates['llm_cloud_base_url'] = data['llm_cloud_base_url'].strip()[:512]
+        url = data['llm_cloud_base_url'].strip()
+        # Only http/https so a base URL can't smuggle a non-HTTP scheme or
+        # point the API key at an unexpected protocol.
+        if url and not url.startswith(('http://', 'https://')):
+            return jsonify({'error': 'Base URL must start with http:// or https://'}), 400
+        updates['llm_cloud_base_url'] = url[:512]
 
     # API key is stored in .env (chmod 600), never in settings.json.
     api_key = (data.get('api_key') or '').strip()
@@ -709,11 +714,20 @@ def _run_ollama_install(job_id):
     _set_job(job_id, 'running', 'Downloading the Ollama installer…')
     try:
         script_path = os.path.join(tempfile.gettempdir(), 'decloud_ollama_install.sh')
+        # Best-effort one-click install: downloads the official installer over
+        # HTTPS (TLS provides transport integrity). There is no pinned hash —
+        # this is the same trust model as the official `curl | sh` docs and is
+        # only ever run when the user explicitly clicks "Install Ollama".
         with _requests.get('https://ollama.com/install.sh', stream=True, timeout=60) as r:
             r.raise_for_status()
             with open(script_path, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
+        # Sanity check: the download must look like a shell script before we run it.
+        head = open(script_path, 'rb').read(256).decode('utf-8', errors='replace')
+        if '#!/' not in head:
+            _set_job(job_id, 'error', 'Installer download did not look like a script — aborted.')
+            return
         proc = subprocess.run(['sh', script_path], capture_output=True, text=True, timeout=600)
         tail = (proc.stdout + proc.stderr)[-2000:]
         if proc.returncode == 0 or shutil.which('ollama'):

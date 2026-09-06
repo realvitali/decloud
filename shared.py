@@ -11,6 +11,19 @@ import hashlib
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 sock = Sock(app)
 
+# ─── Upload cap (prevents unbounded body DoS) ────────────────────
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
+
+# ─── Trust the reverse proxy/tunnel (Tailscale Funnel, cloudflared) ──
+# The tunnel terminates TLS and forwards to 127.0.0.1, so request.remote_addr
+# is always loopback. ProxyFix restores the real client IP (so rate limits and
+# login backoff are per-client, not one shared bucket) and sets request.is_secure
+# from X-Forwarded-Proto (so session cookies get the Secure flag). We trust only
+# one hop (x_for=1/x_proto=1) — the immediate proxy — which is safe because the
+# app binds 127.0.0.1 by default and is never directly internet-facing.
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
 # ─── Rate Limiting ──────────────────────────────────────────────
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -377,6 +390,8 @@ def llm_chat(messages, timeout=LLM_TIMEOUT):
 
 def get_book_chapter_text(book_id, chapter_idx):
     """Get full text of a specific chapter from JSON, PDF, or TXT source."""
+    if not is_safe_book_ref(book_id):
+        return '', ''
     json_matches = list(BOOKS_DIR.rglob(f'{book_id}.json'))
     json_source = json_matches[0] if json_matches else (BOOKS_DIR / f'{book_id}.json')
     if json_source.exists():
@@ -459,7 +474,7 @@ def safe_join_browse(base, *parts):
     """Join parts under base, resolving symlinks, and clamp any result that
     escapes base. Uses real-path containment (is_relative_to), NOT a string
     prefix check, so sibling directories with a shared name prefix can't
-    pass the check (e.g. /home/dallas vs /home/dallas2)."""
+    pass the check (e.g. /home/user vs /home/user2)."""
     base = Path(base)
     result = base
     for part in parts:
@@ -474,6 +489,19 @@ def safe_join_browse(base, *parts):
         if os.path.commonpath([str(base_resolved), str(result_resolved)]) == str(base_resolved):
             return result_resolved
     return base_resolved
+
+
+def is_safe_book_ref(value):
+    """Reject path traversal in a book id / file reference (no separators,
+    no '..', no leading dot). Book references are used in glob patterns, so a
+    bare `..` or slash would escape the library directory."""
+    if not isinstance(value, str) or not value:
+        return False
+    if '/' in value or '\\' in value or '..' in value:
+        return False
+    if value.startswith('.'):
+        return False
+    return True
 
 def format_size(size):
     """Format bytes as human-readable."""

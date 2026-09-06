@@ -206,9 +206,16 @@ document.getElementById('terminal-input')?.addEventListener('keydown', e => {
   }
 });
 
-async function runCmd(cmd) {
+function _appendTermLine(text, color) {
   const out = document.getElementById('terminal-output');
-  out.innerHTML += `<span style="color:var(--accent)">$ ${cmd}</span>\n`;
+  const div = document.createElement('div');
+  if (color) div.style.color = color;
+  div.textContent = text;
+  out.appendChild(div);
+}
+
+async function runCmd(cmd) {
+  _appendTermLine('$ ' + cmd, 'var(--accent)');
   try {
     const r = await fetch('/api/command', {
       method: 'POST',
@@ -216,9 +223,10 @@ async function runCmd(cmd) {
       body: JSON.stringify({ command: cmd })
     });
     const d = await r.json();
-    if (d.output) out.innerHTML += d.output;
-    if (d.error) out.innerHTML += `<span style="color:var(--red)">${d.error}</span>\n`;
-  } catch (e) { out.innerHTML += `<span style="color:var(--red)">Error: ${e.message}</span>\n`; }
+    if (d.output) _appendTermLine(d.output);
+    if (d.error) _appendTermLine(d.error, 'var(--red)');
+  } catch (e) { _appendTermLine('Error: ' + e.message, 'var(--red)'); }
+  const out = document.getElementById('terminal-output');
   out.scrollTop = out.scrollHeight;
 }
 

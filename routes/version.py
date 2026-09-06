@@ -8,9 +8,23 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.0.3"
+VERSION = "0.0.4"
 
 CHANGELOG = [
+    {
+        "version": "0.0.4",
+        "date": "2026-09-06",
+        "changes": [
+            "Security hardening + polish: fix path traversal in books, XSS sinks, and deploy/config issues",
+            "Fix arbitrary file read via books routes (book_id/file traversal)",
+            "Fix XSS across terminal, agent logs, file browser, reader, and chat (escaped output + single-quote)",
+            "Docker: require passcode + secret, localhost-only port, fix .dockerignore secret leak",
+            "Remove localhost.run relay from installer (Tailscale/cloudflared only)",
+            "Bump cryptography to 50.0.0 to close 11 known CVEs",
+            "Sanitize universe names, reject change_pin in open mode, ProxyFix for per-client limits",
+            "Add upload size cap and input validation",
+        ]
+    },
     {
         "version": "0.0.3",
         "date": "2026-09-06",

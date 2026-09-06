@@ -43,15 +43,16 @@ window.fetch = function(input, init) {
 };
 
 // ─── Shared helpers (single source of truth) ──────────────────────
-// escapeHtml must escape quotes too, because it's used inside HTML
-// attribute values (e.g. onclick="...'${escapeHtml(id)}'", href="...").
+// escapeHtml must escape quotes (both " and ') because it's used inside HTML
+// attribute values and inline onclick="...('${escapeHtml(x)}')" handlers.
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
   return String(s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // ─── Crash Recovery (runs before anything else can break) ──
