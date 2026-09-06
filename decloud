@@ -12,7 +12,7 @@ TUNNEL_PID_FILE="$APP_DIR/tunnel.pid"
 APP_PID_FILE="$APP_DIR/app.pid"
 
 # ─── Version ──────────────────────────────────────────────────────
-VERSION="0.1.0"
+VERSION="0.2.0"
 
 # ─── Helpers ────────────────────────────────────────────────────
 
@@ -246,8 +246,11 @@ case "${1:-}" in
         shift
         exec "$APP_DIR/.venv/bin/python" "$APP_DIR/scripts/decloud_update.py" "$@"
         ;;
+    tui|dashboard)
+        exec "$APP_DIR/.venv/bin/python" "$APP_DIR/scripts/decloud_tui.py"
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|qr|status|version|update}"
+        echo "Usage: $0 {start|stop|restart|qr|status|version|update|tui}"
         echo ""
         echo "  start   — Start app + tunnel"
         echo "  stop    — Stop everything"
@@ -257,6 +260,7 @@ case "${1:-}" in
         echo "  version — Show DeCloud version"
         echo "  update  — Check/apply updates from the terminal"
         echo "            (update check | update | update rollback | update <version>)"
+        echo "  tui     — Open the terminal dashboard"
         exit 1
         ;;
 esac
