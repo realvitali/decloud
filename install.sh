@@ -282,6 +282,12 @@ echo ""
 echo "→ Starting DeCloud..."
 chmod +x "$APP_DIR/decloud"
 
+# Put `decloud` on PATH (~/.local/bin) so `decloud update` / `decloud status`
+# work from any directory. Most distros already include ~/.local/bin in PATH.
+mkdir -p "$HOME/.local/bin"
+ln -sf "$APP_DIR/decloud" "$HOME/.local/bin/decloud"
+echo "✓ 'decloud' command installed to ~/.local/bin (decloud update, status, qr, …)"
+
 # The decloud wrapper starts the app and the Tailscale funnel together
 # (no third-party relays). A non-root user may need `sudo tailscale funnel`.
 "$APP_DIR/decloud" start
