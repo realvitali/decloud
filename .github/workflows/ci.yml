@@ -43,4 +43,4 @@ jobs:
         run: python -m pytest tests/ -v
 
       - name: Python compile check (all modules)
-        run: python -m py_compile app.py shared.py routes/*.py tts_worker.py tts_worker_json.py
+        run: python -m compileall -q app.py shared.py routes tts_worker.py tts_worker_json.py
