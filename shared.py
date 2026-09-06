@@ -99,10 +99,48 @@ else:
           'Set SECRET_KEY in .env to persist sessions.', flush=True)
 app.secret_key = SECRET_KEY
 
-# In-memory session store: token -> expiry epoch seconds
-SESSIONS: dict[str, float] = {}
+# Session store: token -> expiry epoch seconds. Persisted to disk so sessions
+# survive an app restart (still single-process — see note in save_sessions).
+SESSIONS_FILE = Path(__file__).parent / 'sessions.json'
 SESSION_TTL_SECONDS = 30 * 24 * 60 * 60  # 30 days
 MAX_SESSIONS = 50
+_session_lock = threading.Lock()
+
+
+def _load_sessions():
+    """Load persisted sessions, dropping any that are already expired."""
+    if SESSIONS_FILE.exists():
+        try:
+            data = json.loads(SESSIONS_FILE.read_text())
+            if isinstance(data, dict):
+                now = time.time()
+                return {k: v for k, v in data.items()
+                        if isinstance(v, (int, float)) and v > now}
+        except Exception:
+            pass
+    return {}
+
+
+SESSIONS: dict[str, float] = _load_sessions()
+
+
+def save_sessions():
+    """Persist sessions to disk (atomic write, chmod 600). Best-effort — a
+    failed write must not break auth. Single-process safe: this app is one
+    Flask process (threaded), so a file store is sufficient; multi-worker
+    deployments would need a shared store (Redis/DB)."""
+    with _session_lock:
+        try:
+            _purge_expired_sessions()
+            tmp = SESSIONS_FILE.with_suffix('.tmp')
+            tmp.write_text(json.dumps(SESSIONS))
+            tmp.replace(SESSIONS_FILE)
+            try:
+                os.chmod(SESSIONS_FILE, 0o600)
+            except OSError:
+                pass
+        except Exception:
+            pass
 
 # Failed-login tracking: remote address -> [attempt timestamps]
 _LOGIN_ATTEMPTS: dict[str, list[float]] = {}

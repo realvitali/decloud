@@ -8,9 +8,19 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.0.4"
+VERSION = "0.0.5"
 
 CHANGELOG = [
+    {
+        "version": "0.0.5",
+        "date": "2026-09-06",
+        "changes": [
+            "Persistent sessions + XSS hardening via event delegation",
+            "Sessions now persist across app restarts (sessions.json, chmod 600)",
+            "Refactor inline onclick handlers to data-* attributes in file browser, books, and agents (closes quote-breakout XSS)",
+            "ProxyFix trusts the tunnel hop so rate limits/backoff are per-client",
+        ]
+    },
     {
         "version": "0.0.4",
         "date": "2026-09-06",

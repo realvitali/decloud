@@ -60,7 +60,7 @@ async function loadLego(path = '', page = 1) {
     });
     const data = await r.json();
     if (data.error) {
-      list.innerHTML = `<span style="color:var(--red);padding:20px;display:block">${data.error}</span>`;
+      list.innerHTML = `<span style="color:var(--red);padding:20px;display:block">${escapeHtml(data.error)}</span>`;
       return;
     }
 
@@ -69,8 +69,8 @@ async function loadLego(path = '', page = 1) {
       const bc = document.getElementById('lego-breadcrumbs');
       bc.innerHTML = data.breadcrumbs.map((b, i) => {
         const isLast = i === data.breadcrumbs.length - 1;
-        return `<span class="lego-crumb ${isLast ? 'active' : ''}" onclick="loadLego('${escapeHtml(b.path)}')">${escapeHtml(b.name)}</span>${!isLast ? '<span class="lego-crumb-sep">/</span>' : ''}`;
-      }).join('') + `<button class="lego-view-toggle" onclick="toggleLegoView()">${legoViewMode === 'grid' ? ICONS.layers : ICONS.terminal}</button><button class="lego-view-toggle" onclick="toggleLegoSort()" style="margin-left:6px" title="Sort: ${legoSortMode}">${legoSortIcon()}</button><button class="lego-view-toggle" onclick="openSwipeMode('${path}')" style="margin-left:6px" title="Swipe mode">${ICONS.image}</button>`;
+        return `<span class="lego-crumb ${isLast ? 'active' : ''}" data-path="${escapeHtml(b.path)}" onclick="loadLego(this.dataset.path)">${escapeHtml(b.name)}</span>${!isLast ? '<span class="lego-crumb-sep">/</span>' : ''}`;
+      }).join('') + `<button class="lego-view-toggle" onclick="toggleLegoView()">${legoViewMode === 'grid' ? ICONS.layers : ICONS.terminal}</button><button class="lego-view-toggle" onclick="toggleLegoSort()" style="margin-left:6px" title="Sort: ${legoSortMode}">${legoSortIcon()}</button><button class="lego-view-toggle" onclick="openSwipeMode(legoCurrentPath)" style="margin-left:6px" title="Swipe mode">${ICONS.image}</button>`;
     }
 
     legoHasMore = data.has_more;
@@ -119,21 +119,18 @@ async function loadLego(path = '', page = 1) {
         const thumb = item.has_images
           ? `<img class="lego-thumb" data-src="/api/lego/thumbnail?path=${encodeURIComponent(item.path)}" alt="" loading="lazy" />`
           : `<div class="lego-thumb-placeholder"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>`;
-        return `<div class="lego-card${dimClass}" data-path="${item.path.replace(/"/g, '&quot;')}" onclick="if(!legoLoading)loadLego('${item.path.replace(/'/g, "\\'")}')">
+        return `<div class="lego-card${dimClass}" data-path="${escapeHtml(item.path)}" onclick="if(!legoLoading)loadLego(this.dataset.path)">
           <div class="lego-thumb-wrap">${thumb}${item.has_images ? '<div class="lego-thumb-badge"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>' : ''}${visitedDot}</div>
           <div class="lego-card-info">
             <div class="lego-card-name">${escapeHtml(item.name)}</div>
-            <div class="lego-card-meta" id="meta-${CSS.escape(item.path)}">${visited ? `Done ${visitTime} · ` : ''}${countLabel}</div>
+            <div class="lego-card-meta" id="meta-${encodeURIComponent(item.path)}">${visited ? `Done ${visitTime} · ` : ''}${countLabel}</div>
           </div>
         </div>`;
       } else {
-        const clickAction = isImage
-          ? `openLegoImage('${item.path}')`
-          : `downloadLegoFile('${item.path}')`;
         const thumb = isImage
           ? `<img class="lego-thumb" data-src="/api/lego/thumbnail?path=${encodeURIComponent(item.path)}" alt="" loading="lazy" data-save-path="${escapeHtml(item.path)}" />`
           : `<div class="lego-thumb-placeholder">${getLegoIcon(item.ext)}</div>`;
-        return `<div class="lego-card" data-path="${item.path.replace(/"/g, '&quot;')}" onclick="${clickAction}">
+        return `<div class="lego-card" data-path="${escapeHtml(item.path)}" data-type="${isImage ? 'image' : 'file'}" onclick="if(!legoLoading)legoItemClick(this)">
           <div class="lego-thumb-wrap">${thumb}</div>
           <div class="lego-card-info">
             <div class="lego-card-name">${escapeHtml(item.name)}</div>
@@ -185,7 +182,7 @@ async function loadLego(path = '', page = 1) {
       fetch(`/api/lego/folder_info?path=${encodeURIComponent(dir.path)}`)
         .then(r => r.json())
         .then(info => {
-          const metaEl = document.getElementById(`meta-${CSS.escape(dir.path)}`);
+          const metaEl = document.getElementById(`meta-${encodeURIComponent(dir.path)}`);
           if (metaEl) {
             metaEl.textContent = info.child_count > 0 ? `${info.child_count} items` : 'Empty';
           }
@@ -211,7 +208,7 @@ async function loadLego(path = '', page = 1) {
     });
   } catch (e) {
     if (e.name === 'AbortError') return;  // user navigated away, ignore
-    list.innerHTML = `<span style="color:var(--red);padding:20px;display:block">Error: ${e.message}</span>`;
+    list.innerHTML = `<span style="color:var(--red);padding:20px;display:block">Error: ${escapeHtml(e.message)}</span>`;
   } finally {
     legoLoading = false;
     legoAbortController = null;
@@ -316,6 +313,12 @@ function getLegoIcon(ext) {
   return i;
 }
 
+function legoItemClick(el) {
+  const path = el.dataset.path;
+  if (el.dataset.type === 'image') openLegoImage(path);
+  else downloadLegoFile(path);
+}
+
 function downloadLegoFile(path) {
   const link = document.createElement('a');
   link.href = `/api/lego/download?path=${encodeURIComponent(path)}`;
@@ -405,7 +408,7 @@ function removeLegoCard(path) {
   const cards = document.querySelectorAll('.lego-card');
   for (const card of cards) {
     const cardPath = card.getAttribute('data-path') || '';
-    if (cardPath === path || card.getAttribute('onclick')?.includes(path)) {
+    if (cardPath === path) {
       card.style.transition = 'opacity 0.2s, transform 0.2s';
       card.style.opacity = '0';
       card.style.transform = 'scale(0.8)';

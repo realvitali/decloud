@@ -70,3 +70,5 @@ run_tts.sh
 tunnel.url
 voice_hermes_session.txt
 voice_history.json
+sessions.json
+sessions.json.tmp
