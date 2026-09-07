@@ -8,9 +8,20 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 CHANGELOG = [
+    {
+        "version": "0.2.1",
+        "date": "2026-09-07",
+        "changes": [
+            "Polish pass: TUI non-blocking polls, session caching, agent workflow docs",
+            "TUI fetches run in worker threads so a slow/offline app never blocks the UI",
+            "TUI session token is cached in memory and invalidated on 401",
+            "Fixed session-cache bug that skipped loading the saved session",
+            "Added comprehensive AGENTS.md + CLAUDE.md workflow (test/bug/dependency/release protocols) for all agents",
+        ]
+    },
     {
         "version": "0.2.0",
         "date": "2026-09-06",
