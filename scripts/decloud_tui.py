@@ -36,20 +36,34 @@ MUTED = '#7a7a7a'
 FG = '#e8e6e3'
 BG = '#0a0a0a'
 
+_sess_cache = {'v': None}  # None = not loaded yet
+
 
 def _load_session():
+    if _sess_cache['v'] is not None:
+        return _sess_cache['v']
     try:
-        return json.loads(SESSION_FILE.read_text()).get('session', '')
+        _sess_cache['v'] = json.loads(SESSION_FILE.read_text()).get('session', '')
     except Exception:
-        return ''
+        _sess_cache['v'] = ''
+    return _sess_cache['v']
 
 
 def _save_session(token):
+    _sess_cache['v'] = token
     try:
         SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
         SESSION_FILE.write_text(json.dumps({'session': token}))
         SESSION_FILE.chmod(0o600)
     except Exception:
+        pass
+
+
+def _clear_session():
+    _sess_cache['v'] = ''
+    try:
+        SESSION_FILE.unlink(missing_ok=True)
+    except OSError:
         pass
 
 
@@ -67,6 +81,7 @@ def api(path, method='GET', data=None):
             return json.loads(r.read() or b'{}'), True
     except urllib.error.HTTPError as e:
         if e.code == 401:
+            _clear_session()
             return {'_unauthorized': True}, False
         try:
             return json.loads(e.read() or b'{}'), False
@@ -115,10 +130,6 @@ def bar(pct, width=18):
 
 def kb(value):
     return f"[{ACCENT}]{value}[/]"
-
-
-def panel_title(text):
-    return f"[bold {MUTED}]{text}[/]"
 
 
 class Panel(Static):
@@ -352,11 +363,19 @@ class DeCloudTUI(App):
             f"{kb('U')} update now")
 
     # ── panels ──
+    # Every panel fetches over HTTP in a worker thread so a slow or offline
+    # app never blocks the UI thread (4s timeouts would otherwise stutter).
+
+    @work(exclusive=False, thread=True)
+    def _poll_api(self, path, renderer):
+        d, ok = api(path)
+        if ok and self.is_running:
+            self.call_from_thread(renderer, d)
 
     def refresh_system(self):
-        d, ok = api('/api/system')
-        if not ok:
-            return
+        self._poll_api('/api/system', self._render_system)
+
+    def _render_system(self, d):
         lines = [
             f"[bold]CPU[/]   {bar(d.get('cpu_percent', 0))}"
             f"  {d.get('cpu_cores', '?')} cores",
@@ -373,9 +392,9 @@ class DeCloudTUI(App):
         self.query_one('#system', Static).update('\n'.join(lines))
 
     def refresh_voice(self):
-        d, ok = api('/api/voice/status')
-        if not ok:
-            return
+        self._poll_api('/api/voice/status', self._render_voice)
+
+    def _render_voice(self, d):
         cfg = d.get('config', {})
         hermes = d.get('hermes', {})
         brain = 'hermes' if hermes.get('available') else 'llm'
@@ -389,9 +408,9 @@ class DeCloudTUI(App):
         self.query_one('#voice', Static).update('\n'.join(lines))
 
     def refresh_music(self):
-        d, ok = api('/api/music/list')
-        if not ok:
-            return
+        self._poll_api('/api/music/list', self._render_music)
+
+    def _render_music(self, d):
         total = sum(s.get('size_mb', 0) for s in d)
         lines = [f"[bold]{len(d)} tracks[/]  ·  {total:,.0f} MB"]
         for s in d[:7]:
@@ -400,9 +419,9 @@ class DeCloudTUI(App):
         self.query_one('#music', Static).update('\n'.join(lines))
 
     def refresh_devices(self):
-        d, ok = api('/api/devices')
-        if not ok:
-            return
+        self._poll_api('/api/devices', self._render_devices)
+
+    def _render_devices(self, d):
         lines = []
         for dev in d[:10]:
             mark = '[#4dff6a]●[/]' if dev.get('online') else '[#3a3a3a]○[/]'
@@ -413,9 +432,9 @@ class DeCloudTUI(App):
         self.query_one('#devices', Static).update('\n'.join(lines) or 'none')
 
     def refresh_logs(self):
-        d, ok = api('/api/logs?limit=40')
-        if not ok:
-            return
+        self._poll_api('/api/logs?limit=40', self._render_logs)
+
+    def _render_logs(self, d):
         out = []
         for l in d[-30:]:
             level = (l.get('level') or 'INFO').upper()
@@ -426,13 +445,21 @@ class DeCloudTUI(App):
         self.query_one('#logs', Static).update('\n'.join(out))
 
     def refresh_update(self):
+        self._poll_update()
+
+    @work(exclusive=True, thread=True)
+    def _poll_update(self):
         try:
             import routes.update as upd
-            self.last_update_status = upd.check_status()
-            d = self.last_update_status
+            d = upd.check_status()
+            self.last_update_status = d
         except Exception as e:
             d = {'current_version': '?', 'update_available': False,
                  'latest': {}, 'error': str(e)}
+        if self.is_running:
+            self.call_from_thread(self._render_update, d)
+
+    def _render_update(self, d):
         if d.get('error'):
             self.query_one('#update', Static).update(
                 f"[#ff4d4d]{d['error']}[/]")
