@@ -209,7 +209,7 @@ accepted limitations.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests/        # 74 security + smoke tests
+python -m pytest tests/        # 99 security + smoke tests
 ```
 
 CI runs the suite on Ubuntu, macOS, and Windows.
