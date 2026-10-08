@@ -29,7 +29,7 @@ All features are optional — the app works with zero configuration. Features th
 ### Install
 
 ```bash
-git clone <repo-url> ~/decloud
+git clone https://github.com/realvitali/decloud.git ~/decloud
 cd ~/decloud
 ./install.sh
 ```
