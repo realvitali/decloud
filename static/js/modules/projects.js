@@ -96,11 +96,6 @@ function updateProjectCard(id, gh, vercel) {
   }
 }
 
-function escapeHtml(s) {
-  if (!s) return '';
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
 function openProject(id) {
   const p = PROJECTS.find(x => x.id === id);
   if (!p) return;

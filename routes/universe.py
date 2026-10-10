@@ -9,6 +9,7 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request
 from datetime import datetime
 from shared import app, get_whisper_model, STT_ENGINES
+import shared
 
 bp = Blueprint('universe', __name__)
 
@@ -161,6 +162,9 @@ def universe_add_person():
         return jsonify({"error": "Name required"}), 400
 
     safe = name.replace(" ", "_")
+    # Reject path separators / traversal so a name can't escape People/.
+    if not shared.is_safe_book_ref(safe):
+        return jsonify({"error": "Invalid name"}), 400
     path = journal_dir / 'People' / f"{safe}.md"
     if path.exists():
         return jsonify({"error": "Person already exists"}), 400

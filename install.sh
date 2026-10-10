@@ -25,6 +25,18 @@ echo ""
 echo "Detected: $OS_TYPE ($(uname -s) $(uname -r))"
 echo ""
 
+# ─── One-click updates require a git clone ───────────────────────
+# The in-app updater (Settings → About → Check for updates) checks out new
+# versions via git. A ZIP/tarball install works fine but can't self-update.
+if ! git -C "$APP_DIR" rev-parse --is-inside-work-tree &>/dev/null 2>&1; then
+    echo "⚠ This is NOT a git checkout — the in-app updater will be unavailable."
+    echo "  The app installs and runs fine, but for one-click updates reinstall with:"
+    echo ""
+    echo "    git clone https://github.com/realvitali/decloud ~/decloud"
+    echo "    cd ~/decloud && ./install.sh"
+    echo ""
+fi
+
 # ─── Check Python ───────────────────────────────────────────────
 if command -v python3 &>/dev/null; then
     PYBIN=python3
@@ -76,40 +88,46 @@ if ! command -v qrencode &>/dev/null; then
     fi
 fi
 
-# ─── Install tunnel client (for secure HTTPS access from phone) ──
-# localhost.run is primary — free, no account, no interstitial page.
-# Just needs SSH (pre-installed on macOS/Linux/WSL).
-# cloudflared is offered as a fallback.
+# ─── Install ffmpeg (audio: Whisper STT + Piper TTS) ─────────────
+if ! command -v ffmpeg &>/dev/null; then
+    echo "→ Installing ffmpeg (for voice)..."
+    if [ "$OS_TYPE" = "macos" ]; then
+        command -v brew &>/dev/null && brew install ffmpeg 2>/dev/null || echo "  (optional — skipped)"
+    elif command -v dnf &>/dev/null; then
+        sudo dnf install -y ffmpeg 2>/dev/null || echo "  (optional — skipped)"
+    elif command -v apt-get &>/dev/null; then
+        sudo apt-get install -y ffmpeg 2>/dev/null || echo "  (optional — skipped)"
+    elif command -v pacman &>/dev/null; then
+        sudo pacman -S --noconfirm ffmpeg 2>/dev/null || echo "  (optional — skipped)"
+    elif command -v zypper &>/dev/null; then
+        sudo zypper install -y ffmpeg 2>/dev/null || echo "  (optional — skipped)"
+    else
+        echo "  (ffmpeg not found — install it manually for voice)"
+    fi
+else
+    echo "✓ ffmpeg ready"
+fi
+
+# ─── Tunnel client (for secure HTTPS access from phone) ──────────
+# Tailscale Funnel is the only supported tunnel: it terminates TLS on your
+# own machine and requires your own tailnet. We deliberately do NOT use
+# third-party relays (localhost.run, localhost tunnel via SSH) — those
+# forward plaintext HTTP through someone else's box, which contradicts
+# DeCloud's privacy story. cloudflared (your own Cloudflare account) is the
+# fallback.
 TUNNEL_TOOL=""
 
-if command -v ssh &>/dev/null; then
-    TUNNEL_TOOL="localhost-run"
-    echo "✓ Tunnel client ready (localhost.run via SSH)"
+if command -v tailscale &>/dev/null; then
+    TUNNEL_TOOL="tailscale"
+    echo "✓ Tunnel client ready (Tailscale Funnel)"
 elif command -v cloudflared &>/dev/null; then
     TUNNEL_TOOL="cloudflared"
-    echo "✓ Tunnel client ready (cloudflared)"
-elif command -v npx &>/dev/null; then
-    TUNNEL_TOOL="localtunnel"
-    echo "✓ Tunnel client ready (localtunnel via npx)"
+    echo "✓ Tunnel client ready (cloudflared — your own Cloudflare account)"
 else
-    # Try to install cloudflared as fallback
-    echo "→ Installing cloudflared (for secure HTTPS tunnel)..."
-    ARCH=$(uname -m)
-    case "$ARCH" in
-        x86_64|amd64)  CF_ARCH="amd64" ;;
-        aarch64|arm64) CF_ARCH="arm64" ;;
-        *)             CF_ARCH="" ;;
-    esac
-    if [ -n "$CF_ARCH" ] && [ "$OS_TYPE" != "macos" ]; then
-        curl -sSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" \
-            -o "$HOME/.local/bin/cloudflared" 2>/dev/null && \
-            chmod +x "$HOME/.local/bin/cloudflared" && \
-            TUNNEL_TOOL="cloudflared" && echo "✓ cloudflared installed"
-    fi
-    if [ -z "$TUNNEL_TOOL" ]; then
-        echo "⚠ No tunnel client available. SSH is required for localhost.run:"
-        echo "   (SSH comes pre-installed on macOS, Linux, and WSL)"
-    fi
+    echo "⚠ No tunnel client available."
+    echo "  Install Tailscale: curl -fsSL https://tailscale.com/install.sh | sh"
+    echo "  Then: sudo tailscale up  (login to your account)"
+    echo "  (Alternative: install cloudflared from developers.cloudflare.com)"
 fi
 
 # ─── Create venv + install deps ─────────────────────────────────
@@ -136,12 +154,44 @@ if [ ! -f .env ]; then
     # Generate a random 8-digit passcode for app access (longer = harder
     # to brute-force; the app warns if you shorten it below 8 characters)
     PIN=$($PYBIN -c "import secrets; print(''.join(str(secrets.randbelow(10)) for _ in range(8)))")
-    echo "DECLOUD_PIN=$PIN" >> .env
+    # Idempotent: replace any existing DECLOUD_PIN line, else append.
+    if grep -q '^DECLOUD_PIN=' .env 2>/dev/null; then
+        if [ "$OS_TYPE" = "macos" ]; then
+            sed -i '' "s/^DECLOUD_PIN=.*/DECLOUD_PIN=$PIN/" .env
+        else
+            sed -i "s/^DECLOUD_PIN=.*/DECLOUD_PIN=$PIN/" .env
+        fi
+    else
+        echo "DECLOUD_PIN=$PIN" >> .env
+    fi
     echo "✓ .env created (edit it to customize paths)"
 fi
 
 # Lock down .env — contains PIN, SECRET_KEY, and any user-supplied tokens.
 chmod 600 .env 2>/dev/null || true
+
+# ─── Piper TTS voices (downloaded so speech works out of the box) ──
+PIPER_DIR=$(grep '^DECLOUD_PIPER_DIR=' .env 2>/dev/null | cut -d= -f2- | sed 's/^"//;s/"$//')
+if [ -z "$PIPER_DIR" ]; then
+    PIPER_DIR="$HOME/.local/share/piper"
+fi
+PIPER_DIR=$(eval echo "$PIPER_DIR")  # expand ~
+mkdir -p "$PIPER_DIR"
+_fetch_voice() {
+    local name="$1" quality="$2"
+    local base="https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/${name}/${quality}/en_US-${name}-${quality}"
+    if [ ! -f "$PIPER_DIR/en_US-${name}-${quality}.onnx" ]; then
+        echo "→ Downloading Piper voice ${name} (${quality})…"
+        curl -sSL "${base}.onnx" -o "$PIPER_DIR/en_US-${name}-${quality}.onnx" \
+            || echo "  (voice ${name} download failed — speech will use browser TTS)"
+    fi
+    if [ ! -f "$PIPER_DIR/en_US-${name}-${quality}.onnx.json" ]; then
+        curl -sSL "${base}.onnx.json" -o "$PIPER_DIR/en_US-${name}-${quality}.onnx.json" 2>/dev/null || true
+    fi
+}
+_fetch_voice "lessac" "high"
+_fetch_voice "lessac" "medium"
+_fetch_voice "kathleen" "low"
 
 # ─── SSL certs not needed — tunnel handles HTTPS ────────────────
 # The app runs HTTP on localhost only (not exposed). The cloudflared
@@ -227,43 +277,37 @@ SVCEOF
     echo "✓ Service installed and started"
 fi
 
-# ─── Start DeCloud (app + tunnel together) ───────────────────────
+# ─── Start DeCloud (app + Tailscale funnel together) ─────────────
 echo ""
 echo "→ Starting DeCloud..."
 chmod +x "$APP_DIR/decloud"
 
-# Check if app is already running (from systemd)
-if curl -s http://localhost:${DECLOUD_PORT:-8899}/ > /dev/null 2>&1; then
-    echo "✓ App already running via systemd"
-    # Just start the tunnel if not already running
-    if [ ! -f "$APP_DIR/tunnel.pid" ] || ! kill -0 $(cat "$APP_DIR/tunnel.pid" 2>/dev/null) 2>/dev/null; then
-        echo "Starting tunnel..."
-        nohup ssh -R 80:localhost:${DECLOUD_PORT:-8899} nokey@localhost.run \
-            -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-            -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
-            > "$APP_DIR/tunnel.log" 2>&1 &
-        echo $! > "$APP_DIR/tunnel.pid"
-        sleep 3
-    else
-        echo "✓ Tunnel already running"
-    fi
-else
-    # No systemd or app not running — start both
-    "$APP_DIR/decloud" start
-fi
+# Put `decloud` on PATH (~/.local/bin) so `decloud update` / `decloud status`
+# work from any directory. Most distros already include ~/.local/bin in PATH.
+mkdir -p "$HOME/.local/bin"
+ln -sf "$APP_DIR/decloud" "$HOME/.local/bin/decloud"
+echo "✓ 'decloud' command installed to ~/.local/bin (decloud update, status, qr, …)"
 
-# Get the tunnel URL from the log
-TUNNEL_LOG="$APP_DIR/tunnel.log"
-TUNNEL_URL=$(grep -oP 'https://[a-z0-9-]+\.lhr\.life' "$TUNNEL_LOG" 2>/dev/null | head -1 || true)
+# The decloud wrapper starts the app and the Tailscale funnel together
+# (no third-party relays). A non-root user may need `sudo tailscale funnel`.
+"$APP_DIR/decloud" start
+
+# Get the funnel URL (can take a few seconds to appear)
+TUNNEL_URL=""
+for _ in 1 2 3 4 5; do
+    TUNNEL_URL=$(tailscale funnel status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
+    [ -n "$TUNNEL_URL" ] && break
+    sleep 2
+done
 
 if [ -n "$TUNNEL_URL" ]; then
-    echo "✓ Tunnel active: $TUNNEL_URL"
+    echo "✓ Funnel active: $TUNNEL_URL"
     ACCESS_URL="$TUNNEL_URL"
 else
-    echo "⚠ Tunnel failed to start. Local access only:"
-    ACCESS_URL="https://localhost:${PORT}"
+    echo "⚠ Funnel not active yet. Local access only:"
+    ACCESS_URL="http://localhost:${PORT}"
     echo "  $ACCESS_URL"
-    echo "  To start tunnel manually: cloudflared tunnel --url https://localhost:${PORT}"
+    echo "  To start the tunnel: sudo tailscale funnel ${PORT}"
 fi
 
 # ─── Done ───────────────────────────────────────────────────────
@@ -276,8 +320,8 @@ echo "╚═══════════════════════�
 echo ""
 echo "🌐 LOCAL ACCESS: http://localhost:${PORT}"
 if [ -n "$TUNNEL_URL" ]; then
-    echo "📱 TEMPORARY TUNNEL (test only): $TUNNEL_URL"
-    echo "   PIN: ${DECLOUD_PIN:-set DECLOUD_PIN env var}"
+    echo "📱 TAILNET URL: $TUNNEL_URL"
+    echo "   PIN: ${PIN:-set in .env}"
     echo ""
     echo "⚠️  This tunnel URL changes every few hours. For permanent access:"
     echo ""

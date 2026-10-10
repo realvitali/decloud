@@ -20,6 +20,11 @@ function initOnboarding() {
   buildProgressDots();
   generateOnboardingQRs();
   showOnboardingStep(0);
+  // Prefill the agent name with the current value (if already set).
+  fetch('/api/voice/config').then(function(r) { return r.json(); }).then(function(d) {
+    var input = document.getElementById('agent-name-input');
+    if (input && d.config && d.config.agent_name) input.value = d.config.agent_name;
+  }).catch(function() {});
 }
 
 function buildProgressDots() {
@@ -88,6 +93,16 @@ function onboardingFinish() {
 }
 
 function finishOnboarding(skipped) {
+  // Persist the chosen agent name (empty = keep default).
+  var nameInput = document.getElementById('agent-name-input');
+  var name = nameInput ? nameInput.value.trim() : '';
+  if (name) {
+    fetch('/api/voice/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_name: name })
+    }).catch(function() {});
+  }
   localStorage.setItem('decloud_onboarded', '1');
   var overlay = document.getElementById('onboarding-overlay');
   if (overlay) {

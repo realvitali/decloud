@@ -1,13 +1,15 @@
 """Books library, audio, TTS, summarize, and Q&A routes."""
 from flask import Blueprint, jsonify, request, send_file
-import json, subprocess
+import json, re, subprocess
 from shared import (
-    app, BASE_DIR, BOOKS_DIR, AUDIO_DIR, VOICES,
+    app, BASE_DIR, AUDIO_DIR, VOICES,
     _pdf_text_cache, _pdf_chapters_cache,
     LLM_MODEL, LLM_TIMEOUT, llm_chat,
     get_book_chapter_text, get_text_up_to_position,
     format_size,
 )
+
+import shared
 
 bp = Blueprint('books', __name__)
 
@@ -19,15 +21,15 @@ def list_voices():
 @bp.route('/api/books')
 def list_books():
     books = []
-    if BOOKS_DIR.exists():
+    if shared.BOOKS_DIR.exists():
         # Collect both PDF and JSON source files
         # JSON sources first (preferred), then PDFs
         source_files = []
-        for f in sorted(BOOKS_DIR.rglob('*.json')):
+        for f in sorted(shared.BOOKS_DIR.rglob('*.json')):
             source_files.append((f, 'json'))
-        for f in sorted(BOOKS_DIR.rglob('*.pdf')):
+        for f in sorted(shared.BOOKS_DIR.rglob('*.pdf')):
             source_files.append((f, 'pdf'))
-        for f in sorted(BOOKS_DIR.rglob('*.txt')):
+        for f in sorted(shared.BOOKS_DIR.rglob('*.txt')):
             # Skip non-book txt files
             if f.stat().st_size > 3000:
                 source_files.append((f, 'txt'))
@@ -118,15 +120,21 @@ def get_book_text():
     chapter_idx = request.args.get('chapter') # e.g. '0'
     chapter_file = request.args.get('file')  # fallback: direct file name
 
+    # Reject path traversal in book/file references (they feed glob patterns).
+    if book_id and not shared.is_safe_book_ref(book_id):
+        return jsonify({'error': 'invalid book'}), 400
+    if chapter_file and not shared.is_safe_book_ref(chapter_file):
+        return jsonify({'error': 'invalid file'}), 400
+
     if chapter_file:
         # Search subfolders for the file
-        matches = list(BOOKS_DIR.rglob(chapter_file))
-        pdf_path = matches[0] if matches else (BOOKS_DIR / chapter_file)
+        matches = list(shared.BOOKS_DIR.rglob(chapter_file))
+        pdf_path = matches[0] if matches else (shared.BOOKS_DIR / chapter_file)
     elif book_id:
         # Check for JSON source first, then PDF (search subfolders)
-        json_matches = list(BOOKS_DIR.rglob(f'{book_id}.json'))
-        json_source = json_matches[0] if json_matches else (BOOKS_DIR / f'{book_id}.json')
-        pdf_matches = list(BOOKS_DIR.rglob(f'{book_id}.pdf'))
+        json_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.json'))
+        json_source = json_matches[0] if json_matches else (shared.BOOKS_DIR / f'{book_id}.json')
+        pdf_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.pdf'))
         if json_source.exists():
             # Serve from JSON source
             with open(json_source) as jf:
@@ -360,7 +368,7 @@ def _ensure_book_cover(book_id):
     if cover_file.exists():
         return
     # Try extracting first page from PDF
-    pdf_matches = list(BOOKS_DIR.rglob(f'{book_id}.pdf'))
+    pdf_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.pdf'))
     if pdf_matches:
         try:
             import fitz
@@ -453,7 +461,7 @@ def tts_status(book_id):
                 # If total_chapters equals done_chapters, the worker hasn't set the real total yet
                 # Use the source JSON to get the real total
                 if total_chapters <= done_chapters:
-                    source_json_matches = list(BOOKS_DIR.rglob(f'{book_id}.json'))
+                    source_json_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.json'))
                     source_json = source_json_matches[0] if source_json_matches else None
                     if source_json and source_json.exists():
                         src = json.loads(source_json.read_text())
@@ -488,10 +496,10 @@ def tts_status(book_id):
 def tts_start(book_id):
     """Start TTS generation with the book's configured voice."""
     # Check for JSON source first (search subfolders)
-    json_matches = list(BOOKS_DIR.rglob(f'{book_id}.json'))
-    pdf_matches = list(BOOKS_DIR.rglob(f'{book_id}.pdf'))
-    json_source = json_matches[0] if json_matches else (BOOKS_DIR / f'{book_id}.json')
-    pdf_path = pdf_matches[0] if pdf_matches else (BOOKS_DIR / f'{book_id}.pdf')
+    json_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.json'))
+    pdf_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.pdf'))
+    json_source = json_matches[0] if json_matches else (shared.BOOKS_DIR / f'{book_id}.json')
+    pdf_path = pdf_matches[0] if pdf_matches else (shared.BOOKS_DIR / f'{book_id}.pdf')
 
     if json_source.exists():
         source_path = json_source
@@ -532,7 +540,9 @@ def tts_stop(book_id):
     # checks it between chapters), which is written just above.
     import platform as _platform
     if _platform.system() != 'Windows':
-        subprocess.run(['pkill', '-f', f'tts_worker.*{book_id}'], capture_output=True)
+        # Escape the book id so it can't act as a regex that matches other
+        # processes (e.g. a book id containing '.' or '*').
+        subprocess.run(['pkill', '-f', 'tts_worker.*' + re.escape(book_id)], capture_output=True)
     return jsonify({'status': 'stopped'})
 
 # ─── API: Summarize & Q&A (uses local LLM) ────────────────────
@@ -544,7 +554,10 @@ def summarize():
     """
     data = request.json or {}
     book_id = data.get('book_id', '')
-    chapter_idx = int(data.get('chapter_idx', 0))
+    try:
+        chapter_idx = int(data.get('chapter_idx', 0) or 0)
+    except (TypeError, ValueError):
+        chapter_idx = 0
     word_index = data.get('word_index')  # position in current chapter
     mode = data.get('mode', 'both')  # 'chapter', 'sofar', or 'both'
 
@@ -606,7 +619,10 @@ def ask_question():
     """
     data = request.json or {}
     book_id = data.get('book_id', '')
-    chapter_idx = int(data.get('chapter_idx', 0))
+    try:
+        chapter_idx = int(data.get('chapter_idx', 0) or 0)
+    except (TypeError, ValueError):
+        chapter_idx = 0
     word_index = data.get('word_index')
     question = data.get('question', '')
     context_summaries = data.get('context_summaries', {})
