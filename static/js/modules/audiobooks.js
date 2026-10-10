@@ -25,14 +25,14 @@ async function loadBooks() {
                          b.status === 'generating' ? (total ? `${done}/${total} chapters` : `${done} chapters done`) :
                          total ? `${done}/${total} chapters` : 'Not generated';
       return `
-        <div class="book-item" onclick="openBook('${b.id}', '${b.title.replace(/'/g,"\\'")}')">
+        <div class="book-item" data-id="${escapeHtml(b.id)}" data-title="${escapeHtml(b.title)}" onclick="openBook(this.dataset.id, this.dataset.title)">
           <div class="book-item-info">
-            <div class="book-item-name">${b.title}</div>
-            <div class="book-item-meta">${b.size_mb} MB &nbsp;•&nbsp; ${b.voice || 'no voice'}</div>
+            <div class="book-item-name">${escapeHtml(b.title)}</div>
+            <div class="book-item-meta">${escapeHtml(b.size_mb)} MB &nbsp;•&nbsp; ${escapeHtml(b.voice || 'no voice')}</div>
           </div>
           <div class="book-item-right">
             <div class="book-status ${statusClass}">${statusText}</div>
-            <button class="settings-btn" onclick="event.stopPropagation(); openSettingsForBook('${b.id}')" title="Settings">&#9881;</button>
+            <button class="settings-btn" data-id="${escapeHtml(b.id)}" onclick="event.stopPropagation(); openSettingsForBook(this.dataset.id)" title="Settings">&#9881;</button>
           </div>
         </div>
       `;
@@ -80,6 +80,7 @@ let player = null;
 let audioChapterIdx = 0;
 let transcriptWords = [];
 let pollInterval = null;
+let isGenerating = false;
 
 // ─── Open Book ────────────────────────────────────────────
 async function openBook(bookId, title) {
@@ -238,7 +239,7 @@ function renderReaderText() {
   const words = readerText.split(/(\s+)/);
   el.innerHTML = words.map((w, i) => {
     if (/^\s+$/.test(w)) return w;
-    return `<span class="reader-word" data-idx="${i}" onclick="handleWordTap(this, ${i})">${w}</span>`;
+    return `<span class="reader-word" data-idx="${i}" onclick="handleWordTap(this, ${i})">${escapeHtml(w)}</span>`;
   }).join('');
 
   el.style.fontSize = fs + 'px';
@@ -549,7 +550,7 @@ function buildTranscript(chapter) {
     const end = (elapsed / totalWeight) * duration;
     words.push({ idx: i, start, end });
     wordIdx++;
-    return `<span class="tw" id="tw-${i}">${t}</span>`;
+    return `<span class="tw" id="tw-${i}">${escapeHtml(t)}</span>`;
   }).join('');
 
   transcriptWords = words;
@@ -667,6 +668,13 @@ function formatTime(sec) {
 }
 
 // ─── Generation Banner ───────────────────────────────────
+function setupPlayer() {
+  player = document.getElementById('audio-player');
+  player.removeEventListener('timeupdate', onTimeUpdate);
+  player.addEventListener('timeupdate', onTimeUpdate);
+  document.getElementById('audio-mode-btn').disabled = false;
+}
+
 function showGenBanner(progress) {
   const banner = document.getElementById('gen-banner');
   banner.style.display = 'block';
@@ -1013,7 +1021,7 @@ async function askSummaryQuestion() {
   input.value = '';
 
   const chat = document.getElementById('summary-chat');
-  chat.innerHTML += `<div class="summary-msg user">${question}</div>`;
+  chat.innerHTML += `<div class="summary-msg user">${escapeHtml(question)}</div>`;
   chat.innerHTML += `<div class="summary-msg ai loading"><div class="pixel-loader"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>`;
   chat.scrollTop = chat.scrollHeight;
 

@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, request, make_response
 from shared import (
     app, DECLOUD_PIN, limiter, SESSIONS, SESSION_TTL_SECONDS, MAX_SESSIONS,
     _LOGIN_ATTEMPTS, _LOGIN_BACKOFF_WINDOW, _LOGIN_BACKOFF_MAX,
-    _csrf_for_token, _purge_expired_sessions,
+    _csrf_for_token, _purge_expired_sessions, save_sessions,
 )
 import hmac
 import secrets
@@ -57,6 +57,7 @@ def login():
         for old_token, _ in oldest:
             SESSIONS.pop(old_token, None)
     SESSIONS[token] = time.time() + SESSION_TTL_SECONDS
+    save_sessions()
 
     resp = make_response(jsonify({
         'ok': True,
@@ -102,6 +103,51 @@ def logout():
             token = auth_header[7:].strip()
     if token:
         SESSIONS.pop(token, None)
+        save_sessions()
     resp = make_response(jsonify({'ok': True}))
     resp.delete_cookie('decloud_session')
     return resp
+
+
+@bp.route('/api/auth/pin', methods=['POST'])
+@limiter.limit("10 per hour")
+def change_pin():
+    """Change the access passcode. Requires the current passcode (in case a
+    valid session is held by an untrusted device) and writes the new one to
+    .env + the running process, then invalidates every session."""
+    import shared
+
+    data = request.get_json(silent=True) or {}
+    current = data.get('current_pin', '') or ''
+    new = data.get('new_pin', '') or ''
+    if not isinstance(current, str) or not isinstance(new, str):
+        return jsonify({'error': 'Invalid request'}), 400
+
+    # In open mode there is no existing passcode to verify, so an
+    # unauthenticated caller could set one and lock the owner out. Refuse.
+    if not shared.DECLOUD_PIN:
+        return jsonify({'error': 'No passcode is set — configure DECLOUD_PIN in .env first.'}), 400
+
+    if not hmac.compare_digest(current, shared.DECLOUD_PIN):
+        return jsonify({'error': 'Current passcode is incorrect'}), 401
+
+    new = new.strip()
+    if len(new) < 8:
+        return jsonify({'error': 'New passcode must be at least 8 characters'}), 400
+    if len(new) > 64:
+        return jsonify({'error': 'New passcode is too long (max 64 characters)'}), 400
+    if hmac.compare_digest(new, shared.DECLOUD_PIN):
+        return jsonify({'error': 'New passcode must be different from the current one'}), 400
+
+    if not shared.set_env_value('DECLOUD_PIN', new):
+        return jsonify({'error': 'Could not write .env (check permissions)'}), 500
+
+    # Update the running process (shared gate + this module's copy) and
+    # force every device to sign in again with the new passcode.
+    shared.DECLOUD_PIN = new
+    global DECLOUD_PIN
+    DECLOUD_PIN = new
+    SESSIONS.clear()
+    save_sessions()
+
+    return jsonify({'ok': True, 'message': 'Passcode updated — please sign in again'})

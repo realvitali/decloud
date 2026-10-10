@@ -116,6 +116,35 @@
   margin-bottom: 10px;
 }
 
+.onboarding-name {
+  margin: 16px 0;
+  text-align: left;
+}
+
+.onboarding-name label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.onboarding-name input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  font-size: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: var(--chip-bg);
+  color: var(--text);
+  outline: none;
+}
+
+.onboarding-name input:focus {
+  border-color: var(--accent);
+}
+
 .onboarding-hint {
   font-size: 12px !important;
   color: var(--text-faint) !important;

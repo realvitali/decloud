@@ -5,10 +5,12 @@ from pathlib import Path
 import random as _random
 import shutil as _shutil
 from shared import (
-    FILES_DIR, format_size,
+    format_size,
     _folder_info_cache,
     safe_join_browse, _generate_thumbnail,
 )
+
+import shared
 
 bp = Blueprint('lego', __name__)
 
@@ -20,7 +22,7 @@ def lego_browse():
     subpath = request.args.get('path', '')
     page = max(1, request.args.get('page', 1, type=int))
     per_page = min(500, request.args.get('per_page', 200, type=int))
-    target = safe_join_browse(FILES_DIR, *subpath.split('/')) if subpath else FILES_DIR
+    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/')) if subpath else shared.FILES_DIR
 
     if not target.exists() or not target.is_dir():
         return jsonify({'error': 'not found or not a directory'}), 404
@@ -35,7 +37,7 @@ def lego_browse():
                     continue
                 try:
                     is_dir = entry.is_dir()
-                    rel_path = str(Path(entry.path).relative_to(FILES_DIR))
+                    rel_path = str(Path(entry.path).relative_to(shared.FILES_DIR))
                     if is_dir:
                         all_items.append({
                             'name': entry.name,
@@ -109,7 +111,7 @@ def lego_folder_info():
     subpath = request.args.get('path', '')
     if not subpath:
         return jsonify({'error': 'path required'}), 400
-    target = safe_join_browse(FILES_DIR, *subpath.split('/'))
+    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
     if not target.exists() or not target.is_dir():
         return jsonify({'error': 'not found'}), 404
 
@@ -151,7 +153,7 @@ def lego_download():
     subpath = request.args.get('path', '')
     if not subpath:
         return jsonify({'error': 'path required'}), 400
-    target = safe_join_browse(FILES_DIR, *subpath.split('/'))
+    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
     if not target.exists() or not target.is_file():
         return jsonify({'error': 'not found'}), 404
     return send_file(str(target), as_attachment=True, download_name=target.name)
@@ -162,7 +164,7 @@ def lego_thumbnail():
     subpath = request.args.get('path', '')
     if not subpath:
         return jsonify({'error': 'path required'}), 400
-    target = safe_join_browse(FILES_DIR, *subpath.split('/'))
+    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
     if not target.exists():
         return jsonify({'error': 'not found'}), 404
 
@@ -210,7 +212,7 @@ import random as _random
 def lego_random_image():
     """Get a random image file from a folder (non-recursive, fast). Query: path=<relative>"""
     subpath = request.args.get('path', '')
-    target = safe_join_browse(FILES_DIR, *subpath.split('/')) if subpath else FILES_DIR
+    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/')) if subpath else shared.FILES_DIR
     if not target.exists() or not target.is_dir():
         return jsonify({'error': 'not found'}), 404
 
@@ -228,7 +230,7 @@ def lego_random_image():
 
     pick = _random.choice(images)
     return jsonify({
-        'path': str(pick.relative_to(FILES_DIR)),
+        'path': str(pick.relative_to(shared.FILES_DIR)),
         'name': pick.name,
         'total_images': len(images),
     })
@@ -242,8 +244,8 @@ def lego_trash():
     if not subpath:
         return jsonify({'error': 'path required'}), 400
 
-    target = safe_join_browse(FILES_DIR, *subpath.split('/'))
-    files_root_resolved = FILES_DIR.resolve()
+    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
+    files_root_resolved = shared.FILES_DIR.resolve()
     target_resolved = target.resolve()
 
     if not str(target_resolved).startswith(str(files_root_resolved) + '/') and target_resolved != files_root_resolved:
@@ -253,7 +255,7 @@ def lego_trash():
     if target.is_symlink():
         return jsonify({'error': 'cannot trash symlinks'}), 400
 
-    trash_dir = (FILES_DIR / 'file types' / 'trash')
+    trash_dir = (shared.FILES_DIR / 'file types' / 'trash')
     trash_dir.mkdir(parents=True, exist_ok=True)
     dest = trash_dir / target_resolved.name
 
@@ -267,7 +269,7 @@ def lego_trash():
 
     try:
         _shutil.move(str(target_resolved), str(dest))
-        return jsonify({'ok': True, 'moved_to': str(dest.relative_to(FILES_DIR))})
+        return jsonify({'ok': True, 'moved_to': str(dest.relative_to(shared.FILES_DIR))})
     except Exception as e:
         return jsonify({'error': f'trash error: {str(e)}'}), 500
 
@@ -283,10 +285,10 @@ def lego_shred():
     if not subpath:
         return jsonify({'error': 'path required'}), 400
 
-    target = safe_join_browse(FILES_DIR, *subpath.split('/'))
+    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
 
     # Hard safety checks
-    files_root_resolved = FILES_DIR.resolve()
+    files_root_resolved = shared.FILES_DIR.resolve()
     target_resolved = target.resolve()
 
     # Must be inside Files (strict prefix match)
@@ -323,9 +325,9 @@ def lego_poof():
     if not subpath:
         return jsonify({'error': 'path required'}), 400
 
-    target = safe_join_browse(FILES_DIR, *subpath.split('/'))
+    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
 
-    files_root_resolved = FILES_DIR.resolve()
+    files_root_resolved = shared.FILES_DIR.resolve()
     target_resolved = target.resolve()
 
     # Must be inside Files (strict prefix match)
@@ -341,7 +343,7 @@ def lego_poof():
         return jsonify({'error': 'cannot poof symlinks'}), 400
 
     # Must not already be in the poof directory
-    poof_dir = (FILES_DIR / 'file types' / 'poof')
+    poof_dir = (shared.FILES_DIR / 'file types' / 'poof')
     poof_dir.mkdir(parents=True, exist_ok=True)
     dest = poof_dir / target_resolved.name
 
@@ -356,7 +358,7 @@ def lego_poof():
 
     try:
         _shutil.move(str(target_resolved), str(dest))
-        return jsonify({'ok': True, 'moved_to': str(dest.relative_to(FILES_DIR))})
+        return jsonify({'ok': True, 'moved_to': str(dest.relative_to(shared.FILES_DIR))})
     except Exception as e:
         return jsonify({'error': f'poof error: {str(e)}'}), 500
 
@@ -369,9 +371,9 @@ def lego_mark_done():
     if not subpath:
         return jsonify({'error': 'path required'}), 400
 
-    target = safe_join_browse(FILES_DIR, *subpath.split('/'))
+    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
 
-    files_root_resolved = FILES_DIR.resolve()
+    files_root_resolved = shared.FILES_DIR.resolve()
     target_resolved = target.resolve()
 
     # Must be inside Files
@@ -397,7 +399,7 @@ def lego_mark_done():
     new_name = target_resolved.name + ' (MANUALLY DONE)'
 
     # Move into /manually done/ folder
-    done_dir = FILES_DIR / 'manually done'
+    done_dir = shared.FILES_DIR / 'manually done'
     done_dir.mkdir(parents=True, exist_ok=True)
     dest = done_dir / new_name
 
@@ -407,7 +409,7 @@ def lego_mark_done():
 
     try:
         _shutil.move(str(target_resolved), str(dest))
-        new_rel = str(dest.relative_to(FILES_DIR))
+        new_rel = str(dest.relative_to(shared.FILES_DIR))
         return jsonify({'ok': True, 'new_path': new_rel, 'new_name': new_name})
     except Exception as e:
         return jsonify({'error': f'move/rename error: {str(e)}'}), 500

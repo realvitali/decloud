@@ -1,16 +1,100 @@
-"""Version info route for About panel."""
-import os
+"""Version info route for About panel.
+
+Single source of truth: VERSION below, which must match CHANGELOG[0].
+`date` shown in the About panel is the release date of that entry.
+"""
 import json
-from pathlib import Path
 from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION_FILE = Path(__file__).parent.parent / 'version.json'
-
-VERSION = "0.0.2"
+VERSION = "0.2.1"
 
 CHANGELOG = [
+    {
+        "version": "0.2.1",
+        "date": "2026-09-07",
+        "changes": [
+            "Polish pass: TUI non-blocking polls, session caching, agent workflow docs",
+            "TUI fetches run in worker threads so a slow/offline app never blocks the UI",
+            "TUI session token is cached in memory and invalidated on 401",
+            "Fixed session-cache bug that skipped loading the saved session",
+            "Added comprehensive AGENTS.md + CLAUDE.md workflow (test/bug/dependency/release protocols) for all agents",
+        ]
+    },
+    {
+        "version": "0.2.0",
+        "date": "2026-09-06",
+        "changes": [
+            "TUI dashboard: 'decloud tui'",
+            "'decloud tui' opens a brutalist terminal dashboard (system, voice, music, devices, logs)",
+            "Update panel + 'U' action reuse the verified updater",
+            "works even when the app is offline",
+            "Optional 'textual' dependency via requirements-tui.txt (friendly one-line hint if missing)",
+            "Passcode login handled in-TUI and the session is stored in ~/.config/decloud",
+        ]
+    },
+    {
+        "version": "0.1.0",
+        "date": "2026-09-06",
+        "changes": [
+            "Terminal updates: 'decloud update' CLI",
+            "'decloud update' command (check / update / rollback) shares the in-app updater's verified logic",
+            "install.sh symlinks decloud into ~/.local/bin so it's on PATH",
+        ]
+    },
+    {
+        "version": "0.0.6",
+        "date": "2026-09-06",
+        "changes": [
+            "One-click updates: auto-release pipeline, semver compare, supervised restarts",
+            "Updater only offers genuine upgrades (semver compare — no more downgrade offers)",
+            "GitHub Action auto-creates a git tag + release for each version bump (no manual tagging)",
+            "Manual ./decloud starts now supervise the app so self-update restarts work without systemd",
+            "install.sh warns when the install is not a git checkout (updates need git)",
+        ]
+    },
+    {
+        "version": "0.0.5",
+        "date": "2026-09-06",
+        "changes": [
+            "Persistent sessions + XSS hardening via event delegation",
+            "Sessions now persist across app restarts (sessions.json, chmod 600)",
+            "Refactor inline onclick handlers to data-* attributes in file browser, books, and agents (closes quote-breakout XSS)",
+            "ProxyFix trusts the tunnel hop so rate limits/backoff are per-client",
+        ]
+    },
+    {
+        "version": "0.0.4",
+        "date": "2026-09-06",
+        "changes": [
+            "Security hardening + polish: fix path traversal in books, XSS sinks, and deploy/config issues",
+            "Fix arbitrary file read via books routes (book_id/file traversal)",
+            "Fix XSS across terminal, agent logs, file browser, reader, and chat (escaped output + single-quote)",
+            "Docker: require passcode + secret, localhost-only port, fix .dockerignore secret leak",
+            "Remove localhost.run relay from installer (Tailscale/cloudflared only)",
+            "Bump cryptography to 50.0.0 to close 11 known CVEs",
+            "Sanitize universe names, reject change_pin in open mode, ProxyFix for per-client limits",
+            "Add upload size cap and input validation",
+        ]
+    },
+    {
+        "version": "0.0.3",
+        "date": "2026-09-06",
+        "changes": [
+            "Voice agent: drives Hermes natively with a persistent session (falls back to local Ollama/cloud when Hermes isn't installed)",
+            "Voice agent: modular STT/LLM/TTS engines configurable from Settings → Voice — no terminal needed",
+            "Voice agent: command access tiers (Talk / Basic / Full) with a confirmation for unrestricted access",
+            "Voice agent: remembers your conversation, can be named, and shows clear errors instead of failing silently",
+            "Voice agent: browser or Whisper speech recognition, Piper or browser speech",
+            "Security: fixed open-mode auth bypass on fresh installs (duplicate passcode in .env)",
+            "Security: fixed path traversal in the music and file-browser routes",
+            "UI: voice overlay now matches the black/white minimalism theme",
+            "Settings: change your passcode in-app; library paths apply instantly without restart",
+            "Devices: real Tailscale device list with names, OS, and online status",
+            "Fixes: TTS autoplay on phones, stuck 'speaking' state, book-reader crash, duplicate HTML cleanup",
+        ]
+    },
     {
         "version": "0.0.2",
         "date": "2026-08-19",
@@ -53,12 +137,20 @@ CHANGELOG = [
 ]
 
 
+def _current_entry():
+    """Changelog entry matching VERSION; falls back to the newest entry."""
+    for entry in CHANGELOG:
+        if entry.get('version') == VERSION:
+            return entry
+    return CHANGELOG[0] if CHANGELOG else {"version": VERSION, "date": "", "changes": []}
+
+
 @bp.route('/api/version')
 def get_version():
     """Return current version and changelog."""
-    current = CHANGELOG[0] if CHANGELOG else {"version": "0.0.0", "date": "", "changes": []}
+    current = _current_entry()
     return jsonify({
         "version": current["version"],
         "date": current["date"],
-        "changelog": CHANGELOG
+        "changelog": CHANGELOG,
     })

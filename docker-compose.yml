@@ -2,21 +2,26 @@ services:
   decloud:
     build: .
     ports:
-      - "8899:8899"
+      - "127.0.0.1:8899:8899"   # localhost only — expose via a tunnel/reverse proxy, not the LAN
     volumes:
       # Mount your actual directories here
       - ./data/books:/data/books
       - ./data/files:/data/files
       - ./data/music:/data/music
       - decloud-cache:/data/cache
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # makes OLLAMA_HOST resolve on Linux
     environment:
       - DECLOUD_PORT=8899
-      - DECLOUD_HOST=0.0.0.0
       - DECLOUD_BOOKS_DIR=/data/books
       - DECLOUD_FILES_DIR=/data/files
       - DECLOUD_MUSIC_DIR=/data/music
       - OLLAMA_HOST=http://host.docker.internal:11434
-      - SECRET_KEY=${SECRET_KEY:-change-me}
+      # REQUIRED — no insecure defaults. Set these in a .env file:
+      #   DECLOUD_PIN=<a strong passcode>  (the app runs OPEN MODE without it)
+      #   SECRET_KEY=<random string>
+      - DECLOUD_PIN=${DECLOUD_PIN:?DECLOUD_PIN is required — see .env.example}
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
     restart: unless-stopped
 
 volumes:
