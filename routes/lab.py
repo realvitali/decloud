@@ -5,6 +5,7 @@ Each device (full DeCloud or the standalone lab_report.py agent) serves
 parallel and sums them up.
 """
 import hmac
+import re
 import os
 import platform
 import secrets
@@ -34,7 +35,7 @@ def _prefs(settings):
     p = settings.get('lab') or {}
     return {
         'name': str(p.get('name') or platform.node() or 'my lab')[:24],
-        'accent': p.get('accent') or '#ffb454',
+        'accent': p.get('accent') if re.fullmatch(r'#[0-9a-fA-F]{6}', str(p.get('accent'))) else '#ffb454',
         'style': p.get('style') if p.get('style') in STYLES else 'neofetch',
         'services': [s for s in p.get('services', []) if isinstance(s, str)][:20],
     }
@@ -68,6 +69,56 @@ def pair_code():
                     'url': url})
 
 
+def _num(v, default=0):
+    try:
+        f = float(v)
+        return f if f == f and abs(f) < 1e18 else default  # drop NaN / absurd values
+    except (TypeError, ValueError):
+        return default
+
+
+def _str(v, n=80):
+    return str(v)[:n] if v is not None else ''
+
+
+def _clean(r):
+    """Rebuild a peer's report from known fields with forced types.
+    A peer is another machine: never pass its JSON through to the page as-is."""
+    if not isinstance(r, dict):
+        raise ValueError
+    run = r.get('running') if isinstance(r.get('running'), dict) else {}
+    lst = lambda k: [x for x in run.get(k, []) if isinstance(x, (dict, str))][:30] if isinstance(run.get(k), list) else []
+    st = r.get('storage') if isinstance(r.get('storage'), dict) else {}
+    return {
+        'kind': 'agent' if r.get('kind') == 'agent' else 'decloud',
+        'hostname': _str(r.get('hostname'), 64), 'os': _str(r.get('os')), 'kernel': _str(r.get('kernel')),
+        'arch': _str(r.get('arch'), 20), 'cpu_name': _str(r.get('cpu_name')),
+        'cores': int(_num(r.get('cores'))), 'cpu_percent': max(0, min(100, _num(r.get('cpu_percent')))),
+        'load': None, 'temp': _num(r.get('temp'), None),
+        'gpus': [{'name': _str(g.get('name')), 'vram_gb': _num(g.get('vram_gb'), None),
+                  'util': _num(g.get('util'), None), 'temp': _num(g.get('temp'), None)}
+                 for g in (r.get('gpus') or [])[:8] if isinstance(g, dict)],
+        'ram_total': _num(r.get('ram_total')), 'ram_used': _num(r.get('ram_used')),
+        'storage': {'total': _num(st.get('total')), 'used': _num(st.get('used')), 'volumes': int(_num(st.get('volumes')))},
+        'uptime_s': int(_num(r.get('uptime_s'))),
+        'running': {
+            'containers': [{'name': _str(c.get('name')), 'image': _str(c.get('image'))} for c in lst('containers') if isinstance(c, dict)],
+            'models': [_str(m) for m in lst('models') if isinstance(m, str)],
+            'services': [{'name': _str(x.get('name')), 'active': x.get('active') is True} for x in lst('services') if isinstance(x, dict)],
+            'processes': [{'name': _str(x.get('name'), 40), 'cpu': _num(x.get('cpu')), 'mem': _num(x.get('mem'))} for x in lst('processes') if isinstance(x, dict)],
+        },
+    }
+
+
+@bp.route('/api/lab/reset-key', methods=['POST'])
+def reset_key():
+    """Revoke every hub that paired with this device; they must re-pair with the new code."""
+    settings = load_settings()
+    settings['lab_token'] = secrets.token_urlsafe(24)
+    save_settings(settings)
+    return jsonify({'ok': True})
+
+
 def _fetch(dev):
     try:
         r = _requests.get(dev['url'] + '/api/lab/report', timeout=4,
@@ -75,10 +126,10 @@ def _fetch(dev):
         if r.status_code == 401:
             return {'error': 'Key rejected — pair this device again'}
         r.raise_for_status()
-        return r.json()
+        return _clean(r.json())
     except _requests.RequestException:
         return {'error': 'Offline or unreachable'}
-    except ValueError:
+    except (ValueError, AttributeError, TypeError):
         return {'error': 'Not a DeCloud device'}
 
 
@@ -119,7 +170,7 @@ def set_prefs():
     p = _prefs(settings)
     if isinstance(data.get('name'), str) and data['name'].strip():
         p['name'] = data['name'].strip()[:24]
-    if isinstance(data.get('accent'), str) and len(data['accent']) == 7 and data['accent'].startswith('#'):
+    if isinstance(data.get('accent'), str) and re.fullmatch(r'#[0-9a-fA-F]{6}', data['accent']):
         p['accent'] = data['accent']
     if data.get('style') in STYLES:
         p['style'] = data['style']

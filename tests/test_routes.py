@@ -142,3 +142,14 @@ def test_lab_report_rejects_wrong_token(monkeypatch):
     client = app.test_client()  # no session cookie: only the lab token can get in
     assert client.get('/api/lab/report', headers={'Authorization': 'Bearer wrong'}).status_code == 401
     assert client.get('/api/lab/report', headers={'Authorization': 'Bearer right'}).status_code == 200
+
+
+def test_lab_peer_report_is_sanitized():
+    from routes.lab import _clean
+    evil = {'cpu_percent': '1%"><img src=x onerror=alert(1)>', 'cores': '<b>', 'temp': 'x"',
+            'storage': {'total': 'NaN', 'volumes': '"'}, 'gpus': [{'name': 'g', 'vram_gb': '"'}],
+            'running': {'models': ['ok', {'x': 1}], 'containers': 'nope'}, 'kind': '<script>'}
+    c = _clean(evil)
+    assert c['cpu_percent'] == 0 and c['cores'] == 0 and c['temp'] is None and c['kind'] == 'decloud'
+    assert c['storage']['total'] == 0 and c['gpus'][0]['vram_gb'] is None
+    assert c['running']['models'] == ['ok'] and c['running']['containers'] == []

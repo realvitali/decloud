@@ -235,8 +235,10 @@ async function loadSystem() {
           <button class="lab-btn" onclick="labCopy(document.getElementById('lab-agent-cmd').textContent)">Copy commands</button>
           <p class="lab-dim">Full DeCloud gives you every app on that machine but is heavier. The agent is one small file with no web UI, so it's safe on anything that only needs to report.</p>
         </div>
-        <button class="lab-btn" onclick="labShowCode()">Show this device's code</button>
+        <div class="lab-row"><button class="lab-btn" onclick="labShowCode()">Show this device's code</button>
+          <button class="lab-btn" onclick="labResetKey()">Reset key</button></div>
         <pre class="lab-cmd" id="lab-own-code" hidden></pre>
+        <p class="lab-dim">Reset key disconnects every hub that added this device. They'll need the new code.</p>
       </details>`;
     document.getElementById('lab-agent-cmd').textContent =
       `sudo apt install -y python3-psutil   # or: pip install psutil\ncurl -fsSL ${location.origin}/lab-agent.py -o decloud-agent.py\npython3 decloud-agent.py --install-service`;
@@ -296,6 +298,13 @@ async function labShowCode() {
   el.textContent = d.code;
   el.hidden = false;
   labCopy(d.code);
+}
+
+async function labResetKey() {
+  if (!confirm('Disconnect every hub that added this device?')) return;
+  await fetch('/api/lab/reset-key', { method: 'POST' });
+  document.getElementById('lab-own-code').hidden = true;
+  document.getElementById('lab-msg').textContent = 'Key reset. Hubs that had this device must add it again.';
 }
 
 function labCopy(text) {
