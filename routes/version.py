@@ -8,9 +8,17 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 
 CHANGELOG = [
+    {
+        "version": "0.4.1",
+        "date": "2026-10-11",
+        "changes": [
+            "Fix Windows CI (musicgen test file handle)",
+            "Tests: close streamed audio before deleting, so the suite passes on Windows",
+        ]
+    },
     {
         "version": "0.4.0",
         "date": "2026-10-11",

@@ -129,6 +129,7 @@ class TestHistory:
 
         r = client.get('/api/musicgen/audio/song_one', headers=auth_headers)
         assert r.status_code == 200
+        r.close()  # release the file handle, or Windows refuses the delete below
 
         r = client.delete('/api/musicgen/history/song_one', headers=auth_headers)
         assert r.status_code == 200
