@@ -11,8 +11,8 @@
   <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=104">
-  <link rel="stylesheet" href="/static/css/onboarding.css?v=104">
+  <link rel="stylesheet" href="/static/css/app.css?v=105">
+  <link rel="stylesheet" href="/static/css/onboarding.css?v=105">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
   <title>DeCloud</title>
 </head>
@@ -686,8 +686,8 @@
       <button class="journal-record-btn" id="journal-record-btn" onclick="startVoiceJournal()">
         <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-          <line x1="19" y1="10v2a7 7 0 0 1-14 0v-2"/>
-          <line x1="12" y1="19v3"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <path d="M12 19v3"/>
         </svg>
         <span id="journal-record-label">Tap to record</span>
       </button>
@@ -1089,7 +1089,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
-<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script type="importmap">
 { "imports": { "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js" } }
 </script>
@@ -1098,31 +1099,31 @@ import * as CANNON from 'cannon-es';
 window.CANNON = CANNON;
 </script>
 <script src="/static/js/thinking-orbs.js"></script>
-<script src="/static/js/modules/auth.js?v=104"></script>
-<script src="/static/js/modules/onboarding.js?v=104"></script>
-<script src="/static/js/modules/core.js?v=104"></script>
-<script src="/static/js/modules/media-session.js?v=104"></script>
-<script src="/static/js/modules/home.js?v=104"></script>
- <script src="/static/js/modules/liquid.js?v=104"></script>
- <script src="/static/js/modules/musicgen.js?v=104"></script>
- <script src="/static/js/modules/models.js?v=104"></script>
-<script src="/static/js/modules/projects.js?v=104"></script>
-<script src="/static/js/modules/audiobooks.js?v=104"></script>
-<script src="/static/js/modules/lego.js?v=104"></script>
-<script src="/static/js/modules/terminal.js?v=104"></script>
-<script src="/static/js/modules/osint.js?v=104"></script>
-<script src="/static/js/modules/universe.js?v=104"></script>
-<script src="/static/js/modules/system.js?v=104"></script>
-<script src="/static/js/modules/ollama.js?v=104"></script>
-<script src="/static/js/modules/comfy.js?v=104"></script>
-<script src="/static/js/modules/lego3d.js?v=104"></script>
-<script src="/static/js/modules/voice.js?v=104"></script>
-<script src="/static/js/modules/journal.js?v=104"></script>
-<script src="/static/js/modules/legos3d.js?v=104"></script>
-<script src="/static/js/modules/settings.js?v=104"></script>
-<script src="/static/js/modules/telemetry.js?v=104"></script>
-<script src="/static/js/modules/desktop.js?v=104"></script>
-<script src="/static/js/modules/music.js?v=104"></script>
+<script src="/static/js/modules/auth.js?v=105"></script>
+<script src="/static/js/modules/onboarding.js?v=105"></script>
+<script src="/static/js/modules/core.js?v=105"></script>
+<script src="/static/js/modules/media-session.js?v=105"></script>
+<script src="/static/js/modules/home.js?v=105"></script>
+ <script src="/static/js/modules/liquid.js?v=105"></script>
+ <script src="/static/js/modules/musicgen.js?v=105"></script>
+ <script src="/static/js/modules/models.js?v=105"></script>
+<script src="/static/js/modules/projects.js?v=105"></script>
+<script src="/static/js/modules/audiobooks.js?v=105"></script>
+<script src="/static/js/modules/lego.js?v=105"></script>
+<script src="/static/js/modules/terminal.js?v=105"></script>
+<script src="/static/js/modules/osint.js?v=105"></script>
+<script src="/static/js/modules/universe.js?v=105"></script>
+<script src="/static/js/modules/system.js?v=105"></script>
+<script src="/static/js/modules/ollama.js?v=105"></script>
+<script src="/static/js/modules/comfy.js?v=105"></script>
+<script src="/static/js/modules/lego3d.js?v=105"></script>
+<script src="/static/js/modules/voice.js?v=105"></script>
+<script src="/static/js/modules/journal.js?v=105"></script>
+<script src="/static/js/modules/legos3d.js?v=105"></script>
+<script src="/static/js/modules/settings.js?v=105"></script>
+<script src="/static/js/modules/telemetry.js?v=105"></script>
+<script src="/static/js/modules/desktop.js?v=105"></script>
+<script src="/static/js/modules/music.js?v=105"></script>
 
 <!-- ═══ ONBOARDING OVERLAY ═══ -->
 <div id="onboarding-overlay" class="onboarding-overlay" style="display:none">
@@ -1179,7 +1180,7 @@ window.CANNON = CANNON;
     <div class="onboarding-nav">
       <button id="onboarding-skip" class="onboarding-btn-secondary" onclick="onboardingSkip()">Skip</button>
       <button id="onboarding-prev" class="onboarding-btn-secondary" onclick="onboardingPrev()" style="display:none">Back</button>
-      <button id="onboarding-next" class="onboarding-btn-primary" onclick="onboardingNext()">Get Started</button>
+      <button id="onboarding-next" class="onboarding-btn" onclick="onboardingNext()">Get Started</button>
     </div>
   </div>
 </div>

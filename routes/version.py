@@ -8,9 +8,26 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 
 CHANGELOG = [
+    {
+        "version": "0.3.0",
+        "date": "2026-10-11",
+        "changes": [
+            "Polish + fixes; Liquid UI, Music Generator, Model Advisor, ComfyUI lifecycle",
+            "Liquid UI: press-squash, ripples and stretchy AI spread (experimental apps stay hidden, disabled buttons dim again)",
+            "Music Generator, AI Model Advisor with one-tap downloads, ComfyUI start/stop/log from the UI, neofetch-style System panel",
+            "Fix split GGUF downloads deleting themselves when merged",
+            "Fix blank Legos (three.js now from jsdelivr, allowed by CSP)",
+            "QR codes generated in the browser (no third-party QR service, tunnel URL stays private)",
+            "Fix unstyled onboarding button and broken journal mic icon",
+            "Agents Recent Activity shows 'No activity yet.' instead of loading forever",
+            "Music/ComfyUI generation polls stop on errors and re-enable the button",
+            "XSS hardening: data-* attributes instead of inline onclick values, escaped system/ComfyUI fields, removed duplicate escapeHtml",
+            "Service worker no longer caches /api/ responses",
+        ]
+    },
     {
         "version": "0.2.1",
         "date": "2026-09-07",

@@ -57,15 +57,15 @@ async function loadSystem() {
     const osShort = (d.os || 'Unknown').replace(/ GNU\/Linux$/, '');
     const cpuShort = (d.cpu_name || '').replace(/\(R\)|\(TM\)|Processor/g, '').replace(/\s+/g, ' ').trim();
 
-    const spec = (k, v, mono) => v ? `<div class="nf-row"><span class="nf-k">${k}</span><span class="nf-v${mono ? ' nf-mono' : ''}">${v}</span></div>` : '';
+    const spec = (k, v, mono) => v ? `<div class="nf-row"><span class="nf-k">${k}</span><span class="nf-v${mono ? ' nf-mono' : ''}">${escapeHtml(v)}</span></div>` : '';
 
     document.getElementById('system-content').innerHTML = `
       <div class="nf-card">
         <div class="nf-head">
           <svg class="nf-logo" viewBox="0 0 48 48" style="color:${logo.color}" aria-hidden="true">${logo.svg}</svg>
           <div class="nf-id">
-            <div class="nf-host">${d.hostname}</div>
-            <div class="nf-os">${osShort}${d.arch ? ' · ' + d.arch : ''}</div>
+            <div class="nf-host">${escapeHtml(d.hostname)}</div>
+            <div class="nf-os">${escapeHtml(osShort + (d.arch ? ' · ' + d.arch : ''))}</div>
           </div>
         </div>
         <div class="nf-specs">

@@ -60,7 +60,7 @@ function renderModelCard(item) {
       <div class="models-file-name" title="${escapeHtml(f.file)}">${escapeHtml(f.file)}${partsNote}</div>
       <div class="models-file-size">${escapeHtml(f.size_gb)} GB</div>
       <span class="models-tier ${t.cls}">${escapeHtml(t.label)}</span>
-      ${canDownload ? `<button class="models-get-btn" onclick="modelsDownload('${escapeHtml(item.repo)}', '${escapeHtml(f.file).replace(/'/g, "\\'")}')">Get</button>` : ''}
+      ${canDownload ? `<button class="models-get-btn" data-repo="${escapeHtml(item.repo)}" data-file="${escapeHtml(f.file)}" onclick="modelsDownload(this.dataset.repo, this.dataset.file)">Get</button>` : ''}
     </div>`;
   }).join('');
   const more = files.length > 5 ? `<div class="models-more">+${files.length - 5} more files</div>` : '';
@@ -141,8 +141,8 @@ async function modelsPoll() {
         const total = dl.total_bytes || 0;
         const pct = total > 0 ? Math.min(100, Math.round((dl.done_bytes / total) * 100)) : 0;
         const status = dl.state === 'done'
-          ? (dl.ollama ? `Ready in AI Chat (${escapeHtml(dl.ollama)})` : 'Downloaded — restart ComfyUI if needed')
-          : dl.state === 'error' ? `Error: ${escapeHtml(dl.error || '')}`
+          ? (dl.ollama ? `Ready in AI Chat (${dl.ollama})` : 'Downloaded — restart ComfyUI if needed')
+          : dl.state === 'error' ? `Error: ${dl.error || ''}`
           : dl.state === 'cancelled' ? 'Cancelled'
           : dl.state;
         return `<div class="models-dl">
@@ -150,7 +150,7 @@ async function modelsPoll() {
           <div class="models-dl-status">${escapeHtml(status)}</div>
           ${(dl.state === 'downloading' || dl.state === 'queued') ? `
             <div class="comfy-progress-bar"><div class="comfy-progress-fill" style="width:${pct}%"></div></div>
-            <button class="settings-export-btn" onclick="modelsCancel('${dl.id}')">Cancel</button>` : ''}
+            <button class="settings-export-btn" data-id="${escapeHtml(dl.id)}" onclick="modelsCancel(this.dataset.id)">Cancel</button>` : ''}
         </div>`;
       }).join('');
       const active = list.some((x) => ['queued', 'downloading', 'importing'].includes(x.state));
@@ -165,12 +165,7 @@ async function modelsPoll() {
 }
 
 async function modelsCancel(id) {
-  try { await fetch(`/api/models/downloads/${id}/cancel`, { method: 'POST' }); } catch (e) {}
-}
-
-function escapeHtml(s) {
-  return String(s || '').replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  try { await fetch(`/api/models/downloads/${encodeURIComponent(id)}/cancel`, { method: 'POST' }); } catch (e) {}
 }
 
 // Expose

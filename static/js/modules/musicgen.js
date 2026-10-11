@@ -51,7 +51,7 @@ async function musicGenLoadHistory() {
       const dur = s.duration_sec ? ` · ${Math.floor(s.duration_sec / 60)}:${String(Math.round(s.duration_sec % 60)).padStart(2, '0')}` : '';
       const created = s.created ? new Date(s.created * 1000).toLocaleDateString() : '';
       return `
-        <div class="musicgen-song" data-id="${s.id}">
+        <div class="musicgen-song" data-id="${escapeHtml(s.id)}">
           <div class="musicgen-song-head">
             <div class="musicgen-song-title" title="${escapeHtml(s.prompt || '')}">${escapeHtml(title)}</div>
             <div class="musicgen-song-meta">${escapeHtml(created)}${dur}${s.instrumental ? ' · instrumental' : ''}</div>
@@ -60,8 +60,8 @@ async function musicGenLoadHistory() {
           <audio class="musicgen-player" controls preload="none" src="/api/musicgen/audio/${encodeURIComponent(s.id)}"></audio>
           <div class="musicgen-song-actions">
             <a class="settings-export-btn" href="/api/musicgen/audio/${encodeURIComponent(s.id)}" download>Download</a>
-            <button class="settings-export-btn" onclick="musicGenDelete('${s.id}')">Delete</button>
-            <button class="settings-export-btn" onclick="musicGenAgain('${s.id}')">Again</button>
+            <button class="settings-export-btn" data-id="${escapeHtml(s.id)}" onclick="musicGenDelete(this.dataset.id)">Delete</button>
+            <button class="settings-export-btn" data-id="${escapeHtml(s.id)}" onclick="musicGenAgain(this.dataset.id)">Again</button>
           </div>
         </div>`;
     }).join('');
@@ -119,16 +119,19 @@ async function musicGenPoll() {
   if (!musicGenPromptId) return;
   try {
     const r = await fetch(`/api/musicgen/progress/${musicGenPromptId}`);
-    const d = await r.json();
     if (r.status === 503) {
       document.getElementById('musicgen-progress-text').textContent = 'ComfyUI hiccup — retrying…';
-    } else if (d.done) {
+      musicGenPollTimer = setTimeout(musicGenPoll, 4000);
+      return;
+    }
+    const d = await r.json().catch(() => ({}));
+    if (d.done || d.error || !r.ok) {
       clearInterval(musicGenPollTimer);
       musicGenPromptId = null;
       document.getElementById('musicgen-progress').style.display = 'none';
       document.getElementById('musicgen-generate-btn').disabled = false;
-      if (d.error) {
-        alert(d.error);
+      if (d.error || !r.ok) {
+        alert(d.error || `Generation lost (HTTP ${r.status})`);
         return;
       }
       document.getElementById('musicgen-prompt').value = '';
@@ -171,11 +174,6 @@ async function musicGenAgain(id) {
       window.scrollTo(0, 0);
     }
   } catch (e) {}
-}
-
-function escapeHtml(s) {
-  return String(s || '').replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 // Expose for inline handlers

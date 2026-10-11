@@ -241,6 +241,12 @@ def _slug(name: str) -> str:
     return re.sub(r'[^A-Za-z0-9._-]+', '-', name).strip('-')[:80] or 'model'
 
 
+def _merged_name(first_part: str) -> str:
+    """Name for a merged split GGUF: strip `-00001-of-0000N` so it can't
+    collide with part 1's own download path."""
+    return _slug(re.sub(r'-\d+-of-\d+(?=\.gguf$)', '', first_part.split('/')[-1]))
+
+
 def _ollama_import(gguf_path: Path, name: str) -> tuple:
     """Make a downloaded chat GGUF usable in the AI Chat app."""
     modelfile = gguf_path.with_suffix('.Modelfile')
@@ -262,7 +268,7 @@ def _ollama_import(gguf_path: Path, name: str) -> tuple:
 def _download_worker(dl_id: str, repo: str, parts: list, category: str,
                      import_ollama: bool):
     dest_dir = _target_dir(category)
-    combined = dest_dir / _slug(parts[0].split('/')[-1]) if len(parts) > 1 else dest_dir / _slug(parts[0])
+    combined = dest_dir / _merged_name(parts[0])
     try:
         dest_dir.mkdir(parents=True, exist_ok=True)
         total_size = 0

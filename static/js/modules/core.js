@@ -43,8 +43,9 @@ window.fetch = function(input, init) {
 };
 
 // ─── Shared helpers (single source of truth) ──────────────────────
-// escapeHtml must escape quotes (both " and ') because it's used inside HTML
-// attribute values and inline onclick="...('${escapeHtml(x)}')" handlers.
+// escapeHtml escapes quotes so it is safe in quoted HTML attribute values.
+// It is NOT safe inside inline onclick="fn('${...}')" strings: the browser
+// decodes &#39; back to ' before running the JS. Use data-* + this.dataset.
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
   return String(s)

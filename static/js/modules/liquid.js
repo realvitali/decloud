@@ -171,7 +171,8 @@
     if (st.rotation) tr += `rotate(${st.rotation}deg) `;
     if (st.scaleX !== 1 || st.scaleY !== 1) tr += `scale(${st.scaleX}, ${st.scaleY})`;
     el.style.transform = tr.trim();
-    el.style.opacity = String(st.opacity);
+    // Only hold inline opacity while animating, so CSS (e.g. :disabled) wins at rest
+    el.style.opacity = st.opacity === 1 ? '' : String(st.opacity);
   }
 
   function lerp(to, from, k) { return from + (to - from) * k; }
@@ -264,9 +265,8 @@
   // that moves. Satellites are real buttons that spring out and ring.
 
   (function setupAISpread() {
-    if (typeof openAISpread !== 'function') return;
-    const SUBAPPS = (typeof AI_SUBAPPS !== 'undefined') ? AI_SUBAPPS : [];
-    if (!SUBAPPS.length) return;
+    if (typeof AI_SUBAPPS === 'undefined') return;
+    let SUBAPPS = [];   // recomputed on open: experimental toggle can change
     const ITEM = 72;
     const HALF = ITEM / 2;
 
@@ -313,6 +313,8 @@
 
     function open() {
       if (isOpen) return;
+      SUBAPPS = visibleApps(AI_SUBAPPS);
+      if (!SUBAPPS.length) return;
       isOpen = true;
       if (tl) tl.kill();
       const geo = fanGeometry();

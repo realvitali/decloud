@@ -125,29 +125,22 @@ function reopenOnboarding() {
 
 /**
  * Generate QR codes for the onboarding steps.
- * Uses api.qrserver.com as a simple img-based QR (one-time flow, no deps).
+ * Rendered client-side (qrcode-generator from jsdelivr) so the tunnel URL
+ * never leaves the browser.
  */
 function generateOnboardingQRs() {
   // Tailscale download QR
   var tailscaleContainer = document.getElementById('qr-tailscale');
   if (tailscaleContainer && !tailscaleContainer.hasChildNodes()) {
-    var url1 = 'https://tailscale.com/download';
-    var img1 = document.createElement('img');
-    img1.src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(url1);
-    img1.alt = 'QR: ' + url1;
-    img1.loading = 'lazy';
-    tailscaleContainer.appendChild(img1);
+    var img1 = generateQR('https://tailscale.com/download', 300);
+    if (img1) tailscaleContainer.appendChild(img1);
   }
 
   // Phone PWA QR — current origin
   var phoneContainer = document.getElementById('qr-phone');
   if (phoneContainer && !phoneContainer.hasChildNodes()) {
-    var pageUrl = window.location.origin;
-    var img2 = document.createElement('img');
-    img2.src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(pageUrl);
-    img2.alt = 'QR: ' + pageUrl;
-    img2.loading = 'lazy';
-    phoneContainer.appendChild(img2);
+    var img2 = generateQR(window.location.origin, 300);
+    if (img2) phoneContainer.appendChild(img2);
   }
 
   // Show the URL hint
@@ -157,17 +150,19 @@ function generateOnboardingQRs() {
   }
 }
 
-/**
- * Generic QR generator (kept for API compatibility / future use).
- * Currently uses api.qrserver.com img fallback.
- */
+/** Client-side QR as a data-URL <img>; null if the lib failed to load. */
 function generateQR(text, size) {
+  if (typeof qrcode !== 'function') return null;
   var s = size || 200;
+  var qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
   var img = document.createElement('img');
-  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=' + s + 'x' + s + '&data=' + encodeURIComponent(text);
+  img.src = qr.createDataURL(Math.max(2, Math.floor(s / (qr.getModuleCount() + 8))), 4);
   img.width = s;
   img.height = s;
-  img.alt = 'QR code';
+  img.style.imageRendering = 'pixelated';
+  img.alt = 'QR: ' + text;
   return img;
 }
 

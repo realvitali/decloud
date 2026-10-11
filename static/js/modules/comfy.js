@@ -24,7 +24,7 @@ async function loadComfyStatus() {
     const vramTotal = (d.vram_total / 1e9).toFixed(1);
     const queueText = d.queue_running > 0 ? ` · ${d.queue_running} running` : '';
     const pendingText = d.queue_pending > 0 ? ` · ${d.queue_pending} queued` : '';
-    bar.innerHTML = `${d.gpu} · VRAM ${vramUsed}/${vramTotal}GB${queueText}${pendingText}`;
+    bar.innerHTML = `${escapeHtml(d.gpu)} · VRAM ${vramUsed}/${vramTotal}GB${queueText}${pendingText}`;
     document.getElementById('comfy-generate-btn').disabled = false;
   } catch {
     document.getElementById('comfy-status-bar').innerHTML = 'Failed to check status';
@@ -50,7 +50,7 @@ async function loadComfyGallery() {
     }
     const gallery = document.getElementById('comfy-gallery');
     gallery.innerHTML = d.images.slice(0, 20).map(img => 
-      `<div class="comfy-gallery-item" onclick="openComfyImage('${img.url}')"><img src="${img.url}&preview=1" loading="lazy" alt="" /></div>`
+      `<div class="comfy-gallery-item" data-url="${escapeHtml(img.url)}" onclick="openComfyImage(this.dataset.url)"><img src="${escapeHtml(img.url)}&amp;preview=1" loading="lazy" alt="" /></div>`
     ).join('');
   } catch {}
 }
@@ -91,7 +91,7 @@ async function comfyGenerate() {
     });
     const d = await r.json();
     if (d.error) {
-      progressText.innerHTML = `<span style="color:var(--red)">Error: ${d.error}</span>`;
+      progressText.innerHTML = `<span style="color:var(--red)">Error: ${escapeHtml(d.error)}</span>`;
       btn.disabled = false;
       btn.textContent = 'Generate';
       return;
@@ -103,9 +103,16 @@ async function comfyGenerate() {
     comfyPollTimer = setInterval(async () => {
       elapsed += 1;
       try {
-        const pr = await fetch(`/api/comfy/progress/${promptId}`);
-        const pd = await pr.json();
-        if (pd.done) {
+        const pr = await fetch(`/api/comfy/progress/${encodeURIComponent(promptId)}`);
+        if (pr.status === 503) return;  // ComfyUI hiccup — keep polling
+        const pd = await pr.json().catch(() => ({}));
+        if (pd.error || !pr.ok) {
+          clearInterval(comfyPollTimer);
+          comfyPollTimer = null;
+          progressText.innerHTML = `<span style="color:var(--red)">Error: ${escapeHtml(pd.error || `HTTP ${pr.status}`)}</span>`;
+          btn.disabled = false;
+          btn.textContent = 'Generate';
+        } else if (pd.done) {
           clearInterval(comfyPollTimer);
           comfyPollTimer = null;
           progressFill.style.width = '100%';
@@ -113,7 +120,7 @@ async function comfyGenerate() {
           if (pd.images && pd.images.length > 0) {
             result.style.display = 'block';
             result.innerHTML = pd.images.map(img => 
-              `<img src="${img.url}" alt="" onclick="openComfyImage('${img.url}')" style="width:100%;border-radius:12px;cursor:pointer" />`
+              `<img src="${escapeHtml(img.url)}" alt="" data-url="${escapeHtml(img.url)}" onclick="openComfyImage(this.dataset.url)" style="width:100%;border-radius:12px;cursor:pointer" />`
             ).join('');
           }
           btn.disabled = false;
@@ -128,7 +135,7 @@ async function comfyGenerate() {
       } catch {}
     }, 1000);
   } catch (e) {
-    progressText.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+    progressText.innerHTML = `<span style="color:var(--red)">Error: ${escapeHtml(e.message)}</span>`;
     btn.disabled = false;
     btn.textContent = 'Generate';
   }

@@ -106,7 +106,8 @@ async function loadActivity() {
     const r = await fetch('/api/agents/logs?n=15');
     const d = await r.json();
     const el = document.getElementById('activity-list');
-    if (!el || !d.events?.length) return;
+    if (!el) return;
+    if (!d.events?.length) { el.innerHTML = '<span class="text-dim">No activity yet.</span>'; return; }
     el.innerHTML = d.events.map(ev => {
       const t = ev.ts ? relTime(ev.ts) : '';
       const label = ev.dir === 'in' ? 'IN' : 'OUT';
@@ -404,119 +405,6 @@ function openApp(id) {
   if (id === 'agents') { location.hash = '#agents'; }
   if (id === 'projects') { location.hash = '#projects'; openProjectList(); }
   if (id === 'settings') { location.hash = '#settings'; loadSettings(); }
-}
-
-// ─── AI Spread Menu ──────────────────────────────────────
-let aiSpreadOpen = false;
-
-function toggleAISpread(e) {
-  if (e) e.stopPropagation();
-  if (aiSpreadOpen) {
-    closeAISpread();
-  } else {
-    openAISpread();
-  }
-}
-
-function openAISpread() {
-  aiSpreadOpen = true;
-  const btn = document.querySelector('[data-app-id="ai"]');
-  if (!btn) return;
-  const rect = btn.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-
-  let overlay = document.getElementById('ai-spread-overlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'ai-spread-overlay';
-    overlay.className = 'ai-spread-overlay';
-    document.body.appendChild(overlay);
-  }
-  overlay.onclick = closeAISpread;
-
-  const itemSize = 72;
-  const margin = 16;
-  const subapps = visibleApps(AI_SUBAPPS);
-  const n = subapps.length;
-  if (n === 0) { closeAISpread(); return; }
-
-  // Fan direction: away from screen center
-  const screenCx = window.innerWidth / 2;
-  const screenCy = window.innerHeight / 2;
-  let fanAngle = Math.atan2(screenCy - cy, screenCx - cx);
-  // Normalize to 0..2PI
-  if (fanAngle < 0) fanAngle += 2 * Math.PI;
-
-  // Arc spread: ~25deg per item after the first, capped at 140deg
-  const arcDeg = Math.min(140, 30 + (n - 1) * 25);
-  const halfArc = (arcDeg / 2) * Math.PI / 180;
-
-  // Radius: measure available space in the fan direction
-  // Cast a ray in the fan direction and see how far we can go
-  let r = 130;
-  // Simple: check space toward the nearest edge in the fan direction
-  const cosF = Math.cos(fanAngle), sinF = Math.sin(fanAngle);
-  // How far can we travel from button center before hitting an edge?
-  let maxR = Infinity;
-  if (cosF > 0.01) maxR = Math.min(maxR, (window.innerWidth - margin - cx) / cosF);
-  if (cosF < -0.01) maxR = Math.min(maxR, (cx - margin) / -cosF);
-  if (sinF > 0.01) maxR = Math.min(maxR, (window.innerHeight - margin - cy) / sinF);
-  if (sinF < -0.01) maxR = Math.min(maxR, (cy - margin) / -sinF);
-  // Account for item size and the arc width (edge items spread out)
-  maxR -= itemSize;
-  // Also need room for items at the arc edges
-  const cosEdge = Math.cos(fanAngle + halfArc), sinEdge = Math.sin(fanAngle + halfArc);
-  let maxREdge = Infinity;
-  if (cosEdge > 0.01) maxREdge = Math.min(maxREdge, (window.innerWidth - margin - cx - itemSize/2) / cosEdge);
-  if (cosEdge < -0.01) maxREdge = Math.min(maxREdge, (cx - margin + itemSize/2) / -cosEdge);
-  if (sinEdge > 0.01) maxREdge = Math.min(maxREdge, (window.innerHeight - margin - cy - itemSize/2) / sinEdge);
-  if (sinEdge < -0.01) maxREdge = Math.min(maxREdge, (cy - margin + itemSize/2) / -sinEdge);
-  r = Math.max(70, Math.min(r, maxR, maxREdge - itemSize));
-
-  overlay.innerHTML = subapps.map((sub, i) => {
-    // Distribute items evenly across the arc
-    const frac = n === 1 ? 0.5 : i / (n - 1);
-    const angle = fanAngle - halfArc + frac * (halfArc * 2);
-    const dx = Math.cos(angle) * r;
-    const dy = Math.sin(angle) * r;
-    const x = cx + dx - itemSize / 2;
-    const y = cy + dy - itemSize / 2;
-    return '<div class="ai-spread-item" style="left:' + (cx - itemSize/2) + 'px;top:' + (cy - itemSize/2) + 'px;--tx:' + dx + 'px;--ty:' + dy + 'px;--delay:' + (i * 0.07) + 's" onclick="event.stopPropagation(); openAISubApp(\'' + sub.id + '\',\'' + sub.screen + '\')">' +
-      '<div class="ai-spread-item-visual" style="color:' + sub.color + '">' + sub.svg + '</div>' +
-      '<div class="ai-spread-item-label">' + sub.label + '</div>' +
-    '</div>';
-  }).join('');
-
-  requestAnimationFrame(() => {
-    overlay.classList.add('active');
-    overlay.querySelectorAll('.ai-spread-item').forEach(el => el.classList.add('show'));
-  });
-
-  btn.classList.add('ai-spread-active');
-}
-
-function closeAISpread() {
-  aiSpreadOpen = false;
-  const overlay = document.getElementById('ai-spread-overlay');
-  if (overlay) {
-    overlay.classList.remove('active');
-    overlay.querySelectorAll('.ai-spread-item').forEach(el => el.classList.remove('show'));
-    setTimeout(() => { if (overlay) overlay.innerHTML = ''; }, 400);
-  }
-  const btn = document.querySelector('[data-app-id="ai"]');
-  if (btn) btn.classList.remove('ai-spread-active');
-}
-
-function openAISubApp(id, screen) {
-  closeAISpread();
-  setTimeout(() => {
-    showScreen(screen);
-    if (id === 'ollama') { location.hash = '#ollama'; loadOllamaModels(); }
-    if (id === 'comfy') { location.hash = '#comfy'; loadComfyStatus(); loadComfyModels(); loadComfyGallery(); }
-    if (id === 'musicgen') { location.hash = '#musicgen'; loadMusicGen(); }
-    if (id === 'agents') { location.hash = '#agents'; }
-  }, 50);
 }
 
 // ─── Screen Management ───────────────────────────────────

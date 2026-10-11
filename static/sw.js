@@ -1,11 +1,5 @@
 // DeCloud Service Worker
-const CACHE_NAME = 'decloud-v104';
-const ASSETS = [
-  '/',
-  '/manifest.json',
-  '/static/css/app.css?v=72',
-  '/static/css/onboarding.css?v=72'
-];
+const CACHE_NAME = 'decloud-v105';
 
 self.addEventListener('install', e => {
   self.skipWaiting(); // activate immediately
@@ -25,6 +19,8 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   // Network-first for everything — always get fresh content
   if (e.request.method !== 'GET') return;
+  // Never cache API responses (personal data; server sends no-store anyway)
+  if (new URL(e.request.url).pathname.startsWith('/api/')) return;
   e.respondWith(
     fetch(e.request)
       .then(response => {

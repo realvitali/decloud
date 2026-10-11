@@ -100,3 +100,9 @@ class TestEndpoints:
         s = d['specs']
         for key in ('cpu', 'ram_total_gb', 'ram_free_gb', 'disk_free_gb', 'gpus'):
             assert key in s
+
+
+def test_merged_split_name_differs_from_part1():
+    part1 = 'sub/Model-Q4_K_M-00001-of-00003.gguf'
+    assert mod._merged_name(part1) == 'Model-Q4_K_M.gguf'
+    assert mod._merged_name(part1) != mod._slug(part1)
