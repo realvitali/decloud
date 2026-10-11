@@ -413,7 +413,7 @@ function showScreen(id) {
   document.getElementById(id)?.classList.add('active');
   // Track app usage
   var appMap = { 'book-screen': 'books', 'music-screen': 'music', 'lego-screen': 'files', 'ollama-screen': 'ai-chat', 'comfy-screen': 'ai-gen', 'agents-screen': 'agents', 'project-screen': 'projects', 'system-screen': 'system', 'terminal-screen': 'terminal', 'osint-screen': 'privacy', 'universe-screen': 'universe', 'journal-screen': 'journal', 'legos-screen': 'legos', 'settings-screen': 'settings' };
-  if (appMap[id]) trackAppOpen(appMap[id]);
+  if (appMap[id] && typeof trackAppOpen === 'function') trackAppOpen(appMap[id]);  // hash restore runs before telemetry.js loads
   // Voice orb only shows on home screen
   const orb = document.getElementById('voice-orb');
   if (orb) {

@@ -8,9 +8,20 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 CHANGELOG = [
+    {
+        "version": "0.4.0",
+        "date": "2026-10-11",
+        "changes": [
+            "My Lab: whole-homelab overview card in three styles",
+            "System screen is now My Lab: one iPhone-sized card for this machine plus paired devices, with Neofetch, Rack and Constellation styles and a screenshot mode",
+            "Pair devices with a code. Headless boxes can run the tiny read-only agent (/lab-agent.py) instead of full DeCloud",
+            "Shows Docker/Podman containers, loaded Ollama models, chosen systemd services and top processes",
+            "Fix: opening a #screen link no longer crashes before telemetry loads",
+        ]
+    },
     {
         "version": "0.3.0",
         "date": "2026-10-11",

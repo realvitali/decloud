@@ -65,6 +65,9 @@ def register_blueprints(app, sock):
     from .models import bp as models_bp
     app.register_blueprint(models_bp)
 
+    from .lab import bp as lab_bp
+    app.register_blueprint(lab_bp)
+
     # WebSocket routes (need sock instance)
     if sock is not None:
         from .terminal import register as register_terminal

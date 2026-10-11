@@ -125,7 +125,7 @@ const APPS = [
   { id: 'ai',         svg: ICONS.brain,   label: 'AI',        color: '#8b5cf6', screen: null, spread: true },
   { id: 'legos',      svg: ICONS.brick,   label: 'Legos',     color: '#ef4444', screen: 'legos-screen', experimental: true },
   { id: 'projects',   svg: ICONS.layers,  label: 'Projects',  color: '#0ea5e9', screen: 'project-screen', experimental: true },
-  { id: 'system',     svg: ICONS.activity,label: 'System',    color: '#4ade80', screen: 'system-screen' },
+  { id: 'system',     svg: ICONS.activity,label: 'Lab',       color: '#4ade80', screen: 'system-screen' },
   { id: 'terminal',   svg: ICONS.terminal,label: 'Terminal',  color: '#fbbf24', screen: 'terminal-screen' },
   { id: 'settings',   svg: ICONS.settings, label: 'Settings', color: '#6b7280', screen: 'settings-screen' },
 ];

@@ -124,3 +124,21 @@ class TestAuth:
         monkeypatch.setattr(auth_module, 'DECLOUD_PIN', '')
         resp = client.post('/api/auth/login', json={'pin': ''})
         assert resp.status_code == 200
+
+
+def test_lab_pairing_code_roundtrip():
+    import lab_report
+    code = lab_report.pairing_code('http://10.0.0.5:8898', 'tok', 'pi')
+    assert lab_report.parse_pairing_code(code) == {'u': 'http://10.0.0.5:8898', 't': 'tok', 'n': 'pi'}
+    for bad in ('', 'hello', 'dcl1.!!!', lab_report.pairing_code('file:///etc', 'tok', 'x')):
+        with pytest.raises(ValueError):
+            lab_report.parse_pairing_code(bad)
+
+
+def test_lab_report_rejects_wrong_token(monkeypatch):
+    import shared
+    monkeypatch.setattr(shared, 'DECLOUD_PIN', 'a-real-passcode')
+    monkeypatch.setattr('routes.lab.load_settings', lambda: {'lab_token': 'right'})
+    client = app.test_client()  # no session cookie: only the lab token can get in
+    assert client.get('/api/lab/report', headers={'Authorization': 'Bearer wrong'}).status_code == 401
+    assert client.get('/api/lab/report', headers={'Authorization': 'Bearer right'}).status_code == 200
