@@ -69,4 +69,7 @@ if __name__ == '__main__':
     print(f'[DeCloud]   (or: cloudflared tunnel --url http://localhost:{PORT})')
     print('[DeCloud] The tunnel provides trusted HTTPS automatically.')
 
+    from routes.lab import sync_server
+    sync_server()  # opens the lab port only if "Let other devices add this computer" is on
+
     app.run(host=bind_host, port=PORT, debug=False, threaded=True)

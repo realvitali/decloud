@@ -5532,3 +5532,15 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
 @keyframes lab-flow { to { stroke-dashoffset: -34 } }
 @keyframes lab-tw { from { opacity: .2 } to { opacity: 1 } }
 @media (prefers-reduced-motion: reduce) { .lab-led, .lab-constellation .lnk, .lab-constellation .tw { animation: none; } }
+.lab-switch { display: flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; }
+.lab-switch input { width: 20px; height: 20px; accent-color: var(--green); }
+.lab-sub { border-top: 1px solid var(--hairline); padding-top: 10px; display: grid; gap: 8px; }
+.lab-sub summary { font-weight: 600; font-size: 14px; cursor: pointer; }
+.lab-pairing, .lab-request { text-align: center; display: grid; gap: 8px; padding: 14px; border-radius: 14px; background: var(--accent-soft); }
+.lab-pairing p, .lab-request p { margin: 0; font-size: 14px; }
+.lab-request { max-width: 560px; margin: 0 auto; border: 2px solid var(--green); }
+.lab-request .lab-row { justify-content: center; }
+.lab-num { font: 700 34px/1.1 ui-monospace, Menlo, monospace; letter-spacing: .12em; font-variant-numeric: tabular-nums; }
+#lab-request-overlay { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 10000; display: grid; gap: 10px; }
+#lab-request-overlay:empty { display: none; }
+#lab-request-overlay .lab-request { background: var(--surface-solid); box-shadow: 0 20px 50px -10px rgba(0,0,0,.45); }

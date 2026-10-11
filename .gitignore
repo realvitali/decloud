@@ -72,3 +72,6 @@ voice_hermes_session.txt
 voice_history.json
 sessions.json
 sessions.json.tmp
+
+# Lab pairing keys (cert, token)
+lab-state/

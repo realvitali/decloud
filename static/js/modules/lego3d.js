@@ -32,7 +32,7 @@ document.addEventListener('contextmenu', e => {
 
 // ─── Service Worker ──────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js?v=106').catch(() => {});
+  navigator.serviceWorker.register('/sw.js?v=107').catch(() => {});
 }
 
 // ─── Init (wrapped in try-catch so one failure doesn't brick everything) ─

@@ -17,7 +17,10 @@ CHANGELOG = [
         "changes": [
             "My Lab: whole-homelab overview card in three styles",
             "System screen is now My Lab: one iPhone-sized card for this machine plus paired devices, with Neofetch, Rack and Constellation styles and a screenshot mode",
-            "Pair devices with a code. Headless boxes can run the tiny read-only agent (/lab-agent.py) instead of full DeCloud",
+            "Add devices Bluetooth-style: Find devices on my Wi-Fi, tap Add, check both screens show the same 6-digit number, tap Allow",
+            "Device stats travel over HTTPS pinned to each device's own certificate; keys only unlock stats and can be reset anytime",
+            "DeCloud stays localhost-only unless you turn on Let other devices add this computer",
+            "Headless boxes (Pi, NAS, Proxmox) run a tiny stats-only agent: one command, approves in the terminal, starts on boot",
             "Shows Docker/Podman containers, loaded Ollama models, chosen systemd services and top processes",
             "Fix: opening a #screen link no longer crashes before telemetry loads",
         ]

@@ -224,30 +224,36 @@ async function loadSystem() {
       <details class="lab-panel" id="lab-devices" open>
         <summary>Devices</summary>
         <div id="lab-device-list"></div>
-        <label for="lab-code">Add a device: paste its pairing code</label>
-        <div class="lab-row"><input id="lab-code" placeholder="dcl1.…" autocomplete="off"><button class="lab-btn primary" onclick="labAddDevice()">Add</button></div>
+        <button class="lab-btn primary" onclick="labDiscover()">Find devices on my Wi-Fi</button>
+        <div id="lab-found"></div>
         <p class="lab-msg" id="lab-msg" role="status"></p>
-        <div class="lab-help">
-          <p><b>Where do I get a code?</b></p>
-          <p><b>Machine already runs DeCloud:</b> open System on it → Devices → <em>Show this device's code</em>.</p>
-          <p><b>Headless box (Pi, NAS, Proxmox):</b> run the tiny agent there. It only reports stats.</p>
+        <label class="lab-switch"><input type="checkbox" id="lab-shareable" onchange="labSetShareable(this.checked)">
+          <span>Let other devices add this computer</span></label>
+        <p class="lab-dim">Turn this on here to add this computer to another DeCloud's lab. When it asks, you'll tap Allow on this screen.</p>
+        <details class="lab-sub">
+          <summary>Computer without DeCloud (Pi, NAS, server)</summary>
+          <p class="lab-dim">Run this on that computer. It installs a tiny program that only reports stats, then waits for you to tap Find devices here.</p>
           <pre class="lab-cmd" id="lab-agent-cmd"></pre>
           <button class="lab-btn" onclick="labCopy(document.getElementById('lab-agent-cmd').textContent)">Copy commands</button>
-          <p class="lab-dim">Full DeCloud gives you every app on that machine but is heavier. The agent is one small file with no web UI, so it's safe on anything that only needs to report.</p>
-        </div>
-        <div class="lab-row"><button class="lab-btn" onclick="labShowCode()">Show this device's code</button>
-          <button class="lab-btn" onclick="labResetKey()">Reset key</button></div>
-        <pre class="lab-cmd" id="lab-own-code" hidden></pre>
-        <p class="lab-dim">Reset key disconnects every hub that added this device. They'll need the new code.</p>
+        </details>
+        <details class="lab-sub">
+          <summary>Not on the same Wi-Fi? Use a code</summary>
+          <label for="lab-code">Paste a code from the other device</label>
+          <div class="lab-row"><input id="lab-code" placeholder="dcl1.…" autocomplete="off"><button class="lab-btn" onclick="labAddDevice()">Add</button></div>
+          <div class="lab-row"><button class="lab-btn" onclick="labShowCode()">Show this computer's code</button>
+            <button class="lab-btn" onclick="labResetKey()">Reset key</button></div>
+          <pre class="lab-cmd" id="lab-own-code" hidden></pre>
+          <p class="lab-dim">Treat a code like a password. Reset key disconnects every hub that added this computer.</p>
+        </details>
       </details>`;
     document.getElementById('lab-agent-cmd').textContent =
-      `sudo apt install -y python3-psutil   # or: pip install psutil\ncurl -fsSL ${location.origin}/lab-agent.py -o decloud-agent.py\npython3 decloud-agent.py --install-service`;
+      `sudo apt install -y python3-psutil\ncurl -fsSL ${location.origin}/lab-agent.py -o decloud-agent.py\npython3 decloud-agent.py --install-service`;
   }
   try { await labRefresh(); } catch {
     document.getElementById('lab-card').innerHTML = '<p class="lab-loading">Couldn\'t read this machine\'s stats. Is DeCloud still running?</p>';
   }
   const p = LAB?.prefs;
-  if (p) { document.getElementById('lab-name').value = p.name; document.getElementById('lab-accent').value = p.accent; document.getElementById('lab-services').value = p.services.join(' '); }
+  if (p) { document.getElementById('lab-shareable').checked = p.shareable; document.getElementById('lab-name').value = p.name; document.getElementById('lab-accent').value = p.accent; document.getElementById('lab-services').value = p.services.join(' '); }
   if (!loadSystem._t) loadSystem._t = setInterval(() => {
     if (!document.getElementById('system-screen')?.classList.contains('active')) { clearInterval(loadSystem._t); loadSystem._t = null; return; }
     labRefresh().catch(() => {});
@@ -286,6 +292,75 @@ async function labAddDevice() {
   labRefresh();
 }
 
+async function labDiscover() {
+  const box = document.getElementById('lab-found'), msg = document.getElementById('lab-msg');
+  msg.textContent = 'Looking for devices on your Wi-Fi…';
+  box.innerHTML = '';
+  const found = await (await fetch('/api/lab/discover', { method: 'POST' })).json().catch(() => []);
+  msg.textContent = found.length ? '' : 'Nothing found. On the other computer, turn on "Let other devices add this computer" (or run the small program for computers without DeCloud), then try again.';
+  box.innerHTML = found.map(f => `
+    <div class="lab-dev"><span class="lab-dot"></span><div><b>${escapeHtml(f.name)}</b><span>${f.kind === 'agent' ? 'Stats program' : 'DeCloud'} · ${escapeHtml(f.ip)}</span></div>
+      ${f.added ? '<span class="lab-dim">Added</span>' : `<button class="lab-btn primary" data-ip="${escapeHtml(f.ip)}" data-port="${Number(f.port)}" onclick="labPair(this.dataset.ip, +this.dataset.port)">Add</button>`}</div>`).join('');
+}
+
+async function labPair(ip, port) {
+  const msg = document.getElementById('lab-msg');
+  msg.textContent = 'Contacting device…';
+  const r = await fetch('/api/lab/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ip, port }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { msg.textContent = d.error || 'Could not reach that device.'; return; }
+  const num = `${d.number.slice(0, 3)} ${d.number.slice(3)}`;
+  document.getElementById('lab-found').innerHTML = `<div class="lab-pairing"><div class="lab-num">${num}</div>
+    <p>${d.kind === 'agent' ? `In the terminal on <b>${escapeHtml(d.name)}</b>, type <b>y</b> if it shows this number.`
+      : `On <b>${escapeHtml(d.name)}</b>, open DeCloud → Lab and tap <b>Allow</b> if it shows this number.`}</p>
+    <p class="lab-dim">If the numbers don't match, deny it. Someone may be pretending to be your device.</p></div>`;
+  msg.textContent = 'Waiting for you to approve on the other device…';
+  for (let i = 0; i < 80; i++) {
+    await new Promise(res => setTimeout(res, 2000));
+    const j = await (await fetch('/api/lab/pair/' + d.job)).json().catch(() => ({ state: 'failed' }));
+    if (j.state === 'waiting') continue;
+    document.getElementById('lab-found').innerHTML = '';
+    msg.textContent = j.state === 'done' ? `Added ${d.name}. It's on your card now.` : (j.error || 'Pairing failed.');
+    labRefresh();
+    return;
+  }
+}
+
+// Pairing prompts pop up on whatever screen is open, so nobody has to find Lab first.
+// Polls only while this computer is shareable; labSetShareable restarts it.
+async function labPollRequests() {
+  if (labPollRequests.on) return;
+  labPollRequests.on = true;
+  clearTimeout(labPollRequests.t);
+  let d = { shareable: false, requests: [] }, retry = false;
+  try { const r = await fetch('/api/lab/pair-requests'); retry = !r.ok; if (r.ok) d = await r.json(); } catch { retry = true; }
+  let box = document.getElementById('lab-request-overlay');
+  if (d.requests?.length && !box) { box = document.createElement('div'); box.id = 'lab-request-overlay'; document.body.appendChild(box); }
+  if (box) box.innerHTML = (d.requests || []).map(q => `<div class="lab-panel lab-request" role="alertdialog" aria-label="Pairing request">
+      <b>${escapeHtml(q.hub)} wants to add this computer to its lab</b>
+      <div class="lab-num">${escapeHtml(q.number.slice(0, 3))} ${escapeHtml(q.number.slice(3))}</div>
+      <p class="lab-dim">Only allow if ${escapeHtml(q.hub)} shows the same number. It will see this computer's stats, nothing else.</p>
+      <div class="lab-row"><button class="lab-btn primary" data-id="${escapeHtml(q.id)}" onclick="labAnswer(this.dataset.id, true)">Allow</button>
+        <button class="lab-btn" data-id="${escapeHtml(q.id)}" onclick="labAnswer(this.dataset.id, false)">Deny</button></div></div>`).join('');
+  labPollRequests.on = false;
+  if (d.shareable || retry) labPollRequests.t = setTimeout(labPollRequests, retry ? 10000 : 2500);  // retry: not logged in yet
+}
+labPollRequests();
+
+async function labAnswer(id, allow) {
+  await fetch('/api/lab/pair-requests/' + encodeURIComponent(id), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ allow }) });
+  const box = document.getElementById('lab-request-overlay');
+  if (box) box.innerHTML = '';
+}
+
+async function labSetShareable(on) {
+  const r = await fetch('/api/lab/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shareable: on }) });
+  const d = await r.json().catch(() => ({}));
+  if (LAB) LAB.prefs.shareable = !!d.shareable;
+  if (d.shareable) labPollRequests();
+  document.getElementById('lab-msg').textContent = d.error || (on ? 'Other devices on your Wi-Fi can now find this computer. Nothing is shared until you tap Allow.' : 'This computer is hidden from other devices.');
+}
+
 async function labRemove(id, name) {
   if (!confirm(`Remove ${name} from your lab?`)) return;
   await fetch('/api/lab/devices/' + encodeURIComponent(id), { method: 'DELETE' });
@@ -294,17 +369,19 @@ async function labRemove(id, name) {
 
 async function labShowCode() {
   const el = document.getElementById('lab-own-code');
-  const d = await (await fetch('/api/lab/pair-code')).json();
+  const r = await fetch('/api/lab/pair-code');
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { document.getElementById('lab-msg').textContent = d.error || 'Could not make a code.'; return; }
   el.textContent = d.code;
   el.hidden = false;
   labCopy(d.code);
 }
 
 async function labResetKey() {
-  if (!confirm('Disconnect every hub that added this device?')) return;
+  if (!confirm('Disconnect every hub that added this computer?')) return;
   await fetch('/api/lab/reset-key', { method: 'POST' });
   document.getElementById('lab-own-code').hidden = true;
-  document.getElementById('lab-msg').textContent = 'Key reset. Hubs that had this device must add it again.';
+  document.getElementById('lab-msg').textContent = 'Key reset. Hubs that had this computer must add it again.';
 }
 
 function labCopy(text) {

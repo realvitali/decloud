@@ -1,34 +1,41 @@
 """Lab overview: this machine + paired devices on one screen.
 
-Each device (full DeCloud or the standalone lab_report.py agent) serves
-/api/lab/report behind a read-only lab token. The hub polls them in
-parallel and sums them up.
+Paired devices (full DeCloud with sharing on, or the standalone agent) run
+lab_report.LabServer: pinned HTTPS + Bluetooth-style pairing. This module is
+the hub side (discover, pair, poll) plus the device side's approval prompts
+and on/off switch. DeCloud itself stays localhost-only; the lab port opens
+only while "Let other devices add this computer" is on.
 """
-import hmac
-import re
 import os
 import platform
-import secrets
+import re
+import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-import requests as _requests
 from flask import Blueprint, jsonify, request, send_file
 
 import lab_report
-from shared import load_settings, save_settings, _is_authenticated
+from shared import BASE_DIR, load_settings, save_settings
 
 bp = Blueprint('lab', __name__)
 _pool = ThreadPoolExecutor(max_workers=8)
 STYLES = ('neofetch', 'rack', 'constellation')
+LAB_PORT = int(os.environ.get('DECLOUD_LAB_PORT', lab_report.AGENT_PORT))
+_state = None
+_server = None
+_server_lock = threading.Lock()
+_requests_in = {}   # device side: pairing prompts waiting for Allow/Deny
+_jobs = {}          # hub side: pairings in progress
 
 
-def _lab_token(settings):
-    if not settings.get('lab_token'):
-        settings['lab_token'] = secrets.token_urlsafe(24)
-        save_settings(settings)
-    return settings['lab_token']
+def state():
+    global _state
+    if _state is None:
+        _state = lab_report.State(BASE_DIR / 'lab-state')
+    return _state
 
 
 def _prefs(settings):
@@ -38,19 +45,72 @@ def _prefs(settings):
         'accent': p.get('accent') if re.fullmatch(r'#[0-9a-fA-F]{6}', str(p.get('accent'))) else '#ffb454',
         'style': p.get('style') if p.get('style') in STYLES else 'neofetch',
         'services': [s for s in p.get('services', []) if isinstance(s, str)][:20],
+        'shareable': p.get('shareable') is True,
     }
 
 
-@bp.route('/api/lab/report')
-def lab_report_route():
-    # Exempt from the session gate in shared._require_auth: a paired hub
-    # authenticates with the read-only lab token instead.
-    settings = load_settings()
-    auth = request.headers.get('Authorization', '')
-    token_ok = settings.get('lab_token') and hmac.compare_digest(auth, f"Bearer {settings['lab_token']}")
-    if not token_ok and not _is_authenticated():
-        return jsonify({'error': 'Authentication required'}), 401
-    return jsonify(lab_report.report(_prefs(settings)['services']))
+# ─── Device side ─────────────────────────────────────────────────
+def _approve(hub, number):
+    """Called on a LabServer thread: park the request until someone taps Allow/Deny in the UI."""
+    rid = uuid.uuid4().hex[:8]
+    req = {'hub': hub, 'number': number, 'event': threading.Event(), 'ok': False, 't': time.time()}
+    _requests_in[rid] = req
+    req['event'].wait(lab_report.PAIR_TTL)
+    _requests_in.pop(rid, None)
+    return req['ok']
+
+
+def sync_server():
+    """Start or stop the lab port to match the 'shareable' setting."""
+    global _server
+    want = _prefs(load_settings())['shareable']
+    with _server_lock:
+        if want and not _server:
+            try:
+                _server = lab_report.LabServer(state(), platform.node(), lambda: lab_report.report(_prefs(load_settings())['services']),
+                                               _approve, port=LAB_PORT).start()
+            except OSError as e:
+                print(f'[DeCloud] Lab sharing could not open port {LAB_PORT}: {e}')
+                return False
+        elif not want and _server:
+            _server.stop()
+            _server = None
+    return True
+
+
+@bp.route('/api/lab/pair-requests')
+def pair_requests():
+    now = time.time()
+    return jsonify({'shareable': _server is not None,
+                    'requests': [{'id': k, 'hub': r['hub'], 'number': r['number'], 'expires_in': int(lab_report.PAIR_TTL - (now - r['t']))}
+                                 for k, r in list(_requests_in.items())]})
+
+
+@bp.route('/api/lab/pair-requests/<rid>', methods=['POST'])
+def answer_pair_request(rid):
+    r = _requests_in.get(rid)
+    if not r:
+        return jsonify({'error': 'That request expired. Start again from the hub.'}), 404
+    r['ok'] = (request.get_json(silent=True) or {}).get('allow') is True
+    r['event'].set()
+    return jsonify({'ok': True})
+
+
+@bp.route('/api/lab/pair-code')
+def pair_code():
+    if not _prefs(load_settings())['shareable']:
+        return jsonify({'error': 'Turn on "Let other devices add this computer" first.'}), 400
+    url = request.args.get('url') or f'https://{lab_report.lan_ip()}:{LAB_PORT}'
+    if not url.startswith('https://'):
+        return jsonify({'error': 'Address must start with https://'}), 400
+    return jsonify({'code': lab_report.pairing_code(url.rstrip('/'), state().token, platform.node(), state().fp), 'url': url})
+
+
+@bp.route('/api/lab/reset-key', methods=['POST'])
+def reset_key():
+    """Revoke every hub that added this device; they must pair again."""
+    state().reset_token()
+    return jsonify({'ok': True})
 
 
 @bp.route('/lab-agent.py')
@@ -60,15 +120,7 @@ def agent_file():
                      download_name='decloud-agent.py')
 
 
-@bp.route('/api/lab/pair-code')
-def pair_code():
-    settings = load_settings()
-    port = os.environ.get('DECLOUD_PORT', '8899')
-    url = request.args.get('url') or f'http://{lab_report.lan_ip()}:{port}'
-    return jsonify({'code': lab_report.pairing_code(url.rstrip('/'), _lab_token(settings), platform.node()),
-                    'url': url})
-
-
+# ─── Hub side ────────────────────────────────────────────────────
 def _num(v, default=0):
     try:
         f = float(v)
@@ -110,27 +162,26 @@ def _clean(r):
     }
 
 
-@bp.route('/api/lab/reset-key', methods=['POST'])
-def reset_key():
-    """Revoke every hub that paired with this device; they must re-pair with the new code."""
-    settings = load_settings()
-    settings['lab_token'] = secrets.token_urlsafe(24)
-    save_settings(settings)
-    return jsonify({'ok': True})
-
-
 def _fetch(dev):
+    if not dev.get('fp'):
+        return {'error': 'Added with an old version — remove and add it again'}
     try:
-        r = _requests.get(dev['url'] + '/api/lab/report', timeout=4,
-                          headers={'Authorization': f"Bearer {dev['token']}"})
-        if r.status_code == 401:
-            return {'error': 'Key rejected — pair this device again'}
-        r.raise_for_status()
-        return _clean(r.json())
-    except _requests.RequestException:
+        return _clean(lab_report.fetch_report(dev['url'], dev['token'], dev['fp']))
+    except lab_report.PinError:
+        return {'error': 'Identity changed — remove and add it again if you reinstalled it'}
+    except PermissionError:
+        return {'error': 'Key was reset — remove and add it again'}
+    except (OSError, ValueError, TypeError, AttributeError):
         return {'error': 'Offline or unreachable'}
-    except (ValueError, AttributeError, TypeError):
-        return {'error': 'Not a DeCloud device'}
+
+
+def _save_device(name, url, token, fp):
+    settings = load_settings()
+    devices = [d for d in settings.get('lab_devices', []) if d.get('fp') != fp and d['url'] != url]
+    dev = {'id': uuid.uuid4().hex[:8], 'name': name[:40] or 'device', 'url': url, 'token': token, 'fp': fp}
+    settings['lab_devices'] = devices + [dev]
+    save_settings(settings)
+    return dev
 
 
 def _totals(nodes):
@@ -176,33 +227,70 @@ def set_prefs():
         p['style'] = data['style']
     if isinstance(data.get('services'), str):
         p['services'] = [s for s in data['services'].replace(',', ' ').split() if s][:20]
+    if isinstance(data.get('shareable'), bool):
+        p['shareable'] = data['shareable']
     settings['lab'] = p
     save_settings(settings)
+    if 'shareable' in data and not sync_server():
+        return jsonify({**p, 'error': f'Port {LAB_PORT} is in use by another program.'}), 409
     return jsonify(p)
 
 
-@bp.route('/api/lab/devices')
-def list_devices():
-    return jsonify([{'id': d['id'], 'name': d['name'], 'url': d['url']}
-                    for d in load_settings().get('lab_devices', [])])
+@bp.route('/api/lab/discover', methods=['POST'])
+def discover():
+    known = {d.get('fp') for d in load_settings().get('lab_devices', [])}
+    own = state().fp
+    return jsonify([{**f, 'added': f['fp'] in known} for f in lab_report.discover(port=LAB_PORT) if f['fp'] != own])
+
+
+@bp.route('/api/lab/pair', methods=['POST'])
+def start_pair():
+    data = request.get_json(silent=True) or {}
+    ip, port = str(data.get('ip', '')), data.get('port', LAB_PORT)
+    if not re.fullmatch(r'[0-9a-fA-F.:]{3,45}', ip) or not isinstance(port, int) or not 0 < port < 65536:
+        return jsonify({'error': 'Bad address'}), 400
+    host = f'[{ip}]' if ':' in ip else ip
+    try:
+        job = lab_report.pair_start(f'https://{host}:{port}', _prefs(load_settings())['name'])
+    except (OSError, ValueError) as e:
+        return jsonify({'error': f'Could not reach that device ({e}).'}), 400
+    jid = uuid.uuid4().hex[:8]
+    _jobs[jid] = {'state': 'waiting', 'number': job['number'], 'name': job['name'], 'kind': job['kind'], 't': time.time()}
+
+    def finish():
+        try:
+            token = lab_report.pair_finish(job)
+            _save_device(job['name'], job['url'], token, job['fp'])
+            _jobs[jid]['state'] = 'done'
+        except (OSError, PermissionError, lab_report.PinError) as e:
+            _jobs[jid].update(state='failed', error=str(e) or 'Pairing failed')
+
+    threading.Thread(target=finish, daemon=True).start()
+    for k in [k for k, j in _jobs.items() if time.time() - j['t'] > 600]:
+        _jobs.pop(k, None)
+    return jsonify({'job': jid, 'number': job['number'], 'name': job['name'], 'kind': job['kind']})
+
+
+@bp.route('/api/lab/pair/<jid>')
+def pair_status(jid):
+    j = _jobs.get(jid)
+    if not j:
+        return jsonify({'state': 'failed', 'error': 'Pairing expired'}), 404
+    return jsonify({k: v for k, v in j.items() if k != 't'})
 
 
 @bp.route('/api/lab/devices', methods=['POST'])
 def add_device():
+    """Manual fallback: paste a dcl1. code (remote / Tailscale)."""
     data = request.get_json(silent=True) or {}
     try:
         p = lab_report.parse_pairing_code(data.get('code'))
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
-    dev = {'id': uuid.uuid4().hex[:8], 'name': (data.get('name') or p['n'] or 'device').strip()[:40],
-           'url': p['u'], 'token': p['t']}
-    test = _fetch(dev)
+    test = _fetch({'url': p['u'], 'token': p['t'], 'fp': p['f']})
     if test.get('error'):
         return jsonify({'error': f"Couldn't reach {p['u']}: {test['error']}"}), 400
-    settings = load_settings()
-    devices = [d for d in settings.get('lab_devices', []) if d['url'] != dev['url']]
-    settings['lab_devices'] = devices + [dev]
-    save_settings(settings)
+    dev = _save_device(p['n'], p['u'], p['t'], p['f'])
     return jsonify({'id': dev['id'], 'name': dev['name'], 'url': dev['url']})
 
 
