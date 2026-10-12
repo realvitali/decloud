@@ -5,6 +5,9 @@ def register_blueprints(app, sock):
     from .auth import bp as auth_bp
     app.register_blueprint(auth_bp)
 
+    from .netloc import bp as netloc_bp
+    app.register_blueprint(netloc_bp)
+
     from .pwa import bp as pwa_bp
     app.register_blueprint(pwa_bp)
 
