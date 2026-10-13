@@ -8,9 +8,21 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.4.1"
+VERSION = "0.4.2"
 
 CHANGELOG = [
+    {
+        "version": "0.4.2",
+        "date": "2026-10-13",
+        "changes": [
+            "Passcode you can't lose: ./decloud pin + emergency reset",
+            "New: ./decloud pin shows your passcode, and ./decloud pin reset makes a new one — type the old one, or press Enter if you forgot it (Windows: decloud.ps1 pin)",
+            "DeCloud never runs unlocked: first start without a passcode makes one, saves it and shows it",
+            "Installer shows the passcode in a box and asks you to write it down",
+            "Login screen: 'Forgot passcode?' tells you exactly what to run",
+            "Passcodes must be 8–10 numbers so Settings can't lock you out of the number keypad",
+        ]
+    },
     {
         "version": "0.4.1",
         "date": "2026-10-11",

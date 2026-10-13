@@ -132,10 +132,10 @@ def change_pin():
         return jsonify({'error': 'Current passcode is incorrect'}), 401
 
     new = new.strip()
-    if len(new) < 8:
-        return jsonify({'error': 'New passcode must be at least 8 characters'}), 400
-    if len(new) > 64:
-        return jsonify({'error': 'New passcode is too long (max 64 characters)'}), 400
+    # The login screen is a number keypad (max 10 digits) — anything else
+    # would lock the owner out.
+    if not (new.isascii() and new.isdigit() and 8 <= len(new) <= 10):
+        return jsonify({'error': 'New passcode must be 8 to 10 numbers'}), 400
     if hmac.compare_digest(new, shared.DECLOUD_PIN):
         return jsonify({'error': 'New passcode must be different from the current one'}), 400
 

@@ -1,7 +1,7 @@
 # DeCloud — Windows lifecycle wrapper (PowerShell)
 # Usage: .\decloud.ps1 start|stop|status|restart|qr
 
-param([string]$Command = "status")
+param([string]$Command = "status", [string]$Sub = "")
 
 $AppDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $AppDir
@@ -52,6 +52,10 @@ switch ($Command) {
         Write-Host "  tailscale funnel status"
         Write-Host "Passcode: $(Get-Passcode)"
     }
+    "pin" {
+        & "$AppDir\.venv\Scripts\python.exe" "$AppDir\scripts\decloud_pin.py" $(if ($Sub) { $Sub } else { "show" })
+        if ($Sub -eq "reset" -and $LASTEXITCODE -eq 0) { & $MyInvocation.MyCommand.Path restart }
+    }
     default {
         Write-Host "DeCloud on Windows"
         Write-Host "  .\decloud.ps1 start    - start the app"
@@ -59,5 +63,6 @@ switch ($Command) {
         Write-Host "  .\decloud.ps1 restart  - restart the app"
         Write-Host "  .\decloud.ps1 status   - show status (default)"
         Write-Host "  .\decloud.ps1 qr       - show access info"
+        Write-Host "  .\decloud.ps1 pin      - show your passcode (pin reset - get a new one)"
     }
 }

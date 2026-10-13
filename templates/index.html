@@ -11,8 +11,8 @@
   <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=107">
-  <link rel="stylesheet" href="/static/css/onboarding.css?v=107">
+  <link rel="stylesheet" href="/static/css/app.css?v=108">
+  <link rel="stylesheet" href="/static/css/onboarding.css?v=108">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
   <title>DeCloud</title>
 </head>
@@ -60,6 +60,12 @@
         </svg>
       </button>
     </div>
+    <details class="login-forgot">
+      <summary>Forgot passcode?</summary>
+      <p>On the computer running DeCloud, open a terminal in the DeCloud folder and run:</p>
+      <code>./decloud pin</code>
+      <p>to see it, or <code>./decloud pin reset</code> to get a new one.<br>Windows: <code>.\decloud.ps1 pin</code></p>
+    </details>
   </div>
 </div>
 
@@ -447,14 +453,14 @@
         </div>
         <div class="settings-row">
           <span>New</span>
-          <input type="password" id="pin-new" class="settings-input" placeholder="8+ characters" autocomplete="off">
+          <input type="password" id="pin-new" class="settings-input" placeholder="8 to 10 numbers" inputmode="numeric" maxlength="10" autocomplete="off">
         </div>
         <div class="settings-row">
           <span>Confirm</span>
-          <input type="password" id="pin-confirm" class="settings-input" placeholder="Repeat new passcode" autocomplete="off">
+          <input type="password" id="pin-confirm" class="settings-input" placeholder="Repeat new passcode" inputmode="numeric" maxlength="10" autocomplete="off">
         </div>
         <button class="settings-save-btn" onclick="changePin()">Change Passcode</button>
-        <div class="settings-note" id="pin-note">Changing your passcode signs out all devices.</div>
+        <div class="settings-note" id="pin-note">Changing your passcode signs out all devices. Write the new one down somewhere safe. Forgot it? On this computer, run <code>./decloud pin</code>.</div>
       </div>
     </div>
     <!-- Voice -->
@@ -1099,32 +1105,32 @@ import * as CANNON from 'cannon-es';
 window.CANNON = CANNON;
 </script>
 <script src="/static/js/thinking-orbs.js"></script>
-<script src="/static/js/modules/auth.js?v=107"></script>
-<script src="/static/js/modules/netloc.js?v=107"></script>
-<script src="/static/js/modules/onboarding.js?v=107"></script>
-<script src="/static/js/modules/core.js?v=107"></script>
-<script src="/static/js/modules/media-session.js?v=107"></script>
-<script src="/static/js/modules/home.js?v=107"></script>
- <script src="/static/js/modules/liquid.js?v=107"></script>
- <script src="/static/js/modules/musicgen.js?v=107"></script>
- <script src="/static/js/modules/models.js?v=107"></script>
-<script src="/static/js/modules/projects.js?v=107"></script>
-<script src="/static/js/modules/audiobooks.js?v=107"></script>
-<script src="/static/js/modules/lego.js?v=107"></script>
-<script src="/static/js/modules/terminal.js?v=107"></script>
-<script src="/static/js/modules/osint.js?v=107"></script>
-<script src="/static/js/modules/universe.js?v=107"></script>
-<script src="/static/js/modules/system.js?v=107"></script>
-<script src="/static/js/modules/ollama.js?v=107"></script>
-<script src="/static/js/modules/comfy.js?v=107"></script>
-<script src="/static/js/modules/lego3d.js?v=107"></script>
-<script src="/static/js/modules/voice.js?v=107"></script>
-<script src="/static/js/modules/journal.js?v=107"></script>
-<script src="/static/js/modules/legos3d.js?v=107"></script>
-<script src="/static/js/modules/settings.js?v=107"></script>
-<script src="/static/js/modules/telemetry.js?v=107"></script>
-<script src="/static/js/modules/desktop.js?v=107"></script>
-<script src="/static/js/modules/music.js?v=107"></script>
+<script src="/static/js/modules/auth.js?v=108"></script>
+<script src="/static/js/modules/netloc.js?v=108"></script>
+<script src="/static/js/modules/onboarding.js?v=108"></script>
+<script src="/static/js/modules/core.js?v=108"></script>
+<script src="/static/js/modules/media-session.js?v=108"></script>
+<script src="/static/js/modules/home.js?v=108"></script>
+ <script src="/static/js/modules/liquid.js?v=108"></script>
+ <script src="/static/js/modules/musicgen.js?v=108"></script>
+ <script src="/static/js/modules/models.js?v=108"></script>
+<script src="/static/js/modules/projects.js?v=108"></script>
+<script src="/static/js/modules/audiobooks.js?v=108"></script>
+<script src="/static/js/modules/lego.js?v=108"></script>
+<script src="/static/js/modules/terminal.js?v=108"></script>
+<script src="/static/js/modules/osint.js?v=108"></script>
+<script src="/static/js/modules/universe.js?v=108"></script>
+<script src="/static/js/modules/system.js?v=108"></script>
+<script src="/static/js/modules/ollama.js?v=108"></script>
+<script src="/static/js/modules/comfy.js?v=108"></script>
+<script src="/static/js/modules/lego3d.js?v=108"></script>
+<script src="/static/js/modules/voice.js?v=108"></script>
+<script src="/static/js/modules/journal.js?v=108"></script>
+<script src="/static/js/modules/legos3d.js?v=108"></script>
+<script src="/static/js/modules/settings.js?v=108"></script>
+<script src="/static/js/modules/telemetry.js?v=108"></script>
+<script src="/static/js/modules/desktop.js?v=108"></script>
+<script src="/static/js/modules/music.js?v=108"></script>
 
 <!-- ═══ ONBOARDING OVERLAY ═══ -->
 <div id="onboarding-overlay" class="onboarding-overlay" style="display:none">
@@ -1156,9 +1162,9 @@ window.CANNON = CANNON;
 
     <!-- Step 2: Secure by default -->
     <div class="onboarding-step" data-step="2">
-      <h1>Secure by Default</h1>
-      <p>DeCloud binds to <strong>localhost only</strong> — zero exposed ports. Remote access is through a tunnel (Tailscale Funnel, localhost.run, or Cloudflare), so your machine is never directly reachable.</p>
-      <p>All API endpoints require a <strong>PIN</strong>. No accounts, no passwords to leak.</p>
+      <h1>Your Passcode Is the Key</h1>
+      <p>The passcode you just typed is the only way in. <strong>Write it down somewhere safe</strong> — a password manager, or paper you keep at home.</p>
+      <p>Forgot it? On this computer, open a terminal in the DeCloud folder and run <code>./decloud pin</code> to see it, or <code>./decloud pin reset</code> for a new one.</p>
     </div>
 
     <!-- Step 3: Phone access -->

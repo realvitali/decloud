@@ -4529,6 +4529,27 @@ body {
 .login-error.show {
   opacity: 1;
 }
+.login-forgot {
+  margin-top: 18px;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: center;
+}
+.login-forgot summary {
+  cursor: pointer;
+  padding: 10px;
+  list-style: none;
+}
+.login-forgot summary::-webkit-details-marker { display: none; }
+.login-forgot p { margin: 6px 0; line-height: 1.5; }
+.login-forgot code {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--text);
+  user-select: all;
+}
 .login-keypad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

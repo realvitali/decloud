@@ -55,7 +55,7 @@ DeCloud uses **Tailscale Funnel** for secure remote access:
 - **End-to-end encrypted** — WireGuard + TLS 1.3
 - **Friends don't need Tailscale** — they just open the link
 
-The first time you open DeCloud, enter your passcode to unlock (tap ✓ after typing).
+The first time you open DeCloud, enter your passcode to unlock (tap ✓ after typing). The installer shows it once — write it down. Forgot it? `./decloud pin` shows it; `./decloud pin reset` makes a new one (works even if you forgot the old one).
 
 ## Configuration
 
@@ -64,7 +64,7 @@ All configuration is via environment variables in `.env` (see `.env.example`):
 | Variable | Default | Description |
 |---|---|---|
 | `DECLOUD_PORT` | `8899` | Port to run on |
-| `DECLOUD_PIN` | *(random)* | Passcode to unlock the app (8+ chars recommended) |
+| `DECLOUD_PIN` | *(random)* | Passcode to unlock the app (8–10 digits; made for you on first start) |
 | `DECLOUD_BOOKS_DIR` | `~/Books` | Where your books live |
 | `DECLOUD_FILES_DIR` | `~` (home) | Directory for the Files browser |
 | `DECLOUD_MUSIC_DIR` | `~/Music` | Music library path |
@@ -89,6 +89,7 @@ All configuration is via environment variables in `.env` (see `.env.example`):
 ./decloud restart    # Restart app + tunnel
 ./decloud status     # Show what's running
 ./decloud qr         # Show current URL + QR code
+./decloud pin        # Show your passcode (pin reset = new one)
 ./decloud version    # Show version
 ```
 

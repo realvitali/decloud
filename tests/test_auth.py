@@ -115,3 +115,37 @@ class TestOpenMode:
         assert r.status_code == 200
         r2 = client.get('/api/auth/check')
         assert r2.get_json() == {'authenticated': True, 'open_mode': True}
+
+
+class TestPinCli:
+    def test_reset_with_right_or_forgotten_pin(self, tmp_path, monkeypatch):
+        import sys
+        sys.path.insert(0, 'scripts')
+        import decloud_pin as dp
+        monkeypatch.setattr(dp, 'ENV', tmp_path / '.env')
+        monkeypatch.setattr(dp, 'SESSIONS', tmp_path / 'sessions.json')
+        monkeypatch.setattr(dp, 'restart', lambda: 'manual')
+        (tmp_path / '.env').write_text('SECRET_KEY=x\nDECLOUD_PIN=11112222\n')
+        (tmp_path / 'sessions.json').write_text('{}')
+
+        answers = iter(['99999999'])                 # wrong pin: nothing changes
+        monkeypatch.setattr('builtins.input', lambda _='': next(answers))
+        assert dp.reset() == 1 and dp.read_pin() == '11112222'
+
+        answers = iter(['11112222'])                 # right pin: new one
+        assert dp.reset() == 0
+        pin = dp.read_pin()
+        assert pin != '11112222' and pin.isdigit() and len(pin) == 8
+        assert not (tmp_path / 'sessions.json').exists()
+        assert 'SECRET_KEY=x' in (tmp_path / '.env').read_text()
+
+        answers = iter(['', 'y'])                    # forgot it: emergency reset
+        assert dp.reset() == 0 and dp.read_pin() != pin
+
+
+def test_change_pin_requires_keypad_digits(client, login):
+    h = {'X-CSRF-Token': login['csrf']}
+    for bad in ('sunshine1', '1234567', '12345678901'):
+        r = client.post('/api/auth/pin', headers=h,
+                        json={'current_pin': TEST_PASSCODE, 'new_pin': bad})
+        assert r.status_code == 400, bad

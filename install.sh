@@ -311,7 +311,7 @@ else
 fi
 
 # ─── Done ───────────────────────────────────────────────────────
-PIN=$(grep DECLOUD_PIN .env 2>/dev/null | cut -d= -f2 || echo "")
+PIN=$(grep '^DECLOUD_PIN=' .env 2>/dev/null | tail -1 | cut -d= -f2- || echo "")
 echo ""
 echo ""
 echo "╔══════════════════════════════════════════════╗"
@@ -320,43 +320,14 @@ echo "╚═══════════════════════�
 echo ""
 echo "🌐 LOCAL ACCESS: http://localhost:${PORT}"
 if [ -n "$TUNNEL_URL" ]; then
-    echo "📱 TAILNET URL: $TUNNEL_URL"
-    echo "   PIN: ${PIN:-set in .env}"
-    echo ""
-    echo "⚠️  This tunnel URL changes every few hours. For permanent access:"
-    echo ""
-    echo "📌 SETUP PERMANENT TUNNEL (5 min):"
-    echo ""
-    echo "   1. Install cloudflared:"
-    if [ "$OS_TYPE" = "macos" ]; then
-        echo "      brew install cloudflared"
-    else
-        echo "      sudo apt install cloudflared  # or: sudo dnf install cloudflared"
-    fi
-    echo ""
-    echo "   2. Create a free Cloudflare account & tunnel:"
-    echo "      cloudflared tunnel login"
-    echo "      cloudflared tunnel create decloud"
-    echo ""
-    echo "   3. Point a domain (yours or free subdomain):"
-    echo "      cloudflared tunnel route dns decloud mydomain.com"
-    echo ""
-    echo "   4. Run the tunnel:"
-    echo "      cloudflared tunnel run decloud"
-    echo ""
-    echo "   Result: https://decloud.mydomain.com (permanent, never changes)"
-    echo ""
-    echo "🔐 ALTERNATIVE (Private-only access):"
-    echo "   Use Tailscale for permanent HTTPS from your own devices:"
-    echo "      sudo tailscale serve https / http://localhost:${PORT}"
-    echo ""
+    echo "📱 PHONE ACCESS: $TUNNEL_URL"
 fi
-echo ""
 
-# Print PIN
+# The passcode is shown here once, loudly — it's the only key to the app.
 if [ -n "$PIN" ]; then
-    echo "🔐 Your access PIN: $PIN"
-    echo "   (Change it: nano ${APP_DIR}/.env)"
+    "$PYBIN" scripts/decloud_pin.py show | sed '$d'
+    printf "Wrote it down? Press Enter to continue... "
+    read -r _ < /dev/tty 2>/dev/null || echo ""
     echo ""
 fi
 
@@ -367,27 +338,28 @@ if [ -n "$TUNNEL_URL" ] && command -v qrencode &>/dev/null; then
     qrencode -t ANSIUTF8 "$TUNNEL_URL" 2>/dev/null || qrencode -t ANSI "$TUNNEL_URL" 2>/dev/null
     echo ""
     echo "Or open manually: $TUNNEL_URL"
-    echo "PIN: $PIN"
+    echo "Passcode: $PIN"
     echo ""
     echo "   Add to Home Screen for a native app experience:"
     echo "   • iPhone: Safari → Share → Add to Home Screen"
     echo "   • Android: Chrome → ⋮ → Add to Home screen"
 elif [ -n "$TUNNEL_URL" ]; then
     echo "📱 Open on your phone: $TUNNEL_URL"
-    echo "   PIN: $PIN"
+    echo "   Passcode: $PIN"
     echo ""
     echo "   Add to Home Screen for a native app experience:"
     echo "   • iPhone: Safari → Share → Add to Home Screen"
     echo "   • Android: Chrome → ⋮ → Add to Home screen"
 else
-    echo "📱 Install cloudflared for phone access:"
-    echo "   https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/"
+    echo "📱 For phone access, install Tailscale (https://tailscale.com/download),"
+    echo "   run: sudo tailscale up   then: ./decloud restart"
 fi
 
 echo ""
 echo "Manage DeCloud:"
 echo "  ./decloud status   — check what's running"
 echo "  ./decloud qr       — show current tunnel URL + QR code"
+echo "  ./decloud pin      — show your passcode (pin reset — get a new one)"
 echo "  ./decloud restart  — restart app + tunnel (new QR if tunnel changed)"
 echo ""
 echo "System service:"

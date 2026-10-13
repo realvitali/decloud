@@ -67,7 +67,7 @@ _load_env_file()
 
 # ─── Authentication ─────────────────────────────────────────────
 # DeCloud requires a passcode (DECLOUD_PIN) to access the app. If not
-# set, the app runs in open mode (for local-only development).
+# set, one is generated on first start (see below) — `./decloud pin` shows it.
 #
 # Security model:
 #   - The passcode is the *credential* — only used during /api/auth/login.
@@ -80,6 +80,15 @@ _load_env_file()
 #     after 30 days. A restart invalidates all sessions, forcing
 #     re-login — acceptable for a personal self-hosted app.
 DECLOUD_PIN = os.environ.get('DECLOUD_PIN', '')
+if not DECLOUD_PIN:
+    # First run without the installer: never run open (any website could
+    # reach the terminal). Make a passcode, save it, and show it once.
+    sys.path.insert(0, str(Path(__file__).parent / 'scripts'))
+    import decloud_pin
+    DECLOUD_PIN = decloud_pin.new_pin()
+    decloud_pin.write_pin(DECLOUD_PIN)
+    os.environ['DECLOUD_PIN'] = DECLOUD_PIN
+    decloud_pin.banner(DECLOUD_PIN, 'DeCloud made you a passcode:')
 if DECLOUD_PIN:
     if len(DECLOUD_PIN) > 64:
         raise SystemExit('[decloud] DECLOUD_PIN is longer than 64 characters.')

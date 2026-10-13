@@ -120,8 +120,8 @@ function changePin() {
     note.className = 'settings-note settings-note-err';
     return;
   }
-  if (newPin.length < 8) {
-    note.textContent = '✗ New passcode must be at least 8 characters';
+  if (!/^\d{8,10}$/.test(newPin)) {
+    note.textContent = '✗ New passcode must be 8 to 10 numbers';
     note.className = 'settings-note settings-note-err';
     return;
   }
