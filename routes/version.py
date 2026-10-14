@@ -7,9 +7,16 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 
 CHANGELOG = [
+    {
+        "version": "0.5.1",
+        "date": "2026-10-14",
+        "changes": [
+            "Fix Windows CI (permission-bit checks are POSIX-only)",
+        ]
+    },
     {
         "version": "0.5.0",
         "date": "2026-10-14",

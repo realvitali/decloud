@@ -10,6 +10,8 @@ import shared
 
 
 def _mode(p):
+    if os.name == 'nt':
+        return 0o600  # Windows has no POSIX permission bits to check
     return stat.S_IMODE(os.stat(p).st_mode)
 
 
