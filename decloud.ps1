@@ -1,5 +1,5 @@
 # DeCloud — Windows lifecycle wrapper (PowerShell)
-# Usage: .\decloud.ps1 start|stop|status|restart|qr
+# Usage: .\decloud.ps1 start|stop|status|restart|qr|pin
 
 param([string]$Command = "status", [string]$Sub = "")
 
@@ -11,10 +11,10 @@ $Port = if ($env:DECLOUD_PORT) { $env:DECLOUD_PORT } else { "8899" }
 
 function Get-Passcode {
     if (Test-Path ".env") {
-        $line = Select-String -Path .env -Pattern '^DECLOUD_PIN=' | Select-Object -First 1
+        $line = Select-String -Path .env -Pattern '^DECLOUD_PIN=' | Select-Object -Last 1  # last wins, like the app
         if ($line) { return $line.Line.Substring(12) }
     }
-    return "(not set — open mode)"
+    return "(not set yet - start DeCloud once, then: .\decloud.ps1 pin)"
 }
 
 switch ($Command) {
@@ -46,6 +46,16 @@ switch ($Command) {
         & $MyInvocation.MyCommand.Path stop
         Start-Sleep -Seconds 1
         & $MyInvocation.MyCommand.Path start
+    }
+    "status" {
+        $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+        Write-Host "Task: $(if ($task) { $task.State } else { 'not installed - run .\setup.ps1' })"
+        try {
+            $null = Invoke-WebRequest -Uri "http://localhost:$Port/" -UseBasicParsing -TimeoutSec 3
+            Write-Host "OK App responding at http://localhost:$Port" -ForegroundColor Green
+        } catch {
+            Write-Host "X App not responding on port $Port" -ForegroundColor Red
+        }
     }
     "qr" {
         Write-Host "Tailscale Funnel URL (run in elevated PowerShell):"

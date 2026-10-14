@@ -12,7 +12,7 @@ SECURE ARCHITECTURE:
 Binding to anything other than 127.0.0.1 prints a loud warning: the app
 then relies on the passcode alone for LAN-visible traffic.
 """
-import os, sys
+import os
 
 # ─── Update safety net ────────────────────────────────────────────
 # If the previous self-update is fresh and THIS boot fails during
@@ -30,7 +30,7 @@ try:
         _meta = read_update_meta()
         if _meta.get('state') in ('installed', 'rolled_back', 'prepared'):
             clear_marker_after_healthy_uptime()
-except Exception as _boot_error:
+except Exception:
     if os.environ.get('DECLOUD_UPDATE_PROBE') != '1':
         try:
             from routes.update import rollback_on_failed_boot

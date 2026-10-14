@@ -1,5 +1,5 @@
 """Projects (GitHub/Vercel) routes."""
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 import json, subprocess
 from shared import PROJECTS_CONFIG
 

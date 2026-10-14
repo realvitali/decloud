@@ -1,7 +1,6 @@
 """Music player routes."""
-from flask import Blueprint, jsonify, request, send_file, Response
+from flask import Blueprint, jsonify, send_file
 import subprocess
-from pathlib import Path
 from shared import MUSIC_EXTS
 import hashlib
 import os

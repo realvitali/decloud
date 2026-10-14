@@ -16,7 +16,7 @@ async function loadAgents() {
     const agents = data.agents || [];
 
     if (!agents.length) {
-      listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🤖</div><h3>No agents found</h3><p>Set DECLOUD_HERMES_HOME in .env to enable agent management.</p></div>';
+      listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🤖</div><h3>No agents found</h3><p>To manage agents, set the Hermes path in Settings → Voice.</p></div>';
       return;
     }
 
@@ -27,7 +27,7 @@ async function loadAgents() {
       const hasJobs = a.jobs && a.jobs.length;
       const note = a.profile === 'local' ? 'This workstation — always on' : 'No cron jobs configured';
       return `
-      <div class="agent-card" data-id="${escapeHtml(a.id)}" onclick="toggleAgentDetail(this.dataset.id)">
+      <div class="agent-card" role="button" tabindex="0" data-id="${escapeHtml(a.id)}" onclick="toggleAgentDetail(this.dataset.id)">
         <div class="agent-header">
           <div class="agent-avatar" style="${agentAvatarStyle(name)}">${escapeHtml(name.charAt(0).toUpperCase())}</div>
           <div class="agent-info">
@@ -56,7 +56,7 @@ async function loadAgents() {
     }
   } catch(e) {
     console.error('loadAgents failed', e);
-    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🤖</div><h3>Agents not configured</h3><p>Set DECLOUD_HERMES_HOME in .env to enable agent management.</p></div>';
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🤖</div><h3>Agents not set up</h3><p>To manage agents, set the Hermes path in Settings → Voice.</p></div>';
   }
 }
 
@@ -89,7 +89,7 @@ function renderJobs(container, jobs, profile) {
 async function toggleJob(jobId, enabled, profile) {
   const action = enabled ? 'resume' : 'pause';
   try {
-    const r = await fetch(`/api/agents/jobs/${jobId}/${action}?profile=${profile}`, { method: 'POST' });
+    const r = await fetch(`/api/agents/jobs/${encodeURIComponent(jobId)}/${action}?profile=${encodeURIComponent(profile)}`, { method: 'POST' });
     const d = await r.json();
     if (!d.ok) {
       console.error('toggle failed:', d.error);
@@ -112,8 +112,8 @@ async function loadActivity() {
       const t = ev.ts ? relTime(ev.ts) : '';
       const label = ev.dir === 'in' ? 'IN' : 'OUT';
       return `
-        <div class="activity-item ${ev.dir}">
-          <span class="activity-dir ${ev.dir}">${label}</span>
+        <div class="activity-item ${ev.dir === 'in' ? 'in' : 'out'}">
+          <span class="activity-dir ${ev.dir === 'in' ? 'in' : 'out'}">${label}</span>
           <span class="activity-time">${escapeHtml(t)}</span>
           <span class="activity-text">${escapeHtml(ev.text || '')}</span>
         </div>
@@ -152,7 +152,7 @@ function updateClock() {
   document.getElementById('clock').textContent =
     now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
 }
-setInterval(updateClock, 1000);
+setInterval(() => { if (!document.hidden) updateClock(); }, 1000);
 updateClock();
 
 // ─── Status Chips (Kali-style) + Sparklines ────────────────
@@ -216,7 +216,7 @@ function buildStatusChips() {
     { key: 'net',  label: 'NET' },
   ];
   container.innerHTML = chips.map(function(c) {
-    return '<div class="stat-chip" id="chip-' + c.key + '" onclick="toggleChipGraph(\'' + c.key + '\')">' +
+    return '<div class="stat-chip" role="button" tabindex="0" id="chip-' + c.key + '" data-key="' + c.key + '" onclick="toggleChipGraph(this.dataset.key)">' +
       '<div class="chip-percent">' +
       '<div class="stat-chip-label">' + c.label + '</div>' +
       '<div class="stat-chip-value" id="chip-val-' + c.key + '">--</div>' +
@@ -263,6 +263,9 @@ async function loadQuickStats() {
     setChipValue('cpu', cpu);
     setChipValue('ram', ram);
     setChipValue('gpu', gpuPct);
+    // GPU chip only when the server reports one (NVIDIA)
+    var gpuChip = document.getElementById('chip-gpu');
+    if (gpuChip) gpuChip.style.display = d.gpu ? '' : 'none';
     setChipValue('disk', disk);
 
     var netEl = document.getElementById('chip-val-net');
@@ -372,7 +375,7 @@ document.addEventListener('click', function(e) {
 // ─── App Grid ────────────────────────────────────────────
 function buildAppGrid() {
   document.getElementById('app-grid').innerHTML = visibleApps(APPS).map(app => `
-    <div class="app-icon" data-app-id="${app.id}" onclick="openApp('${app.id}')">
+    <div class="app-icon" role="button" tabindex="0" data-app-id="${app.id}" onclick="openApp(this.dataset.appId)">
       <div class="app-icon-visual" style="color:${app.color}">${app.svg}</div>
       <div class="app-label">${app.label}</div>
     </div>
@@ -384,27 +387,28 @@ function applyExperimentalApps() {
 }
 
 function openApp(id) {
-  const app = APPS.find(a => a.id === id);
+  const app = APPS.find(a => a.id === id) || AI_SUBAPPS.find(a => a.id === id);
   if (!app) return;
   // AI spread menu
   if (app.spread) {
-    toggleAISpread(event);
+    toggleAISpread(window.event);
     return;
   }
   if (!app.screen) return;
-  closeAISpread();
+  if (typeof closeAISpread === 'function') closeAISpread();
   showScreen(app.screen);
-  if (id === 'audiobooks') { location.hash = '#audiobooks'; loadBooks(); }
-  if (id === 'music') { location.hash = '#music'; loadMusic(); }
-  if (id === 'files') { loadLego(''); }
-  if (id === 'journal') { location.hash = '#journal'; switchJournalTab('journal-tab-voice'); }
-  if (id === 'legos') { location.hash = '#legos'; initLegos3D(); }
-  if (id === 'ollama') { location.hash = '#ollama'; loadOllamaModels(); }
-  if (id === 'comfy') { location.hash = '#comfy'; loadComfyStatus(); loadComfyModels(); loadComfyGallery(); }
-  if (id === 'system') { location.hash = '#system'; loadSystem(); }
-  if (id === 'agents') { location.hash = '#agents'; }
-  if (id === 'projects') { location.hash = '#projects'; openProjectList(); }
-  if (id === 'settings') { location.hash = '#settings'; loadSettings(); }
+  if (id !== 'files') location.hash = '#' + id;  // files sets its own #lego/<path>
+  if (id === 'audiobooks') loadBooks();
+  if (id === 'music') loadMusic();
+  if (id === 'files') loadLego('');
+  if (id === 'journal') switchJournalTab('journal-tab-voice');
+  if (id === 'legos') initLegos3D();
+  if (id === 'ollama') loadOllamaModels();
+  if (id === 'comfy') { loadComfyStatus(); loadComfyModels(); loadComfyGallery(); }
+  if (id === 'musicgen') loadMusicGen();
+  if (id === 'system') loadSystem();
+  if (id === 'projects') openProjectList();
+  if (id === 'settings') loadSettings();
 }
 
 // ─── Screen Management ───────────────────────────────────
@@ -412,7 +416,7 @@ function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id)?.classList.add('active');
   // Track app usage
-  var appMap = { 'book-screen': 'books', 'music-screen': 'music', 'lego-screen': 'files', 'ollama-screen': 'ai-chat', 'comfy-screen': 'ai-gen', 'agents-screen': 'agents', 'project-screen': 'projects', 'system-screen': 'system', 'terminal-screen': 'terminal', 'osint-screen': 'privacy', 'universe-screen': 'universe', 'journal-screen': 'journal', 'legos-screen': 'legos', 'settings-screen': 'settings' };
+  var appMap = { 'book-screen': 'books', 'music-screen': 'music', 'lego-screen': 'files', 'ollama-screen': 'ai-chat', 'comfy-screen': 'ai-gen', 'agents-screen': 'agents', 'project-screen': 'projects', 'system-screen': 'system', 'terminal-screen': 'terminal', 'osint-screen': 'privacy', 'musicgen-screen': 'musicgen', 'journal-screen': 'journal', 'legos-screen': 'legos', 'settings-screen': 'settings' };
   if (appMap[id] && typeof trackAppOpen === 'function') trackAppOpen(appMap[id]);  // hash restore runs before telemetry.js loads
   // Voice orb only shows on home screen
   const orb = document.getElementById('voice-orb');
@@ -468,19 +472,21 @@ async function startVoiceJournal() {
   try {
     vjStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     vjChunks = [];
-    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
-    vjRecorder = new MediaRecorder(vjStream, { mimeType: mime });
+    // Safari records mp4, not webm
+    const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+    vjRecorder = new MediaRecorder(vjStream, mime ? { mimeType: mime } : {});
 
     vjRecorder.ondataavailable = (e) => { if (e.data.size > 0) vjChunks.push(e.data); };
     vjRecorder.onstop = async () => {
-      const blob = new Blob(vjChunks, { type: mime });
+      const type = vjRecorder.mimeType || mime || 'audio/webm';
+      const blob = new Blob(vjChunks, { type });
       vjStream.getTracks().forEach(t => t.stop());
       vjStream = null;
       vjRecording = false;
       updateJournalRecordBtn(false);
 
       const fd = new FormData();
-      fd.append('audio', blob, 'journal.webm');
+      fd.append('audio', blob, type.includes('mp4') ? 'journal.m4a' : 'journal.webm');
       const statusEl = document.getElementById('journal-voice-status');
       if (statusEl) statusEl.textContent = 'Transcribing...';
 
@@ -494,7 +500,7 @@ async function startVoiceJournal() {
           if (statusEl) statusEl.textContent = 'Error: ' + (data.error || 'failed');
         }
       } catch (e) {
-        if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+        if (statusEl) statusEl.textContent = friendlyError(e);
       }
     };
 
@@ -502,7 +508,11 @@ async function startVoiceJournal() {
     vjRecording = true;
     updateJournalRecordBtn(true);
   } catch (e) {
-    showToast('Mic access denied');
+    if (vjStream) { vjStream.getTracks().forEach(t => t.stop()); vjStream = null; }
+    if (!navigator.mediaDevices || typeof MediaRecorder === 'undefined') showToast("This browser can't record audio");
+    else if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) showToast('Microphone access was blocked — allow it in your browser settings');
+    else if (e && e.name === 'NotFoundError') showToast('No microphone found');
+    else showToast("Couldn't start recording: " + friendlyError(e));
   }
 }
 

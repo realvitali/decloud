@@ -17,15 +17,15 @@ into the local ComfyUI models tree. Progress is polled from the UI;
 cancel stops and cleans up. The user never touches the machine.
 """
 from flask import Blueprint, jsonify, request
-import json
 import os
 import re
 import subprocess
 import threading
 import time
+import uuid
 from pathlib import Path
 
-from shared import app, limiter, BASE_DIR, _requests, COMFY_OUTPUT
+from shared import limiter, _requests, COMFY_OUTPUT
 import psutil
 
 bp = Blueprint('models', __name__)
@@ -269,6 +269,7 @@ def _download_worker(dl_id: str, repo: str, parts: list, category: str,
                      import_ollama: bool):
     dest_dir = _target_dir(category)
     combined = dest_dir / _merged_name(parts[0])
+    part_path = None
     try:
         dest_dir.mkdir(parents=True, exist_ok=True)
         total_size = 0
@@ -332,6 +333,8 @@ def _download_worker(dl_id: str, repo: str, parts: list, category: str,
         with _download_lock:
             _downloads[dl_id]['state'] = 'done'
     except Exception as e:
+        if part_path:  # never leave a multi-GB partial file behind
+            part_path.unlink(missing_ok=True)
         with _download_lock:
             _downloads[dl_id].update({'state': 'error', 'error': str(e)[:300]})
 
@@ -410,7 +413,6 @@ def models_download():
         total_gb = round(sum(
             next((f['size_gb'] for f in analysis.get('files', [])
                   if f['file'] == p), 0) for p in parts), 2)
-        tier = 'runs-well'  # explicit lists are pre-approved by the UI
     elif fname:
         if not FILE_PATTERN.match(fname):
             return jsonify({'error': 'invalid file name'}), 400
@@ -423,11 +425,10 @@ def models_download():
                                      f"({file_info['size_gb']} GB)"}), 409
         parts = file_info.get('parts') or [fname]
         total_gb = file_info['size_gb']
-        tier = file_info['tier']
     else:
         return jsonify({'error': 'file or files required'}), 400
 
-    dl_id = f'{int(time.time())}-{_slug(repo)[:16]}-{_slug(parts[0])[:24]}'
+    dl_id = f'{int(time.time())}-{uuid.uuid4().hex[:6]}-{_slug(repo)[:16]}-{_slug(parts[0])[:24]}'
     with _download_lock:
         _downloads[dl_id] = {
             'id': dl_id, 'repo': repo, 'file': (fname or parts[0]), 'category': category,

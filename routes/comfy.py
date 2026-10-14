@@ -2,7 +2,7 @@
 from flask import Blueprint, jsonify, request
 import json, os, shlex, shutil, signal, subprocess, time
 from pathlib import Path
-from shared import _requests, COMFY_URL, COMFY_OUTPUT, COMFY_INPUT, BASE_DIR
+from shared import _requests, COMFY_URL, COMFY_OUTPUT, BASE_DIR
 
 bp = Blueprint('comfy', __name__)
 

@@ -23,15 +23,10 @@ echo "║   DeCloud — Uninstaller                      ║"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
 
-# ─── Stop tunnel ────────────────────────────────────────────────
-if [ -f "$APP_DIR/tunnel.pid" ]; then
-    echo "→ Stopping tunnel..."
-    kill "$(cat "$APP_DIR/tunnel.pid")" 2>/dev/null || true
-    rm -f "$APP_DIR/tunnel.pid"
-    echo "✓ Tunnel stopped"
-else
-    pkill -f "cloudflared tunnel.*localhost" 2>/dev/null && echo "✓ Tunnel stopped" || echo "• No tunnel found (skip)"
-fi
+# ─── Stop app + Tailscale funnel (started by ./decloud start) ───
+echo "→ Stopping app + tunnel..."
+"$APP_DIR/decloud" stop >/dev/null 2>&1 || true
+echo "✓ App + tunnel stopped"
 
 # ─── Stop and remove service ────────────────────────────────────
 if [ "$OS_TYPE" = "macos" ]; then
@@ -98,6 +93,7 @@ rm -rf "$APP_DIR/decloud.log" 2>/dev/null || true
 rm -rf "$APP_DIR/decloud.pid" 2>/dev/null || true
 rm -rf "$APP_DIR/tunnel.log" 2>/dev/null || true
 rm -rf "$APP_DIR/tunnel.pid" 2>/dev/null || true
+rm -f "$APP_DIR/app.pid" "$APP_DIR/app.log" "$APP_DIR/tunnel.url" "$APP_DIR/sessions.json" 2>/dev/null || true
 rm -rf "$APP_DIR/__pycache__" 2>/dev/null || true
 rm -rf "$APP_DIR/routes/__pycache__" 2>/dev/null || true
 echo "✓ Caches cleared"

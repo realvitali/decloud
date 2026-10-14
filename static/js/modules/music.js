@@ -50,7 +50,7 @@ function renderMusicList() {
         '<div class="music-song-name">' + escapeHtml(meta.title) + '</div>' +
         (meta.artist ? '<div class="music-song-artist">' + escapeHtml(meta.artist) + '</div>' : '') +
       '</div>' +
-      '<div class="music-song-more" onclick="event.stopPropagation(); showSongDetails(' + i + ')">' +
+      '<div class="music-song-more" role="button" tabindex="0" aria-label="Song details" onclick="event.stopPropagation(); showSongDetails(' + i + ')">' +
         '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>' +
       '</div>' +
     '</div>';

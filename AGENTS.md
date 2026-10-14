@@ -141,10 +141,6 @@ uvx pip-audit -r requirements.txt        # CVE scan — must come back clean
 
 - `shared.py` (~860 lines) and `routes/voice.py` are catch-alls; split into
   smaller modules post-release (sessions → own module, voice config → own).
-- Dead frontend code: `executeVoiceAction` / `confirmVoiceCommand` in
-  `static/js/modules/voice.js` and the `/api/voice/intent` backend route are
-  no longer called (the voice agent uses `/api/voice/chat` now). Remove in a
-  dedicated cleanup PR with its own tests.
 - OSINT module is orphaned (no UI entry point) — remove or re-wire.
 - In-memory `_LOGIN_ATTEMPTS` and unbounded caches could use pruning.
 - Sessions are file-backed and single-process; multi-worker would need a

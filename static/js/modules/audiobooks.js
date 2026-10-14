@@ -7,13 +7,14 @@ async function loadBooks() {
     ).join('');
     const r = await fetch('/api/books');
     const books = await r.json();
+    if (!r.ok || !Array.isArray(books)) throw new Error((books && books.error) || 'Something went wrong — try again');
     if (!books || books.length === 0) {
       document.getElementById('book-list').innerHTML = `
         <div class="empty-state">
           <div class="empty-icon">📚</div>
           <h3>No books yet</h3>
-          <p>Add PDF or EPUB files to your books folder to get started.</p>
-          <p class="empty-hint">Settings → Books folder to change the path</p>
+          <p>Put PDF or plain-text (.txt) files in your books folder to get started.</p>
+          <p class="empty-hint">To choose a different folder, go to Settings → Paths.</p>
         </div>`;
       return;
     }
@@ -37,13 +38,13 @@ async function loadBooks() {
         </div>
       `;
     }).join('');
-  } catch {
+  } catch (e) {
     document.getElementById('book-list').innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">📚</div>
-        <h3>No books yet</h3>
-        <p>Add PDF or EPUB files to your books folder to get started.</p>
-        <p class="empty-hint">Settings → Books folder to change the path</p>
+        <h3>Couldn't load your books</h3>
+        <p>${escapeHtml(friendlyError(e))}</p>
+        <button class="settings-btn" onclick="loadBooks()">Retry</button>
       </div>`;
   }
 }
@@ -219,7 +220,7 @@ async function loadChapterText(idx) {
     const res = await fetch(`/api/books/text?book=${encodeURIComponent(currentBook)}&chapter=${idx}`);
     const data = await res.json();
     if (data.error) {
-      document.getElementById('reader-text').innerHTML = `<span style="color:var(--text-dim)">${data.error}</span>`;
+      document.getElementById('reader-text').innerHTML = `<span style="color:var(--text-dim)">${escapeHtml(data.error)}</span>`;
       return;
     }
     readerText = data.text || '';
@@ -395,7 +396,7 @@ function renderBookmarkList() {
 
   container.innerHTML = nonResume.map((b, i) => `
     <div class="bookmark-row">
-      <span class="bookmark-word">"${b.word}"</span>
+      <span class="bookmark-word">"${escapeHtml(b.word)}"</span>
       <span class="bookmark-ch">Ch ${b.chapter + 1}</span>
       <button class="bookmark-goto" onclick="gotoBookmark(${i})">Go</button>
       <button class="bookmark-del" onclick="deleteBookmark(${i})">✕</button>
@@ -485,7 +486,7 @@ function buildChapterDropdown(activeIdx) {
     const title = c.title || `Chapter ${i + 1}`;
     const prefix = isDone ? '\u2713 ' : pending ? '... ' : '';
     const cls = isCurrent ? 'current' : isDone ? 'completed' : '';
-    return `<option value="${i}" class="${cls}" ${isCurrent ? 'selected' : ''}>${prefix}${num}. ${title}</option>`;
+    return `<option value="${i}" class="${cls}" ${isCurrent ? 'selected' : ''}>${prefix}${num}. ${escapeHtml(title)}</option>`;
   }).join('');
 
   // Resume hint
@@ -694,8 +695,11 @@ async function startPolling(bookId) {
   isGenerating = true;
 
   pollInterval = setInterval(async () => {
-    const r = await fetch(`/api/tts/status/${bookId}`);
-    const d = await r.json();
+    let d;
+    try {
+      const r = await fetch(`/api/tts/status/${encodeURIComponent(bookId)}`);
+      d = await r.json();
+    } catch (e) { return; }  // transient — try again next tick
 
     if (d.status === 'ready') {
       clearInterval(pollInterval);
@@ -741,6 +745,10 @@ async function startPolling(bookId) {
       isGenerating = false;
       pollInterval = null;
       hideGenBanner();
+      if (d.status === 'error') {
+        showToast("Audio generation stopped: " + (d.error || 'something went wrong — try again'));
+        loadBooks();
+      }
     }
   }, 4000);
 }
@@ -774,9 +782,9 @@ async function openSettingsForBook(bookId) {
   voiceGrid.innerHTML = voices.map(v => {
     const isActive = settings.voice === v.id;
     return `
-      <div class="voice-card ${isActive ? 'selected' : ''}" onclick="selectVoice('${v.id}')" id="voice-${v.id}">
+      <div class="voice-card ${isActive ? 'selected' : ''}" data-id="${escapeHtml(v.id)}" onclick="selectVoice(this.dataset.id)" id="voice-${escapeHtml(v.id)}">
         <div class="voice-icon">${v.gender === 'male' ? '♂' : '♀'}</div>
-        <div class="voice-name">${v.name}</div>
+        <div class="voice-name">${escapeHtml(v.name)}</div>
         ${isActive ? '<div class="voice-active-badge">Active</div>' : ''}
       </div>
     `;
@@ -792,7 +800,7 @@ async function openSettingsForBook(bookId) {
       return `
         <div class="chapter-row done">
           <span class="chapter-row-num">${c.index + 1}</span>
-          <span class="chapter-row-name">${getChapterName(c.index) || ''}</span>
+          <span class="chapter-row-name">${escapeHtml(getChapterName(c.index))}</span>
           <span class="chapter-row-size">${c.size_kb ? Math.round(c.size_kb/1024)+'MB' : ''}</span>
         </div>
       `;
@@ -852,8 +860,12 @@ function closeSettings() {
 
 async function startGeneration() {
   if (!settingsBookId) return;
-  const r = await fetch(`/api/tts/start/${settingsBookId}`, { method: 'POST' });
-  const d = await r.json();
+  let r, d;
+  try {
+    r = await fetch(`/api/tts/start/${encodeURIComponent(settingsBookId)}`, { method: 'POST' });
+    d = await r.json();
+  } catch (e) { showToast(friendlyError(e)); return; }
+  if (!r.ok || d.error) { showToast(d.error || 'Could not start audio generation'); return; }
   if (d.status === 'started') {
     document.getElementById('gen-controls').innerHTML =
       `<button class="gen-btn stop" onclick="stopGeneration()">Stop Generation</button>`;
@@ -964,7 +976,7 @@ async function openSummary() {
     clearTimeout(timeoutId);
     summaryData = await r.json();
     if (summaryData.error) {
-      document.getElementById('summary-loading').innerHTML = `<p>${summaryData.error}</p>`;
+      document.getElementById('summary-loading').innerHTML = `<p>${escapeHtml(summaryData.error)}</p>`;
       return;
     }
     document.getElementById('summary-loading').style.display = 'none';
@@ -974,8 +986,8 @@ async function openSummary() {
     switchSummaryTab('chapter');
   } catch (e) {
     clearTimeout(timeoutId);
-    const msg = e.name === 'AbortError' ? 'Timed out.' : e.message;
-    document.getElementById('summary-loading').innerHTML = `<p>Failed: ${msg}</p>`;
+    const msg = e.name === 'AbortError' ? 'Timed out.' : friendlyError(e);
+    document.getElementById('summary-loading').innerHTML = `<p>Failed: ${escapeHtml(msg)}</p>`;
   }
 }
 
@@ -1047,7 +1059,7 @@ async function askSummaryQuestion() {
     const last = msgs[msgs.length - 1];
     if (last) {
       last.classList.remove('loading');
-      last.textContent = data.answer || 'No answer.';
+      last.textContent = data.answer || data.error || 'No answer.';
     }
     chat.scrollTop = chat.scrollHeight;
   } catch (e) {
@@ -1055,7 +1067,7 @@ async function askSummaryQuestion() {
     const last = msgs[msgs.length - 1];
     if (last) {
       last.classList.remove('loading');
-      last.textContent = e.message;
+      last.textContent = friendlyError(e);
     }
   }
 }

@@ -5,25 +5,29 @@ let _loginPin = '';
 let _loginBusy = false;
 const _LOGIN_PIN_MAX = 10;  // keypad supports 6–10 digits; longer passcodes via UI only
 
-// Check auth on page load — show login screen or main app
-(async function checkAuthOnLoad() {
+// Check auth on page load — show login screen, main app, or offline card
+async function checkAuth() {
+  const offline = document.getElementById('offline-screen');
+  let d;
   try {
     const r = await fetch('/api/auth/check');
-    const d = await r.json();
-    if (d.authenticated) {
-      // Already authenticated — stash the CSRF token for state-changing calls
-      if (d.csrf) sessionStorage.setItem('decloud_csrf', d.csrf);
-      hideLoginScreen();
-    } else {
-      // Need to log in
-      showLoginScreen();
-    }
+    d = await r.json();
   } catch (e) {
-    // If auth check fails (network error, etc.), assume not authenticated
-    // but only show login if we get a clear 401
+    // Server unreachable (or not DeCloud answering) — say so plainly.
     console.warn('Auth check failed:', e);
+    if (offline) offline.style.display = 'flex';
+    return;
   }
-})();
+  if (offline) offline.style.display = 'none';
+  if (d.authenticated) {
+    // Already authenticated — stash the CSRF token for state-changing calls
+    if (d.csrf) sessionStorage.setItem('decloud_csrf', d.csrf);
+    hideLoginScreen();
+  } else {
+    showLoginScreen();
+  }
+}
+checkAuth();
 
 function showLoginScreen() {
   const login = document.getElementById('login-screen');
@@ -39,7 +43,24 @@ function hideLoginScreen() {
   // Show home screen
   const home = document.getElementById('home-screen');
   if (home) home.classList.add('active');
+  // First-run intro only after sign-in (never over the login screen)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => initOnboarding());
+  } else if (typeof initOnboarding === 'function') {
+    initOnboarding();
+  }
 }
+
+// Physical keyboard support for the keypad
+document.addEventListener('keydown', (e) => {
+  const login = document.getElementById('login-screen');
+  if (!login || login.style.display === 'none') return;
+  if (e.key >= '0' && e.key <= '9') loginPress(e.key);
+  else if (e.key === 'Backspace') loginBack();
+  else if (e.key === 'Enter') loginGo();
+  else return;
+  e.preventDefault();
+});
 
 function renderLoginDots() {
   const dots = document.getElementById('login-dots');
@@ -92,12 +113,8 @@ async function submitLogin() {
     });
     const d = await r.json();
     if (r.ok && d.ok) {
-      // Store the session token (not the PIN) for the cross-origin Bearer
-      // fallback and the CSRF token for state-changing requests.
+      // Auth is the HttpOnly session cookie; keep only the CSRF token.
       // The PIN must never live in browser storage.
-      if (d.session) {
-        sessionStorage.setItem('decloud_session', d.session);
-      }
       if (d.csrf) {
         sessionStorage.setItem('decloud_csrf', d.csrf);
       }
@@ -138,7 +155,6 @@ async function logout() {
   } catch (e) {
     console.warn('Logout request failed:', e);
   }
-  sessionStorage.removeItem('decloud_session');
   sessionStorage.removeItem('decloud_csrf');
   window.location.reload();
 }
@@ -148,3 +164,4 @@ window.logout = logout;
 window.loginPress = loginPress;
 window.loginBack = loginBack;
 window.loginGo = loginGo;
+window.checkAuth = checkAuth;

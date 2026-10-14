@@ -46,6 +46,4 @@ inline `onclick` handlers.
 
 ## Known debt (do NOT touch mid-feature)
 
-Dead code: `executeVoiceAction`/`confirmVoiceCommand` in `voice.js` and the
-`/api/voice/intent` route (unused — voice uses `/api/voice/chat`). Big-file
-splits (`shared.py`, `routes/voice.py`) are post-release work.
+Big-file splits (`shared.py`, `routes/voice.py`) are post-release work.

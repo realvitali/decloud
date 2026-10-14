@@ -4844,7 +4844,7 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
 
 /* ═══ SETTINGS ═══ */
 .settings-content { padding: 20px; max-width: 600px; margin: 0 auto; }
-.settings-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--glass-border); margin-bottom: 20px; }
+.settings-tabs { display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--glass-border); margin-bottom: 20px; }
 .settings-tab { flex: 1; padding: 12px 16px; border: none; background: none; cursor: pointer; color: var(--text-dim); font-weight: 500; font-size: 0.85rem; border-bottom: 2px solid transparent; transition: color 0.2s, border-color 0.2s; }
 .settings-tab:hover { color: var(--text); }
 .settings-tab.active { color: var(--text); border-bottom-color: var(--accent); }
@@ -5576,3 +5576,31 @@ body.desktop-mode .app-icon.desktop-focus .app-label {
 #netloc-banner .nl-btn{border:none;border-radius:12px;padding:10px 16px;font-size:13.5px;font-weight:600;cursor:pointer;background:var(--accent-soft);color:var(--text)}
 #netloc-banner .nl-btn.nl-primary{background:var(--accent);color:#fff}
 @media (prefers-color-scheme: dark){#netloc-banner .nl-btn.nl-primary{background:var(--accent-text);color:#0a0a0f}}
+
+/* ═══ Confirm dialog (appConfirm in core.js) ═══ */
+.app-confirm-overlay {
+  position: fixed; inset: 0; z-index: 100001;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--modal-bg); padding: 24px;
+}
+.app-confirm-card {
+  background: var(--surface-solid); color: var(--text);
+  border: 1px solid var(--hairline-strong); border-radius: 16px;
+  padding: 20px; max-width: 340px; width: 100%;
+  box-shadow: var(--glass-shadow-lg);
+}
+.app-confirm-msg { margin: 0 0 16px; font-size: 0.95rem; line-height: 1.4; white-space: pre-line; }
+.app-confirm-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.app-confirm-actions button {
+  min-height: 44px; padding: 0 18px; border-radius: 12px; font-weight: 600;
+  border: 1px solid var(--hairline-strong); background: var(--card); color: var(--text); cursor: pointer;
+}
+.app-confirm-ok { background: var(--accent) !important; color: #fff !important; border-color: transparent !important; }
+.app-confirm-ok.danger { background: var(--red) !important; }
+
+/* Toast with an action (e.g. "Update ready — tap to reload") */
+.vj-toast.actionable { pointer-events: auto; cursor: pointer; }
+
+/* Minimum 44px tap targets */
+.reader-ctrl-btn, .chapter-nav-btn, .term-key { min-height: 44px; min-width: 44px; }
+.lego-swipe-close { width: 44px; height: 44px; }

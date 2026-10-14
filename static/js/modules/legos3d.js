@@ -77,11 +77,31 @@ function addBrickFromSpread(rows, cols, color) {
 
 // ─── 3D Legos Engine ───────────────────────────────────
 
+// three.js + cannon-es are big; fetch them only when Legos opens.
+var _legosLibs = null;
+function loadLegosLibs() {
+  if (!_legosLibs) {
+    _legosLibs = Promise.all([
+      window.THREE || new Promise(function(ok, fail) {
+        var sc = document.createElement('script');
+        sc.src = '/static/vendor/three.min.js';
+        sc.onload = ok; sc.onerror = fail;
+        document.head.appendChild(sc);
+      }),
+      window.CANNON || import('/static/vendor/cannon-es.js').then(function(m) { window.CANNON = m; })
+    ]).catch(function(e) { _legosLibs = null; throw e; });
+  }
+  return _legosLibs;
+}
+
 function initLegos3D() {
   if (legos3D) { legos3D.animate(); return; }
   var canvas = document.getElementById('legos-canvas');
-  if (!canvas || !window.THREE) return;
-  if (!window.CANNON) { setTimeout(initLegos3D, 200); return; }
+  if (!canvas) return;
+  if (!window.THREE || !window.CANNON) {
+    loadLegosLibs().then(initLegos3D).catch(function(e) { showToast("Couldn't load Legos: " + friendlyError(e)); });
+    return;
+  }
 
   // Scene — white, bright, minimal
   var scene = new THREE.Scene();

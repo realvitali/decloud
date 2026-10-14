@@ -38,9 +38,8 @@ function showUniverseEmpty() {
     empty.innerHTML = `
       <div class="empty-icon">🌌</div>
       <h3>Your Universe is empty</h3>
-      <p>Universe maps people and entities from your files into an interactive knowledge graph.</p>
-      <p class="empty-hint">Set DECLOUD_OSINT_DIR in .env to point to your data folder</p>
-      <p class="empty-hint">Then add files with names, emails, or org info to scan</p>
+      <p>Universe finds the people and organizations mentioned in your files and shows how they connect.</p>
+      <p class="empty-hint">Add a name below to start, or tap Rescan to look through your files again.</p>
     `;
     parent.appendChild(empty);
   }
@@ -244,10 +243,10 @@ async function addUniversePerson() {
       input.value = '';
       await loadUniverse();
     } else {
-      alert(data.error || 'Failed to add');
+      showToast(data.error || "Couldn't add that person");
     }
   } catch (e) {
-    alert('Error: ' + e.message);
+    showToast(friendlyError(e));
   }
 }
 

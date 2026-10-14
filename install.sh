@@ -55,7 +55,7 @@ fi
 PYVER=$($PYBIN -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
 echo "✓ Python $PYVER found"
 
-if [[ "$PYVER" < "3.10" ]]; then
+if ! "$PYBIN" -c 'import sys; sys.exit(sys.version_info < (3, 10))'; then
     echo "✗ Python 3.10+ required. You have $PYVER"
     exit 1
 fi
@@ -113,21 +113,14 @@ fi
 # own machine and requires your own tailnet. We deliberately do NOT use
 # third-party relays (localhost.run, localhost tunnel via SSH) — those
 # forward plaintext HTTP through someone else's box, which contradicts
-# DeCloud's privacy story. cloudflared (your own Cloudflare account) is the
-# fallback.
-TUNNEL_TOOL=""
+# DeCloud's privacy story.
 
 if command -v tailscale &>/dev/null; then
-    TUNNEL_TOOL="tailscale"
     echo "✓ Tunnel client ready (Tailscale Funnel)"
-elif command -v cloudflared &>/dev/null; then
-    TUNNEL_TOOL="cloudflared"
-    echo "✓ Tunnel client ready (cloudflared — your own Cloudflare account)"
 else
     echo "⚠ No tunnel client available."
     echo "  Install Tailscale: curl -fsSL https://tailscale.com/install.sh | sh"
     echo "  Then: sudo tailscale up  (login to your account)"
-    echo "  (Alternative: install cloudflared from developers.cloudflare.com)"
 fi
 
 # ─── Create venv + install deps ─────────────────────────────────
@@ -175,7 +168,7 @@ PIPER_DIR=$(grep '^DECLOUD_PIPER_DIR=' .env 2>/dev/null | cut -d= -f2- | sed 's/
 if [ -z "$PIPER_DIR" ]; then
     PIPER_DIR="$HOME/.local/share/piper"
 fi
-PIPER_DIR=$(eval echo "$PIPER_DIR")  # expand ~
+PIPER_DIR="${PIPER_DIR/#\~/$HOME}"  # expand ~ (no eval: .env values are data)
 mkdir -p "$PIPER_DIR"
 _fetch_voice() {
     local name="$1" quality="$2"
@@ -194,8 +187,8 @@ _fetch_voice "lessac" "medium"
 _fetch_voice "kathleen" "low"
 
 # ─── SSL certs not needed — tunnel handles HTTPS ────────────────
-# The app runs HTTP on localhost only (not exposed). The cloudflared
-# tunnel provides trusted HTTPS externally. No local certs needed.
+# The app runs HTTP on localhost only (not exposed). Tailscale Funnel
+# provides trusted HTTPS externally. No local certs needed.
 
 # ─── Service setup (platform-specific) ──────────────────────────
 echo ""
@@ -295,7 +288,7 @@ echo "✓ 'decloud' command installed to ~/.local/bin (decloud update, status, q
 # Get the funnel URL (can take a few seconds to appear)
 TUNNEL_URL=""
 for _ in 1 2 3 4 5; do
-    TUNNEL_URL=$(tailscale funnel status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
+    TUNNEL_URL=$(tailscale funnel status 2>/dev/null | grep -oE 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
     [ -n "$TUNNEL_URL" ] && break
     sleep 2
 done

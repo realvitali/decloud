@@ -3,14 +3,46 @@
 Single source of truth: VERSION below, which must match CHANGELOG[0].
 `date` shown in the About panel is the release date of that entry.
 """
-import json
 from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.4.2"
+VERSION = "0.5.0"
 
 CHANGELOG = [
+    {
+        "version": "0.5.0",
+        "date": "2026-10-14",
+        "changes": [
+            "Security + polish pass: full audit fixed",
+            "Security: book files can no longer run code in the app",
+            "Login token is invisible to page scripts",
+            "Terminal only accepts the DeCloud page itself",
+            "Foreign Host headers refused (custom domains: add to DECLOUD_ALLOWED_HOSTS)",
+            "Security: login guessing capped globally",
+            "Settings can't inject .env lines",
+            "Updates refuse downgrades and off-main tags",
+            "Lab port hardened",
+            "All scripts served locally (no CDN)",
+            "Reliability: closed terminals are fully cleaned up",
+            "Settings/sessions saved atomically and private",
+            "Logs rotate",
+            "TTS/model downloads clean up after failures",
+            "Book reading much faster",
+            "Easier: 'Can't reach your computer' and sign-in-again screens",
+            "Friendly errors and in-app confirms everywhere",
+            "Keyboard works on the login keypad",
+            "Delete forever vs Move to Trash made clear",
+            "Refresh keeps your place",
+            "Update prompt instead of forced reload",
+            "Easier: plain-language setup text",
+            "Song Maker / My Lab / Image Maker names",
+            "Terminal moved to experimental apps",
+            "Replay intro in Settings",
+            "Bigger tap targets and screen-reader labels",
+            "Releases now ship only after tests pass",
+        ]
+    },
     {
         "version": "0.4.2",
         "date": "2026-10-13",

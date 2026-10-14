@@ -23,7 +23,9 @@ def _classify(ip_str: str) -> str:
     if ip.version == 6 and (ip.is_link_local or str(ip).lower().startswith('fd7a:')):
         # Tailscale IPv6: fd7a::/48 ULA
         return 'tailscale'
-    if ip.is_private or ip.is_loopback:
+    if ip.is_loopback:
+        return 'local'  # on the DeCloud computer itself — nothing to warn about
+    if ip.is_private:
         return 'lan'
     if ip.is_global:
         return 'public'
@@ -33,18 +35,15 @@ def _classify(ip_str: str) -> str:
 @bp.route('/api/netloc')
 def netloc():
     """Where is this client connecting from? Informational only."""
-    # X-Forwarded-For is only trusted if it came through our own funnel proxy
-    # (tailscale funnel sets it); remote_addr is the socket peer either way.
+    # remote_addr already reflects X-Forwarded-For when (and only when) the
+    # request came through a local proxy like Tailscale Funnel — see shared.py.
     client = request.remote_addr or ''
-    via = request.headers.get('X-Forwarded-For', '')
-    # If the funnel proxy is in front, remote_addr will be the proxy — use XFF's first hop
-    if via:
-        client = via.split(',')[0].strip()
     return jsonify({
         'type': _classify(client),
         'ip_class': _classify(client),
         'hint': {
             'tailscale': 'Connected via Tailscale — full speed, fully encrypted.',
+            'local': 'On this computer.',
             'lan': 'On your home network — fast, but not via Tailscale.',
             'public': 'Public internet — apps may be a cached/static snapshot. Connect to your tailnet for the live app.',
             'unknown': 'Connection type unknown.',

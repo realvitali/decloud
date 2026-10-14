@@ -311,6 +311,16 @@ class LabServer:
         srv = self
 
         class H(BaseHTTPRequestHandler):
+            timeout = 10  # an idle/slow client can't pin a handler thread
+
+            def setup(self):
+                # TLS handshake here, in the handler thread (with the timeout
+                # above) — not in accept() on the serve thread, where one idle
+                # connection would freeze the whole lab server.
+                self.request.settimeout(self.timeout)
+                self.request.do_handshake()
+                super().setup()
+
             def _send(self, code, obj):
                 body = json.dumps(obj).encode()
                 self.send_response(code)
@@ -327,9 +337,11 @@ class LabServer:
                 self._send(200, report_fn())
 
             def do_POST(self):
-                n = int(self.headers.get('Content-Length') or 0)
                 try:
-                    data = json.loads(self.rfile.read(min(n, 4096)) or b'{}')
+                    n = int(self.headers.get('Content-Length') or 0)
+                    if not 0 <= n <= 4096:
+                        raise ValueError('bad length')
+                    data = json.loads(self.rfile.read(n) or b'{}')
                     assert isinstance(data, dict)
                 except Exception:
                     return self._send(400, {'error': 'bad request'})
@@ -364,7 +376,9 @@ class LabServer:
         self.httpd = ThreadingHTTPServer((host, port), H)
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx.load_cert_chain(state.cert, state.key)
-        self.httpd.socket = ctx.wrap_socket(self.httpd.socket, server_side=True)
+        self.httpd.socket = ctx.wrap_socket(self.httpd.socket, server_side=True,
+                                            do_handshake_on_connect=False)
+        self.httpd.handle_error = lambda *a: None  # failed handshakes/timeouts: just drop
         self.port = self.httpd.server_address[1]
         self.udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:

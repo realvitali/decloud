@@ -337,11 +337,7 @@
           e.stopPropagation();
           close();
           setTimeout(() => {
-            showScreen(sub.screen);
-            if (sub.id === 'ollama') { location.hash = '#ollama'; loadOllamaModels(); }
-            if (sub.id === 'comfy') { location.hash = '#comfy'; loadComfyStatus(); loadComfyModels(); loadComfyGallery(); }
-            if (sub.id === 'musicgen') { location.hash = '#musicgen'; loadMusicGen(); }
-            if (sub.id === 'agents') { location.hash = '#agents'; }
+            openApp(sub.id);
           }, 50);
         });
         wrap.appendChild(b);

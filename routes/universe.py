@@ -73,7 +73,7 @@ def journal_voice():
         return jsonify({'ok': True, 'text': text, 'date': today})
     except Exception as e:
         app.logger.error(f'[JOURNAL-VOICE] Error: {e}')
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Voice note failed — check the server log'}), 500
 
 def _load_universe_scanner():
     """Import universe_scanner if available."""
@@ -111,6 +111,8 @@ def universe_person(name):
     if not journal_dir:
         return _not_configured()
     safe = name.replace(" ", "_")
+    if not shared.is_safe_book_ref(safe):
+        return jsonify({"error": "Invalid name"}), 400
     path = journal_dir / 'People' / f"{safe}.md"
     if not path.exists():
         return jsonify({"error": "Not found"}), 404
@@ -122,6 +124,8 @@ def universe_person_update(name):
     if not journal_dir:
         return _not_configured()
     safe = name.replace(" ", "_")
+    if not shared.is_safe_book_ref(safe):
+        return jsonify({"error": "Invalid name"}), 400
     path = journal_dir / 'People' / f"{safe}.md"
     if not path.exists():
         return jsonify({"error": "Not found"}), 404

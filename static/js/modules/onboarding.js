@@ -1,7 +1,7 @@
 // ===== Module: onboarding =====
 // First-run walkthrough for new DeCloud users.
 // Shows on first open (localStorage 'decloud_onboarded'), walks through
-// Tailscale setup, phone PWA install, and app configuration.
+// phone install, and app configuration. Started only after sign-in.
 
 var ONBOARDING_STEPS = 5; // 0=welcome, 1=features, 2=security, 3=phone, 4=done
 var onboardingCurrentStep = 0;
@@ -70,17 +70,27 @@ function showOnboardingStep(step) {
   if (skipBtn) skipBtn.style.display = step < ONBOARDING_STEPS - 1 ? '' : 'none';
 }
 
+// Skip the "open on your phone" step when already on a phone.
+var ONBOARDING_PHONE_STEP = 3;
+function onboardingOnPhone() {
+  return window.matchMedia && window.matchMedia('(pointer: coarse) and (max-width: 820px)').matches;
+}
+
 function onboardingNext() {
   if (onboardingCurrentStep >= ONBOARDING_STEPS - 1) {
     onboardingFinish();
     return;
   }
-  showOnboardingStep(onboardingCurrentStep + 1);
+  var next = onboardingCurrentStep + 1;
+  if (next === ONBOARDING_PHONE_STEP && onboardingOnPhone()) next++;
+  showOnboardingStep(next);
 }
 
 function onboardingPrev() {
   if (onboardingCurrentStep > 0) {
-    showOnboardingStep(onboardingCurrentStep - 1);
+    var prev = onboardingCurrentStep - 1;
+    if (prev === ONBOARDING_PHONE_STEP && onboardingOnPhone()) prev--;
+    showOnboardingStep(prev);
   }
 }
 
@@ -101,7 +111,11 @@ function finishOnboarding(skipped) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ agent_name: name })
-    }).catch(function() {});
+    }).then(function(r) {
+      if (!r.ok) throw new Error('save failed');
+    }).catch(function() {
+      showToast("Couldn't save the name — set it in Settings → Voice");
+    });
   }
   localStorage.setItem('decloud_onboarded', '1');
   var overlay = document.getElementById('onboarding-overlay');
@@ -124,30 +138,24 @@ function reopenOnboarding() {
 }
 
 /**
- * Generate QR codes for the onboarding steps.
- * Rendered client-side (qrcode-generator from jsdelivr) so the tunnel URL
- * never leaves the browser.
+ * Phone QR for the onboarding step. Rendered client-side so the address
+ * never leaves the browser. A localhost address is useless on a phone, so
+ * in that case we point at `./decloud qr` instead.
  */
 function generateOnboardingQRs() {
-  // Tailscale download QR
-  var tailscaleContainer = document.getElementById('qr-tailscale');
-  if (tailscaleContainer && !tailscaleContainer.hasChildNodes()) {
-    var img1 = generateQR('https://tailscale.com/download', 300);
-    if (img1) tailscaleContainer.appendChild(img1);
-  }
-
-  // Phone PWA QR — current origin
   var phoneContainer = document.getElementById('qr-phone');
-  if (phoneContainer && !phoneContainer.hasChildNodes()) {
-    var img2 = generateQR(window.location.origin, 300);
-    if (img2) phoneContainer.appendChild(img2);
-  }
-
-  // Show the URL hint
   var hint = document.getElementById('onboarding-url-hint');
-  if (hint) {
-    hint.textContent = window.location.origin;
+  var host = window.location.hostname;
+  var isLocal = host === 'localhost' || host === '::1' || host === '[::1]' || /^127\./.test(host);
+  if (isLocal) {
+    if (hint) hint.textContent = 'On your computer, run ./decloud qr to get a code your phone can scan.';
+    return;
   }
+  if (phoneContainer && !phoneContainer.hasChildNodes()) {
+    var img = generateQR(window.location.origin, 300);
+    if (img) phoneContainer.appendChild(img);
+  }
+  if (hint) hint.textContent = window.location.origin;
 }
 
 /** Client-side QR as a data-URL <img>; null if the lib failed to load. */
@@ -166,9 +174,4 @@ function generateQR(text, size) {
   return img;
 }
 
-// ─── Boot ───────────────────────────────────────────────
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initOnboarding);
-} else {
-  initOnboarding();
-}
+// Boot: started by hideLoginScreen() (auth.js) after a successful sign-in.

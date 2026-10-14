@@ -4,7 +4,7 @@ JSON-based TTS worker for the DeCloud.
 Reads chapter text from a JSON file instead of a PDF, generates audio with Piper TTS.
 JSON format: [{"chapter": 1, "title": "...", "text": "..."}, ...]
 """
-import sys, wave, subprocess, os, json, re
+import sys, wave, subprocess, os, json
 from pathlib import Path
 
 _PIPER_DIR = os.environ.get('DECLOUD_PIPER_DIR', str(Path.home() / '.local' / 'share' / 'piper'))
@@ -87,7 +87,7 @@ def main():
                     chunk_files.append(str(chunk_file))
                     print(f"    OK: {chunk_file.stat().st_size // 1024}KB")
                 else:
-                    print(f"    FAILED: file too small")
+                    print("    FAILED: file too small")
             except Exception as e:
                 print(f"    ERROR: {e}")
 
@@ -98,7 +98,7 @@ def main():
                 subprocess.run([
                     'ffmpeg', '-y', '-i', chunk_files[0],
                     '-codec:a', 'libmp3lame', '-qscale:a', '2', str(combined)
-                ], capture_output=True)
+                ], capture_output=True, timeout=600)
                 Path(chunk_files[0]).unlink()
             else:
                 concat_file = audio_dir / f'{book_id}_ch{idx}_concat.txt'
@@ -107,7 +107,7 @@ def main():
                     'ffmpeg', '-y', '-f', 'concat', '-safe', '0',
                     '-i', str(concat_file),
                     '-codec:a', 'libmp3lame', '-qscale:a', '2', str(combined)
-                ], capture_output=True, text=True)
+                ], capture_output=True, text=True, timeout=600)
                 if result.returncode == 0:
                     for f in chunk_files:
                         Path(f).unlink()
@@ -161,4 +161,11 @@ def main():
     print(f"\nDone! {len(chapter_data)} chapters, saved to {json_file}")
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception:
+        # Failure status: '-1' in the lock = error (read by tts_status /
+        # list_books), so a crash never leaves the book "converting" forever.
+        if len(sys.argv) >= 4:
+            (Path(sys.argv[2]) / f'{sys.argv[3]}.tts_lock').write_text('-1')
+        raise

@@ -79,7 +79,7 @@ async function musicGenGenerate() {
   const btn = document.getElementById('musicgen-generate-btn');
 
   if (!prompt && !lyrics) {
-    alert('Describe the song, or write lyrics — or both.');
+    showToast('Describe the song, or write lyrics — or both.');
     return;
   }
 
@@ -101,7 +101,7 @@ async function musicGenGenerate() {
     });
     const d = await r.json();
     if (!r.ok) {
-      alert(d.error || 'Generation failed');
+      showToast(d.error || 'Song generation failed');
       progress.style.display = 'none';
       btn.disabled = false;
       return;
@@ -109,7 +109,7 @@ async function musicGenGenerate() {
     musicGenPromptId = d.prompt_id;
     musicGenPoll();
   } catch (e) {
-    alert('Could not reach the server: ' + (e.message || 'network'));
+    showToast(friendlyError(e));
     progress.style.display = 'none';
     btn.disabled = false;
   }
@@ -131,7 +131,7 @@ async function musicGenPoll() {
       document.getElementById('musicgen-progress').style.display = 'none';
       document.getElementById('musicgen-generate-btn').disabled = false;
       if (d.error || !r.ok) {
-        alert(d.error || `Generation lost (HTTP ${r.status})`);
+        showToast(d.error || 'Song generation stopped unexpectedly — try again');
         return;
       }
       document.getElementById('musicgen-prompt').value = '';
@@ -154,12 +154,13 @@ async function musicGenPoll() {
 }
 
 async function musicGenDelete(id) {
-  if (!confirm('Delete this song?')) return;
+  if (!await appConfirm('Delete this song?', { danger: true, ok: 'Delete' })) return;
   try {
-    await fetch(`/api/musicgen/history/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const r = await fetch(`/api/musicgen/history/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Something went wrong — try again');
     musicGenLoadHistory();
   } catch (e) {
-    alert('Delete failed: ' + (e.message || 'network'));
+    showToast('Delete failed: ' + friendlyError(e));
   }
 }
 

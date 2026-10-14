@@ -66,8 +66,8 @@ def is_page_empty(text: str) -> bool:
 
 def get_chapters(pdf_path):
     """Extract chapter boundaries from PDF TOC."""
-    doc = fitz.open(str(pdf_path))
-    toc = doc.get_toc()
+    with fitz.open(str(pdf_path)) as doc:
+        toc = doc.get_toc()
 
     chapters = []
     for entry in toc:
@@ -109,16 +109,15 @@ def get_chapters(pdf_path):
 
 def extract_chapter_text(pdf_path, start_page, end_page):
     """Extract clean text from a page range."""
-    doc = fitz.open(str(pdf_path))
     texts = []
-    for i in range(start_page - 1, min(end_page - 1, len(doc))):
-        page = doc[i]
-        text = page.get_text()
-        if not text or is_page_empty(text):
-            continue
-        cleaned = clean_text(text)
-        if len(cleaned) > 50:
-            texts.append(cleaned)
+    with fitz.open(str(pdf_path)) as doc:
+        for i in range(start_page - 1, min(end_page - 1, len(doc))):
+            text = doc[i].get_text()
+            if not text or is_page_empty(text):
+                continue
+            cleaned = clean_text(text)
+            if len(cleaned) > 50:
+                texts.append(cleaned)
     return ' '.join(texts)
 
 
@@ -214,7 +213,7 @@ def main():
                     chunk_files.append(str(chunk_file))
                     print(f"    OK: {chunk_file.stat().st_size // 1024}KB")
                 else:
-                    print(f"    FAILED: file too small")
+                    print("    FAILED: file too small")
             except Exception as e:
                 print(f"    ERROR: {e}")
 
@@ -227,10 +226,9 @@ def main():
                     'ffmpeg', '-y', '-i', chunk_files[0],
                     '-codec:a', 'libmp3lame', '-qscale:a', '2',
                     str(combined)
-                ], capture_output=True)
+                ], capture_output=True, timeout=600)
                 Path(chunk_files[0]).unlink()
             else:
-                import subprocess
                 # Use ffmpeg to concatenate WAVs then convert to MP3
                 concat_file = audio_dir / f'{book_id}_ch{idx}_concat.txt'
                 concat_file.write_text('\n'.join(f"file '{f}'" for f in chunk_files))
@@ -239,7 +237,7 @@ def main():
                     '-i', str(concat_file),
                     '-codec:a', 'libmp3lame', '-qscale:a', '2',
                     str(combined)
-                ], capture_output=True, text=True)
+                ], capture_output=True, text=True, timeout=600)
                 if result.returncode == 0:
                     # Clean up temp chunks
                     for f in chunk_files:
@@ -292,4 +290,11 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception:
+        # Failure status: '-1' in the lock = error (read by tts_status /
+        # list_books), so a crash never leaves the book "converting" forever.
+        if len(sys.argv) >= 4:
+            (Path(sys.argv[2]) / f'{sys.argv[3]}.tts_lock').write_text('-1')
+        raise

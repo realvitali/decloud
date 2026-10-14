@@ -3,9 +3,12 @@ name: Release
 # Every push to main that bumps VERSION (routes/version.py) automatically
 # creates a matching git tag + GitHub release, which is what the in-app
 # updater (Settings → About → Check for updates) consumes. No manual tagging.
+# Runs only after CI passes on that exact commit, so broken builds never ship.
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
 
 permissions:
@@ -13,10 +16,12 @@ permissions:
 
 jobs:
   release:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - uses: actions/setup-python@v5
@@ -27,7 +32,7 @@ jobs:
         id: meta
         run: |
           python - "$GITHUB_OUTPUT" <<'EOF'
-          import re, sys
+          import ast, re, sys
           text = open('routes/version.py').read()
           m = re.search(r'^VERSION = "([^"]+)"', text, re.MULTILINE)
           if not m:
@@ -40,7 +45,7 @@ jobs:
               date = (re.search(r'"date":\s*"([^"]+)"', entry.group(1)) or [None, ''])[1]
               cm = re.search(r'"changes":\s*\[(.*?)\]', entry.group(1), re.DOTALL)
               changes = cm.group(1) if cm else ''
-          bullets = re.findall(r'"((?:[^"\\]|\\.)*)"', changes)
+          bullets = [ast.literal_eval(f'"{b}"') for b in re.findall(r'"((?:[^"\\]|\\.)*)"', changes)]
           with open('release_body.md', 'w') as f:
               f.write(f"## Changes in v{version} ({date})\n\n")
               for b in bullets:
@@ -61,7 +66,7 @@ jobs:
       - name: Create and push tag
         if: steps.tag.outputs.exists == 'false'
         run: |
-          git tag "v${{ steps.meta.outputs.version }}"
+          git tag "v${{ steps.meta.outputs.version }}" "${{ github.event.workflow_run.head_sha }}"
           git push origin "v${{ steps.meta.outputs.version }}"
 
       - name: Publish GitHub release
@@ -69,5 +74,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.meta.outputs.version }}
+          target_commitish: ${{ github.event.workflow_run.head_sha }}
           name: DeCloud v${{ steps.meta.outputs.version }}
           body_path: release_body.md

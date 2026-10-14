@@ -20,8 +20,8 @@ function loadAbout() {
     document.getElementById('about-updated').textContent = data.date;
     const cl = document.getElementById('about-changelog');
     cl.innerHTML = data.changelog.map(entry =>
-      '<h4>v' + entry.version + ' — ' + entry.date + '</h4>' +
-      '<ul>' + entry.changes.map(c => '<li>' + c + '</li>').join('') + '</ul>'
+      '<h4>v' + escapeHtml(entry.version) + ' — ' + escapeHtml(entry.date) + '</h4>' +
+      '<ul>' + entry.changes.map(c => '<li>' + escapeHtml(c) + '</li>').join('') + '</ul>'
     ).join('');
   }).catch(() => {
     document.getElementById('about-version').textContent = '?';
@@ -105,7 +105,12 @@ function setTheme(theme) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ theme: theme })
-  }).then(function() { applyTheme(); });
+  }).then(function(r) {
+    if (!r.ok) throw new Error('save failed');
+    applyTheme();
+  }).catch(function(e) {
+    showToast("Couldn't save the theme: " + friendlyError(e));
+  });
 }
 
 function changePin() {
@@ -256,10 +261,16 @@ function voiceBackendChanged() {
   if (cloudBlock) cloudBlock.style.display = isCloud ? '' : 'none';
 }
 
-function clearVoiceMemory() {
-  fetch('/api/voice/reset', { method: 'POST' }).then(function() {
+async function clearVoiceMemory() {
+  if (!await appConfirm('Clear what the assistant remembers from your conversations?', { danger: true, ok: 'Clear' })) return;
+  try {
+    var r = await fetch('/api/voice/reset', { method: 'POST' });
+    if (!r.ok) throw new Error('Something went wrong — try again');
+    showToast('Conversation memory cleared');
     loadVoicePanel();
-  }).catch(function() {});
+  } catch (e) {
+    showToast("Couldn't clear memory: " + friendlyError(e));
+  }
 }
 
 function saveHermesHome() {
@@ -269,9 +280,15 @@ function saveHermesHome() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ hermes_home: val })
-  }).then(function(r) { return r.json(); }).then(function(d) {
-    loadVoicePanel();
-  }).catch(function() {});
+  }).then(function(r) {
+    return r.json().catch(function() { return {}; }).then(function(d) {
+      if (!r.ok || d.error) throw new Error(d.error || 'Something went wrong — try again');
+      showToast('Hermes path saved');
+      loadVoicePanel();
+    });
+  }).catch(function(e) {
+    showToast("Couldn't save the Hermes path: " + friendlyError(e));
+  });
 }
 
 function voiceAccessChanged() {
@@ -494,7 +511,7 @@ function loadSettingsLogs() {
       return;
     }
     el.innerHTML = logs.map(function(l) {
-      var level = l.level || 'INFO';
+      var level = escapeHtml(String(l.level || 'INFO').replace(/[^A-Za-z]/g, ''));
       return '<div class="settings-log-row level-' + level.toLowerCase() + '">' +
         '<span class="log-time">' + escapeHtml(l.timestamp || '') + '</span>' +
         '<span class="log-level">' + level + '</span>' +
@@ -561,7 +578,7 @@ async function performUpdate() {
   var go = document.getElementById('update-go-btn');
   var ref = go ? go.getAttribute('data-ref') : '';
   if (!ref) return;
-  if (!confirm('Update DeCloud to ' + ref + '?\n\nThe new version is downloaded, verified, and test-booted before anything restarts. Your passcode, settings, books, and files are untouched. If the new version fails to start, DeCloud reverts automatically.')) return;
+  if (!await appConfirm('Update DeCloud to ' + ref + '?\n\nThe new version is downloaded, verified, and test-booted before anything restarts. Your passcode, settings, books, and files are untouched. If the new version fails to start, DeCloud reverts automatically.', { ok: 'Update' })) return;
   var status = document.getElementById('update-status');
   if (status) status.textContent = 'Updating to ' + ref + '… (this can take a minute)';
   try {
@@ -585,7 +602,7 @@ async function performUpdate() {
 }
 
 async function performRollback() {
-  if (!confirm('Revert to the version from before the last update? DeCloud will restart.')) return;
+  if (!await appConfirm('Go back to the version from before the last update? DeCloud will restart.', { ok: 'Go back' })) return;
   var status = document.getElementById('update-status');
   if (status) status.textContent = 'Reverting…';
   try {

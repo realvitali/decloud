@@ -21,7 +21,7 @@ import re
 import time
 from pathlib import Path
 
-from shared import app, limiter, BASE_DIR, _requests, COMFY_URL, COMFY_OUTPUT
+from shared import limiter, BASE_DIR, _requests, COMFY_URL, COMFY_OUTPUT
 
 bp = Blueprint('musicgen', __name__)
 
@@ -96,7 +96,6 @@ def _ui_to_api(ui_workflow: dict) -> dict:
 
 def _patch_workflow(workflow: dict, params: dict) -> dict:
     """Patch text/flag inputs generically by input-key keywords."""
-    text_keys = ('prompt', 'lyrics', 'text', 'style', 'description', 'genre')
     patched = json.loads(json.dumps(workflow))
     for node in patched.values():
         inputs = node.get('inputs') or {}

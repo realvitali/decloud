@@ -10,14 +10,14 @@ A self-hosted PWA dashboard for audiobooks, AI chat, file browsing, system monit
 - **💬 AI Chat** — Local LLM via Ollama, or cloud models
 - **📁 Files** — Fast file browser with thumbnail previews, image gallery
 - **🎨 Generate** — AI image generation via ComfyUI (FLUX, SDXL, etc)
-- **📊 System Monitor** — CPU, RAM, GPU, network stats in real time
+- **📊 My Lab** — CPU, RAM, GPU, network stats in real time
 - **🧠 AI Model Advisor** — reads your hardware, scores chat/image/video/music
   models from HuggingFace (real file sizes, not guesses), and downloads them
   into the right app folders — split GGUF archives merge automatically and
   chat models import straight into Ollama. No terminal needed.
 - **🖥️ Terminal** — Full interactive web terminal (WebSocket-based)
 - **🎵 Music** — Browse and play your local music library
-- **🔐 Privacy Scanner** — Optional OSINT tool to find and remove your data from broker sites
+- **🔐 Privacy Watcher** — Optional OSINT tool to find and remove your data from broker sites
 - **📓 Journal** — Optional Obsidian vault integration with voice notes (Whisper STT)
 
 All features are optional — the app works with zero configuration. Features that need external services (Ollama, ComfyUI, Piper) gracefully degrade and show helpful messages until configured.
@@ -77,7 +77,7 @@ All configuration is via environment variables in `.env` (see `.env.example`):
 
 | Variable | Description |
 |---|---|
-| `DECLOUD_OSINT_DIR` | Path to osint-tools for privacy scanner |
+| `DECLOUD_OSINT_DIR` | Path to osint-tools for Privacy Watcher |
 | `DECLOUD_JOURNAL_DIR` | Obsidian vault path for journal features |
 | `DECLOUD_HERMES_HOME` | Hermes Agent home for the Agents panel |
 
@@ -203,7 +203,7 @@ never break your machine:
 ## Security
 
 - **Passcode authentication** — the app is locked behind `DECLOUD_PIN`
-  (8 digits generated at install; passphrases up to 64 chars). The
+  (8 digits generated for you; change it in Settings to any 8–10 digits). The
   passcode is only used at login; after that the app uses an opaque
   session token (never the passcode) with a 30-day expiry.
 - **CSRF protection** — state-changing requests require a per-session
@@ -230,7 +230,7 @@ accepted limitations.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests/        # 99 security + smoke tests
+python -m pytest tests/        # security + smoke tests
 ```
 
 CI runs the suite on Ubuntu, macOS, and Windows.

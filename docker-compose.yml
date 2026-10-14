@@ -13,13 +13,23 @@ services:
       - "host.docker.internal:host-gateway"   # makes OLLAMA_HOST resolve on Linux
     environment:
       - DECLOUD_PORT=8899
+      # Listen on all interfaces INSIDE the container so the port mapping above
+      # works; the host side is still bound to 127.0.0.1 only.
+      - DECLOUD_HOST=0.0.0.0
       - DECLOUD_BOOKS_DIR=/data/books
       - DECLOUD_FILES_DIR=/data/files
       - DECLOUD_MUSIC_DIR=/data/music
       - OLLAMA_HOST=http://host.docker.internal:11434
-      # REQUIRED — no insecure defaults. Set these in a .env file:
-      #   DECLOUD_PIN=<a strong passcode>  (the app runs OPEN MODE without it)
-      #   SECRET_KEY=<random string>
+      # REQUIRED — set both in a .env file next to this compose file, e.g.:
+      #   python3 -c "import secrets;print('DECLOUD_PIN=%08d' % secrets.randbelow(10**8))" >> .env
+      #   python3 -c "import secrets;print('SECRET_KEY=' + secrets.token_hex(32))" >> .env
+      # (The bare-metal app makes a passcode for you on first start; in Docker
+      # it must come from here, because the container's own files are thrown
+      # away on rebuild.)
+      # See your passcode:   grep DECLOUD_PIN .env   (or: docker compose exec decloud printenv DECLOUD_PIN)
+      # Change it:           edit DECLOUD_PIN in .env, then: docker compose up -d
+      # (`scripts/decloud_pin.py` inside the container reads the container's
+      # own .env, not this variable — use the commands above instead.)
       - DECLOUD_PIN=${DECLOUD_PIN:?DECLOUD_PIN is required — see .env.example}
       - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
     restart: unless-stopped

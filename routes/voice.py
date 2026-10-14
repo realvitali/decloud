@@ -1,7 +1,7 @@
 """Voice assistant routes: STT, TTS, and the voice brain (Hermes/LLM).
 """
 from flask import Blueprint, jsonify, request, send_file, Response
-import os, io, json, subprocess, uuid, re, tempfile, threading, shutil, time
+import os, io, subprocess, re, tempfile, threading, shutil, time
 from shared import (
     app, _requests, OLLAMA_URL,
     get_whisper_model, TTS_ENGINES, STT_ENGINES, limiter,
@@ -99,29 +99,32 @@ def voice_tts():
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False, dir=tempfile.gettempdir()) as tmp:
             output_path = tmp.name
 
-        proc = subprocess.run(
-            [shared.piper_bin(), '-m', model_path, '-c', config_path, '-f', output_path],
-            input=text.encode('utf-8'),
-            capture_output=True,
-            timeout=30
-        )
-
-        if proc.returncode != 0:
-            return jsonify({'error': 'TTS failed: ' + (proc.stderr.decode() or proc.stdout.decode() or 'unknown error')}), 500
-
-        # Read the WAV into memory and delete the temp file immediately so
-        # repeated TTS calls don't leak files in /tmp.
-        with open(output_path, 'rb') as f:
-            audio_bytes = f.read()
+        # Read the WAV into memory; the temp file is always deleted so
+        # repeated (or failing) TTS calls don't leak files in /tmp.
         try:
-            os.unlink(output_path)
-        except OSError:
-            pass
+            proc = subprocess.run(
+                [shared.piper_bin(), '-m', model_path, '-c', config_path, '-f', output_path],
+                input=text.encode('utf-8'),
+                capture_output=True,
+                timeout=30
+            )
+            if proc.returncode != 0:
+                return jsonify({'error': 'TTS failed: ' + (proc.stderr.decode() or proc.stdout.decode() or 'unknown error')}), 500
+            with open(output_path, 'rb') as f:
+                audio_bytes = f.read()
+        except subprocess.TimeoutExpired:
+            return jsonify({'error': 'TTS timed out — try a shorter text', 'code': 'TTS_TIMEOUT'}), 504
+        finally:
+            try:
+                os.unlink(output_path)
+            except OSError:
+                pass
 
         return send_file(io.BytesIO(audio_bytes), mimetype='audio/wav', as_attachment=False,
                         download_name='tts.wav')
-    except Exception as e:
-        return jsonify({'error': 'TTS error: ' + str(e)}), 500
+    except Exception:
+        app.logger.exception('[TTS] error')
+        return jsonify({'error': 'TTS failed — check the server log'}), 500
 
 @bp.route('/api/voice/tts/stream', methods=['POST'])
 def voice_tts_stream():
@@ -157,14 +160,22 @@ def voice_tts_stream():
     with tempfile.NamedTemporaryFile(suffix='.wav', delete=False, dir=tempfile.gettempdir()) as tmp:
         output_path = tmp.name
 
-    proc = subprocess.run(
-        [shared.piper_bin(), '-m', model_path, '-c', config_path, '-f', output_path],
-        input=text.encode('utf-8'),
-        capture_output=True,
-        timeout=30
-    )
-
-    if proc.returncode != 0:
+    try:
+        proc = subprocess.run(
+            [shared.piper_bin(), '-m', model_path, '-c', config_path, '-f', output_path],
+            input=text.encode('utf-8'),
+            capture_output=True,
+            timeout=30
+        )
+    except subprocess.TimeoutExpired:
+        proc = None
+    if proc is None or proc.returncode != 0:
+        try:
+            os.unlink(output_path)
+        except OSError:
+            pass
+        if proc is None:
+            return jsonify({'error': 'TTS timed out — try a shorter text', 'code': 'TTS_TIMEOUT'}), 504
         return jsonify({'error': 'TTS failed: ' + (proc.stderr.decode() or 'unknown error')}), 500
 
     def generate():
@@ -188,107 +199,6 @@ def voice_engines():
         'stt': [{'id': k, 'name': v['name']} for k, v in STT_ENGINES.items()],
         'tts': [{'id': k, 'name': v['name']} for k, v in TTS_ENGINES.items()],
     })
-
-@bp.route('/api/voice/intent', methods=['POST'])
-def voice_intent():
-    """Parse user speech into structured action using LLM (local or cloud)."""
-    try:
-        data = request.get_json(silent=True) or {}
-        text = data.get('text', '').strip()
-        model = data.get('model', '') or ''
-
-        if not text:
-            return jsonify({'error': 'No text provided'}), 400
-
-        agent_name = shared.get_voice_config().get('agent_name', 'DeCloud')
-        access = shared.get_voice_config().get('voice_access', 'basic')
-
-        access_hint = {
-            'talk': "You may read/view things and read system state, but you cannot change the system. Only use run_command for read-only commands like 'df -h', 'free -h', 'ps', 'ls', 'cat', 'nvidia-smi'.",
-            'basic': "You may create files and make non-destructive changes (touch, mkdir, cp, mv, git, pip install, etc.), but never destructive commands (rm, dd, mkfs, shutdown, etc.).",
-            'full': "You have full, unrestricted shell access — you may run any command, but every command must still set requires_confirmation=true.",
-        }[access]
-
-        # Conversational system prompt. The agent talks naturally but returns
-        # a JSON object ONLY when it needs to control DeCloud. Built with a
-        # plain string + replace because the JSON examples contain braces.
-        system_prompt = """You are {agent_name}, the voice assistant for DeCloud — a self-hosted personal cloud app (music, audiobooks, files, AI chat, a terminal, and a system monitor).
-
-You are speaking out loud, so be natural and conversational. Prefer short answers, but give real detail and substance when it helps — don't be terse or one-word. No markdown, no lists, no emojis, no follow-up questions. Just talk like a warm, capable person.
-
-You can also control DeCloud. If the user asks you to DO something (play a song, open a book, navigate to a screen, run a command, search files), respond with a SINGLE JSON object describing the action — nothing else. Otherwise, just reply in plain conversational text.
-
-Your current access level is "{access}": {access_hint}
-
-Available actions (exact JSON shapes):
-1. {"action": "navigate", "screen": "audiobooks|lego|chat|generate|home"}
-2. {"action": "play_book", "title": "book name", "chapter": number_or_null}
-3. {"action": "stop_playback"}
-4. {"action": "pause_playback"}
-5. {"action": "resume_playback"}
-6. {"action": "run_command", "command": "shell command", "description": "what it does", "requires_confirmation": true}
-7. {"action": "search_files", "query": "search term", "path": "optional path"}
-8. {"action": "generate_image", "prompt": "description"}
-9. {"action": "chat", "message": "what to ask the AI"}
-10. {"action": "reset_conversation"}
-
-Rules:
-- run_command ALWAYS sets requires_confirmation=true and a plain-English "description".
-- Dangerous commands (rm, shred, dd, mkfs, shutdown, reboot) add "dangerous": true.
-- Only return JSON when the user wants an action. Otherwise reply conversationally.""".replace('{agent_name}', agent_name).replace('{access}', access).replace('{access_hint}', access_hint)
-
-        # Persistent memory: full server-side history, not just the last 4.
-        history = shared.load_voice_history()
-        messages = [{"role": "system", "content": system_prompt}]
-        messages.extend(history)
-        messages.append({"role": "user", "content": text})
-
-        # Route through the configured backend (local Ollama or cloud API).
-        try:
-            llm_text = shared.llm_complete(messages, temperature=0.7, model=model or None)
-        except Exception as e:
-            return _llm_error_response(e)
-
-        # Parse a JSON action if the model returned one; otherwise treat the
-        # output as a plain conversational reply.
-        llm_text = (llm_text or '').strip()
-        action = None
-        try:
-            candidate = re.sub(r'^```(?:json)?\s*', '', llm_text)
-            candidate = re.sub(r'\s*```$', '', candidate)
-            parsed = json.loads(candidate)
-            if isinstance(parsed, dict) and 'action' in parsed:
-                action = parsed
-        except Exception:
-            json_match = re.search(r'\{.*\}', llm_text, re.DOTALL)
-            if json_match:
-                try:
-                    parsed = json.loads(json_match.group())
-                    if isinstance(parsed, dict) and 'action' in parsed:
-                        action = parsed
-                except Exception:
-                    action = None
-
-        if action is None:
-            action = {"action": "respond", "message": llm_text}
-
-        # Persist the turn (unless the user asked to forget).
-        if action.get('action') == 'reset_conversation':
-            shared.reset_voice_history()
-            action = {"action": "respond", "message": "Okay, I've forgotten everything. What can I do for you?"}
-        else:
-            new_history = history + [{"role": "user", "content": text}]
-            reply = action.get('message') if action.get('action') in ('respond', 'chat') else ''
-            if reply:
-                new_history.append({"role": "assistant", "content": reply})
-            elif action.get('action') == 'run_command':
-                new_history.append({"role": "assistant", "content": f"[ran: {action.get('command', '')}]"})
-            shared.save_voice_history(new_history)
-
-        return jsonify({'action': action, 'raw_llm': llm_text})
-    except Exception as e:
-        app.logger.error(f'[INTENT] error: {e}')
-        return jsonify({'error': str(e)}), 500
 
 
 @bp.route('/api/voice/reset', methods=['POST'])
@@ -342,6 +252,16 @@ def voice_run_command():
         r'eval\s', r'exec\s',
         r'python3?\s+-c', r'python3?\s*-c',  # inline python can delete data
     ]
+    # Per-command flags that turn a "safe" command into arbitrary execution
+    # or deletion. Prefix-matched against each argument (talk/basic only).
+    DANGEROUS_ARGS = {
+        'find': ('-delete', '-fprint', '-fls', '-exec', '-ok'),  # -execdir/-okdir/-fprintf too
+        'git': ('-c', '--config-env', '--exec-path', '--upload-pack', '--receive-pack'),
+        'tar': ('--to-command', '--checkpoint-action', '--use-compress-program',
+                '-I', '--info-script', '-F', '--new-volume-script', '--rsh-command', '--rmt-command'),
+    }
+    # Interpreters: only version checks, never a script/module to run.
+    INTERPRETERS = {'python', 'python3'}
 
     try:
         data = request.get_json(silent=True) or {}
@@ -350,9 +270,12 @@ def voice_run_command():
         if not command:
             return jsonify({'error': 'No command provided'}), 400
 
-        # Extract the base command (first word, before any arguments)
-        base_cmd = command.split()[0] if command.split() else ''
-        base_cmd = base_cmd.split('/')[-1]
+        import shlex
+        cmd_list = shlex.split(command)
+        if not cmd_list:
+            return jsonify({'error': 'No command provided'}), 400
+        # Base command = basename of the first token, same token we execute
+        base_cmd = cmd_list[0].split('/')[-1]
 
         access = shared.get_voice_config().get('voice_access', 'basic')
 
@@ -376,10 +299,13 @@ def voice_run_command():
             for pat in DANGEROUS_PATTERNS:
                 if re.search(pat, command):
                     return jsonify({'error': 'Blocked: command matches a dangerous pattern'}), 403
+            bad = DANGEROUS_ARGS.get(base_cmd, ())
+            if bad and any(a.startswith(bad) for a in cmd_list[1:]):
+                return jsonify({'error': f'Blocked: that "{base_cmd}" option needs Full access'}), 403
+            if base_cmd in INTERPRETERS and any(a not in ('-V', '--version') for a in cmd_list[1:]):
+                return jsonify({'error': 'Blocked: running scripts needs Full access'}), 403
 
         # Run with timeout — no shell=True, use list form
-        import shlex
-        cmd_list = shlex.split(command)
         proc = subprocess.run(
             cmd_list,
             capture_output=True,
@@ -398,8 +324,11 @@ def voice_run_command():
         })
     except subprocess.TimeoutExpired:
         return jsonify({'error': 'Command timed out (30s limit)'}), 504
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except FileNotFoundError:
+        return jsonify({'error': 'Command not found'}), 404
+    except Exception:
+        app.logger.exception('[VOICE] run_command failed')
+        return jsonify({'error': 'Command failed to run — check the server log'}), 500
 
 
 # ─── Hermes-native voice brain (persistent session) ──────────────

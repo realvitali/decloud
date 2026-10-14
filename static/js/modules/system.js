@@ -310,7 +310,7 @@ async function labPair(ip, port) {
   const d = await r.json().catch(() => ({}));
   if (!r.ok) { msg.textContent = d.error || 'Could not reach that device.'; return; }
   const num = `${d.number.slice(0, 3)} ${d.number.slice(3)}`;
-  document.getElementById('lab-found').innerHTML = `<div class="lab-pairing"><div class="lab-num">${num}</div>
+  document.getElementById('lab-found').innerHTML = `<div class="lab-pairing"><div class="lab-num">${escapeHtml(num)}</div>
     <p>${d.kind === 'agent' ? `In the terminal on <b>${escapeHtml(d.name)}</b>, type <b>y</b> if it shows this number.`
       : `On <b>${escapeHtml(d.name)}</b>, open DeCloud → Lab and tap <b>Allow</b> if it shows this number.`}</p>
     <p class="lab-dim">If the numbers don't match, deny it. Someone may be pretending to be your device.</p></div>`;
@@ -362,8 +362,11 @@ async function labSetShareable(on) {
 }
 
 async function labRemove(id, name) {
-  if (!confirm(`Remove ${name} from your lab?`)) return;
-  await fetch('/api/lab/devices/' + encodeURIComponent(id), { method: 'DELETE' });
+  if (!await appConfirm(`Remove ${name} from your lab?`, { danger: true, ok: 'Remove' })) return;
+  try {
+    const r = await fetch('/api/lab/devices/' + encodeURIComponent(id), { method: 'DELETE' });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Something went wrong — try again');
+  } catch (e) { showToast(friendlyError(e)); }
   labRefresh();
 }
 
@@ -378,8 +381,9 @@ async function labShowCode() {
 }
 
 async function labResetKey() {
-  if (!confirm('Disconnect every hub that added this computer?')) return;
-  await fetch('/api/lab/reset-key', { method: 'POST' });
+  if (!await appConfirm('Disconnect every hub that added this computer?', { danger: true, ok: 'Disconnect' })) return;
+  const r = await fetch('/api/lab/reset-key', { method: 'POST' }).catch(() => null);
+  if (!r || !r.ok) { showToast("Couldn't reset — try again"); return; }
   document.getElementById('lab-own-code').hidden = true;
   document.getElementById('lab-msg').textContent = 'Key reset. Hubs that had this computer must add it again.';
 }

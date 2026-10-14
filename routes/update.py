@@ -18,7 +18,7 @@ Design goals (the machine matters more than the feature):
      notes and asks for confirmation. Nothing updates silently.
 """
 from flask import Blueprint, jsonify, request
-from shared import app, limiter, BASE_DIR
+from shared import limiter, BASE_DIR
 import json
 import os
 import re
@@ -84,8 +84,16 @@ def _head_sha() -> str:
 
 def _resolve_tag_ref(ref: str) -> str:
     """Resolve a tag name to a commit SHA; empty on failure."""
-    ok, out = _git('rev-parse', '--verify', f'refs/tags/{ref}', timeout=15)
+    ok, out = _git('rev-parse', '--verify', f'refs/tags/{ref}^{{commit}}', timeout=15)
     return out if ok else ''
+
+def _on_main(sha: str) -> bool:
+    """True when the commit is part of origin/main's history, so a tag
+    pushed on some side branch (or a fork's stray tag) can't be installed.
+    ponytail: this trusts whoever can push to origin; the upgrade path is
+    `git verify-tag` against the maintainer's pinned GPG/SSH signing key."""
+    ok, _ = _git('merge-base', '--is-ancestor', sha, 'refs/remotes/origin/main', timeout=15)
+    return ok
 
 def _fetch_tags(timeout=90) -> bool:
     ok, _ = _git('fetch', '--tags', 'origin', timeout=timeout)
@@ -333,6 +341,20 @@ def perform_update(ref):
             return 404, {'error': f'version {ref} not found on the remote'}
         if target_sha == prev_sha:
             return 409, {'error': 'already on this version'}
+
+        # 4b. Only move forward (a downgrade could reinstall fixed bugs);
+        # the one exception is going back to the version recorded before
+        # the last update — the explicit rollback path.
+        prev_version = read_update_meta().get('prev_version', '')
+        is_rollback = bool(prev_version) and \
+            _normalize_version(ref) == _normalize_version(prev_version)
+        if not is_rollback and not _version_newer(ref, VERSION):
+            return 409, {'error': f'{ref} is not newer than {VERSION} — '
+                                  'downgrades are refused (use rollback)',
+                         'code': 'DOWNGRADE'}
+        if not _on_main(target_sha):
+            return 409, {'error': f'{ref} is not on the main branch — refusing it',
+                         'code': 'NOT_ON_MAIN'}
 
         write_update_meta({
             'state': 'prepared',

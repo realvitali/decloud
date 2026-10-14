@@ -5,7 +5,6 @@ let voiceRecorder = null;
 let voiceAudioChunks = [];
 let voiceStream = null;
 let voiceConversation = [];
-let pendingCommand = null;
 let voiceSettings = {
   stt: 'whisper-base',
   llm: 'llama3.2',
@@ -101,7 +100,6 @@ function closeVoice() {
   document.getElementById('voice-transcript').textContent = '';
   document.getElementById('voice-response').textContent = '';
   document.getElementById('voice-response').classList.remove('fade-out');
-  document.getElementById('voice-confirm').style.display = 'none';
   // Reset mute state
   micMuted = false;
   updateMuteButton();
@@ -246,7 +244,7 @@ async function sendVoiceTextMessage() {
     voiceConversation.push({ role: 'assistant', content: message });
     voiceChatHistory.push({ role: 'assistant', content: message });
   } catch (e) {
-    aiBubble.innerHTML = `<span style="color:#f87171">Error: ${escapeHtml(e.message)}</span>`;
+    aiBubble.innerHTML = `<span style="color:#f87171">${escapeHtml(friendlyError(e))}</span>`;
   }
 
   msgs.scrollTop = msgs.scrollHeight;
@@ -318,9 +316,8 @@ async function startListening() {
     document.getElementById('voice-transcript').textContent = '';
     document.getElementById('voice-response').textContent = '';
     document.getElementById('voice-response').classList.remove('fade-out');
-    document.getElementById('voice-confirm').style.display = 'none';
-  } catch (e) {
-    document.getElementById('voice-status').textContent = 'Mic access denied';
+    } catch (e) {
+    document.getElementById('voice-status').textContent = (e && e.name === 'NotAllowedError') ? 'Microphone access was blocked' : "Couldn't start the microphone";
     console.error('Mic error:', e);
   }
 }
@@ -439,7 +436,7 @@ async function transcribeAudio(audioBlob) {
     }
   } catch (e) {
     setVoiceState('idle');
-    document.getElementById('voice-status').textContent = 'Error: ' + e.message;
+    document.getElementById('voice-status').textContent = friendlyError(e);
   }
 }
 
@@ -467,7 +464,7 @@ async function processVoiceCommand(text) {
     const reply = data.reply || '';
     await speakAndShowReply(reply);
   } catch (e) {
-    showVoiceError(e.message || 'Network error', 'Check the logs or try again');
+    showVoiceError(friendlyError(e), 'Check that DeCloud is running, then try again');
   }
 }
 
@@ -483,153 +480,6 @@ async function speakAndShowReply(reply) {
   if (responseEl.textContent.trim()) {
     setTimeout(() => { responseEl.classList.add('fade-out'); }, 3000);
   }
-}
-
-// ─── Action execution ───
-
-async function executeVoiceAction(action) {
-  const responseEl = document.getElementById('voice-response');
-  const confirmEl = document.getElementById('voice-confirm');
-  const confirmTextEl = document.getElementById('voice-confirm-text');
-  clearVoiceError();
-
-  switch (action.action) {
-    case 'navigate':
-      responseEl.textContent = `Opening ${action.screen}...`;
-      await speak(`Opening ${action.screen}`);
-      navigateToScreen(action.screen);
-      setTimeout(closeVoice, 1000);
-      break;
-
-    case 'play_book':
-      responseEl.textContent = `Playing "${action.title}"...`;
-      await speak(`Playing ${action.title}`);
-      navigateToScreen('audiobooks');
-      // Try to find and play the book
-      setTimeout(() => playBookByName(action.title, action.chapter), 500);
-      setTimeout(closeVoice, 2000);
-      break;
-
-    case 'stop_playback':
-      responseEl.textContent = 'Stopping playback';
-      stopAudioPlayback();
-      await speak('Playback stopped');
-      setTimeout(closeVoice, 1000);
-      break;
-
-    case 'pause_playback':
-      responseEl.textContent = 'Pausing';
-      pauseAudioPlayback();
-      await speak('Paused');
-      setTimeout(closeVoice, 1000);
-      break;
-
-    case 'resume_playback':
-      responseEl.textContent = 'Resuming';
-      resumeAudioPlayback();
-      await speak('Resuming');
-      setTimeout(closeVoice, 1000);
-      break;
-
-    case 'run_command':
-      pendingCommand = action;
-      confirmEl.style.display = 'flex';
-      confirmTextEl.innerHTML = `Run: <strong>${action.command}</strong><br>${action.description || ''}`;
-      setVoiceState('idle');
-      await speak(`I want to run: ${action.command}. ${action.description || ''}. Shall I proceed?`);
-      break;
-
-    case 'search_files':
-      responseEl.textContent = `Searching for "${action.query}"...`;
-      await speak(`Searching for ${action.query}`);
-      navigateToScreen('lego');
-      setTimeout(() => searchLegoFiles(action.query), 500);
-      setTimeout(closeVoice, 2000);
-      break;
-
-    case 'generate_image':
-      responseEl.textContent = `Generating image: ${action.prompt}`;
-      await speak(`Generating image: ${action.prompt}`);
-      navigateToScreen('generate');
-      setTimeout(() => generateImageFromVoice(action.prompt), 500);
-      setTimeout(closeVoice, 2000);
-      break;
-
-    case 'chat':
-      responseEl.textContent = `Asking AI: ${action.message}`;
-      navigateToScreen('chat');
-      setTimeout(() => sendChatFromVoice(action.message), 500);
-      // Don't close - let user see the response
-      break;
-
-    case 'reset_conversation':
-      voiceConversation = [];
-      voiceChatHistory = [];
-      responseEl.textContent = "Okay, I've forgotten everything. What can I do for you?";
-      await speak("Okay, I've forgotten everything. What can I do for you?");
-      setVoiceState('idle');
-      break;
-
-    case 'respond':
-    default:
-      const replyText = action.message || '';
-      responseEl.textContent = replyText || 'I heard you, but had trouble forming a reply.';
-      responseEl.classList.remove('fade-out');
-      voiceConversation.push({ role: 'assistant', content: replyText });
-      await speak(replyText);
-      setVoiceState('idle');
-      // Fade out response after 3 seconds
-      if (responseEl.textContent.trim()) {
-        setTimeout(() => {
-          responseEl.classList.add('fade-out');
-        }, 3000);
-      }
-      break;
-  }
-}
-
-// ─── Command confirmation ───
-
-async function confirmVoiceCommand(approved) {
-  if (!pendingCommand) return;
-
-  document.getElementById('voice-confirm').style.display = 'none';
-
-  if (!approved) {
-    document.getElementById('voice-response').textContent = 'Command cancelled';
-    await speak('Cancelled');
-    pendingCommand = null;
-    setVoiceState('idle');
-    return;
-  }
-
-  setVoiceState('thinking');
-  document.getElementById('voice-status').textContent = 'Running command...';
-  document.getElementById('voice-response').textContent = 'Running: ' + pendingCommand.command;
-
-  try {
-    const resp = await fetch('/api/voice/run_command', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: pendingCommand.command }),
-    });
-    const data = await resp.json();
-
-    if (data.error) {
-      document.getElementById('voice-response').textContent = 'Error: ' + data.error;
-      await speak('Command failed: ' + data.error);
-    } else {
-      const output = data.output || '(no output)';
-      document.getElementById('voice-response').textContent = output;
-      await speak('Done. ' + output.substring(0, 200));
-    }
-  } catch (e) {
-    document.getElementById('voice-response').textContent = 'Error: ' + e.message;
-    await speak('Command failed');
-  }
-
-  pendingCommand = null;
-  setVoiceState('idle');
 }
 
 // ─── Error surface ───
@@ -761,91 +611,6 @@ async function speak(text) {
   }
 
   return browserSpeak(text);
-}
-
-// ─── Helper functions for actions ───
-
-function navigateToScreen(screen) {
-  const screenMap = {
-    home: 'home-screen',
-    audiobooks: 'book-screen',
-    lego: 'lego-screen',
-    chat: 'ollama-screen',
-    generate: 'comfy-screen',
-    system: 'system-screen',
-    agents: 'agents-screen',
-  };
-  const target = screenMap[screen] || 'home-screen';
-
-  if (screen === 'home') {
-    goHome();
-  } else {
-    showScreen(target);
-    if (screen === 'audiobooks') loadBooks();
-  }
-}
-
-function playBookByName(title, chapter) {
-  // Find matching book in the book list
-  const books = document.querySelectorAll('.book-item');
-  const titleLower = (title || '').toLowerCase();
-
-  for (const book of books) {
-    const bookTitle = book.querySelector('.book-title')?.textContent?.toLowerCase() || '';
-    if (bookTitle.includes(titleLower) || titleLower.includes(bookTitle)) {
-      book.click();
-      if (chapter !== null && chapter !== undefined) {
-        setTimeout(() => {
-          // Select chapter
-          const chapters = document.querySelectorAll('.chapter-item');
-          if (chapters[chapter]) chapters[chapter].click();
-        }, 500);
-      }
-      return;
-    }
-  }
-
-  // If no match, just show the book list
-  loadBooks();
-}
-
-function stopAudioPlayback() {
-  const audio = document.getElementById('audio-player');
-  if (audio) { audio.pause(); audio.currentTime = 0; }
-}
-
-function pauseAudioPlayback() {
-  const audio = document.getElementById('audio-player');
-  if (audio) audio.pause();
-}
-
-function resumeAudioPlayback() {
-  const audio = document.getElementById('audio-player');
-  if (audio) audio.play();
-}
-
-function searchLegoFiles(query) {
-  // Navigate to lego and trigger search if available
-  showScreen('lego-screen');
-  if (typeof loadLego === 'function') loadLego('');
-}
-
-function generateImageFromVoice(prompt) {
-  showScreen('comfy-screen');
-  const promptEl = document.getElementById('comfy-prompt');
-  if (promptEl) {
-    promptEl.value = prompt;
-    if (typeof generateImage === 'function') generateImage();
-  }
-}
-
-function sendChatFromVoice(message) {
-  showScreen('ollama-screen');
-  const chatInput = document.getElementById('ollama-input');
-  if (chatInput) {
-    chatInput.value = message;
-    if (typeof sendOllamaMessage === 'function') sendOllamaMessage();
-  }
 }
 
 // ─── Push-to-talk: removed — mute toggle controls mic ───

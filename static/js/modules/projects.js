@@ -198,7 +198,7 @@ async function loadProjectDetail(p) {
                 <div class="commit-meta">
                   <span class="commit-author">${escapeHtml(c.author || '')}</span>
                   <span>${c.date ? relTime(c.date) : ''}</span>
-                  ${c.sha ? `<span style="color:var(--text-faint);font-family:monospace">${c.sha.substring(0,7)}</span>` : ''}
+                  ${c.sha ? `<span style="color:var(--text-faint);font-family:monospace">${escapeHtml(String(c.sha).substring(0,7))}</span>` : ''}
                 </div>
               </div>
             </div>

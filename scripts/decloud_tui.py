@@ -92,9 +92,18 @@ def api(path, method='GET', data=None):
 
 
 def login(pin):
-    d, ok = api('/api/auth/login', 'POST', {'pin': pin})
-    if ok and d.get('ok'):
-        _save_session(d.get('session', ''))
+    """The session token only comes back in the Set-Cookie header."""
+    from http.cookies import SimpleCookie
+    req = urllib.request.Request(BASE + '/api/auth/login', method='POST',
+                                 data=json.dumps({'pin': pin}).encode(),
+                                 headers={'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=4) as r:
+            morsel = SimpleCookie(r.headers.get('Set-Cookie', '')).get('decloud_session')
+    except Exception:
+        return False
+    if morsel and morsel.value:
+        _save_session(morsel.value)
         return True
     return False
 
@@ -472,14 +481,14 @@ class DeCloudTUI(App):
             status = (f"[bold {ACCENT}]UPDATE AVAILABLE → {latest.get('tag')}[/]\n"
                       f"{'— press U to install —'}")
         else:
-            status = f"[#4dff6a]up to date[/]"
+            status = "[#4dff6a]up to date[/]"
         lines = [
             f"[bold]CURRENT[/] {cur}",
             f"[bold]LATEST[/]  {latest.get('tag') or '—'}",
             status,
         ]
         if not d.get('tree_clean'):
-            lines.append(f"[#ff4d4d]local changes — updates paused[/]")
+            lines.append("[#ff4d4d]local changes — updates paused[/]")
         if d.get('can_rollback'):
             lines.append(f"[{MUTED}]rollback available[/]")
         self.query_one('#update', Static).update('\n'.join(lines))

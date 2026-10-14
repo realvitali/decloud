@@ -110,8 +110,8 @@ async function modelsDownload(repo, file) {
   const category = known.category || 'chat';
   const parts = entry && entry.parts;
   const label = (parts ? parts[0] : file).split('/').pop();
-  if (!confirm(`Download ${label}${parts && parts.length > 1 ? ` (${parts.length} parts)` : ''} (${repo})?\n\nDeCloud will put it where your apps can find it` +
-    (category === 'chat' ? ' and import it into Ollama automatically.' : ' (your ComfyUI models folder).'))) return;
+  if (!await appConfirm(`Download ${label}${parts && parts.length > 1 ? ` (${parts.length} parts)` : ''} (${repo})?\n\nDeCloud will put it where your apps can find it` +
+    (category === 'chat' ? ' and import it into Ollama automatically.' : ' (your ComfyUI models folder).'), { ok: 'Download' })) return;
   try {
     const body = { repo, category, import_ollama: category === 'chat' };
     if (parts && parts.length > 1) body.files = parts;
@@ -122,10 +122,10 @@ async function modelsDownload(repo, file) {
       body: JSON.stringify(body),
     });
     const d = await r.json();
-    if (!r.ok) { alert(d.error || 'Download could not start'); return; }
+    if (!r.ok) { showToast(d.error || 'Download could not start'); return; }
     modelsPoll();
   } catch (e) {
-    alert('Download could not start: ' + (e.message || 'network'));
+    showToast('Download could not start: ' + friendlyError(e));
   }
 }
 

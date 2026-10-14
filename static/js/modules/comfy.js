@@ -135,7 +135,7 @@ async function comfyGenerate() {
       } catch {}
     }, 1000);
   } catch (e) {
-    progressText.innerHTML = `<span style="color:var(--red)">Error: ${escapeHtml(e.message)}</span>`;
+    progressText.innerHTML = `<span style="color:var(--red)">${escapeHtml(friendlyError(e))}</span>`;
     btn.disabled = false;
     btn.textContent = 'Generate';
   }
@@ -143,7 +143,7 @@ async function comfyGenerate() {
 
 // Refresh ComfyUI status periodically when on that screen
 setInterval(() => {
-  if (document.getElementById('comfy-screen')?.classList.contains('active')) {
+  if (!document.hidden && document.getElementById('comfy-screen')?.classList.contains('active')) {
     loadComfyStatus();
   }
 }, 5000);
@@ -182,13 +182,13 @@ async function comfyPollUntilOnline(attempt) {
 }
 
 async function comfyStop() {
-  if (!confirm('Stop ComfyUI? Image and music generation will pause.')) return;
+  if (!await appConfirm('Stop the image generator? Image and song making will pause until you start it again.', { ok: 'Stop' })) return;
   try {
     const r = await fetch('/api/comfy/stop', { method: 'POST' });
     const d = await r.json();
-    alert(d.message || d.error || 'Done');
+    showToast(d.message || d.error || 'Stopped');
     loadComfyStatus();
-  } catch (e) {}
+  } catch (e) { showToast(friendlyError(e)); }
 }
 
 async function comfyShowLog() {

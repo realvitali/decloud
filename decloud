@@ -12,7 +12,7 @@ TUNNEL_PID_FILE="$APP_DIR/tunnel.pid"
 APP_PID_FILE="$APP_DIR/app.pid"
 
 # ─── Version ──────────────────────────────────────────────────────
-VERSION="0.4.2"
+VERSION="0.5.0"
 
 # ─── Helpers ────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ get_tunnel_url() {
     # terminate TLS on someone else's box and forward plaintext HTTP,
     # which contradicts DeCloud's privacy story.
     if command -v tailscale &>/dev/null && tailscale status &>/dev/null; then
-        URL=$(tailscale funnel status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
+        URL=$(tailscale funnel status 2>/dev/null | grep -oE 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
         if [ -n "$URL" ]; then
             echo "$URL" > "$TUNNEL_URL_FILE"
             echo "$URL"
@@ -43,6 +43,12 @@ get_tunnel_url() {
 start_app() {
     if [ -f "$APP_PID_FILE" ] && kill -0 $(cat "$APP_PID_FILE") 2>/dev/null; then
         echo "App already running (PID: $(cat $APP_PID_FILE))"
+        return 0
+    fi
+    # Already served by systemd/launchd/WSL nohup? Don't start a second copy
+    # (it would crash-loop on the busy port forever).
+    if curl -s http://localhost:$PORT/ > /dev/null 2>&1; then
+        echo "✓ App already running at http://localhost:$PORT"
         return 0
     fi
     echo "Starting DeCloud app on port $PORT..."
@@ -89,8 +95,6 @@ start_tunnel() {
         echo "  Install it: curl -fsSL https://tailscale.com/install.sh | sh"
         echo "  Then run:   sudo tailscale up  (login to your account)"
         echo "  Then:       ./decloud start"
-        echo "  (Alternative: run your own tunnel, e.g."
-        echo "   cloudflared tunnel --url http://localhost:$PORT)"
         return 1
     fi
 
@@ -112,7 +116,7 @@ start_tunnel() {
     sleep 3
 
     # Get the funnel URL
-    URL=$(tailscale funnel status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
+    URL=$(tailscale funnel status 2>/dev/null | grep -oE 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
     if [ -n "$URL" ]; then
         echo "$URL" > "$TUNNEL_URL_FILE"
         echo "✓ Funnel active: $URL"
@@ -120,10 +124,9 @@ start_tunnel() {
     fi
 
     # Fallback: try to get from tailscale status
-    HOSTNAME=$(tailscale status --json 2>/dev/null | grep -oP '"HostName":\s*"[^"]+"' | head -1 | cut -d'"' -f4)
-    TAILNET=$(tailscale status --json 2>/dev/null | grep -oP '"MagicDNSSuffix":\s*"[^"]+"' | cut -d'"' -f4)
-    if [ -n "$HOSTNAME" ] && [ -n "$TAILNET" ]; then
-        URL="https://${HOSTNAME}.${TAILNET}"
+    DNSNAME=$(tailscale status --json 2>/dev/null | python3 -c 'import sys, json; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))' 2>/dev/null)
+    if [ -n "$DNSNAME" ]; then
+        URL="https://${DNSNAME}"
         echo "$URL" > "$TUNNEL_URL_FILE"
         echo "✓ Funnel active: $URL"
         return 0
@@ -232,6 +235,14 @@ case "${1:-}" in
         echo "All stopped"
         ;;
     restart)
+        # Installed as a service? Let the service manager restart it.
+        if systemctl --user is-active --quiet decloud 2>/dev/null; then
+            systemctl --user restart decloud && echo "✓ DeCloud restarted"
+            exit $?
+        elif [ "$(uname)" = "Darwin" ] && launchctl list com.decloud.app &>/dev/null; then
+            launchctl kickstart -k "gui/$(id -u)/com.decloud.app" && echo "✓ DeCloud restarted"
+            exit $?
+        fi
         stop_app
         stop_tunnel
         sleep 1

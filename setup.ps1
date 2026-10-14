@@ -58,9 +58,9 @@ if (-not (Test-Path ".env")) {
     Copy-Item .env.example .env
     $Secret = & $VenvPython -c "import secrets; print(secrets.token_hex(32))"
     $Passcode = & $VenvPython -c "import secrets; print(''.join(str(secrets.randbelow(10)) for _ in range(8)))"
-    (Get-Content .env -Raw) `
-        -replace 'change-me-to-a-random-string', $Secret `
-        -replace '^DECLOUD_PIN=.*$', "DECLOUD_PIN=$Passcode" | Set-Content .env -NoNewline
+    (Get-Content .env -Raw) -replace 'change-me-to-a-random-string', $Secret | Set-Content .env -NoNewline
+    # .env.example only has a commented-out DECLOUD_PIN, so append the real one
+    Add-Content .env "`nDECLOUD_PIN=$Passcode"
     Write-Host "OK .env created" -ForegroundColor Green
 }
 
@@ -85,15 +85,15 @@ Start-Sleep -Seconds 3
 
 Write-Host ""
 Write-Host "DeCloud is running at http://localhost:8899" -ForegroundColor Green
-# Read the passcode from .env so re-runs still print the real value.
-$Passcode = ((Get-Content .env | Where-Object { $_ -match '^DECLOUD_PIN=' }) -replace '^DECLOUD_PIN=', '')
-Write-Host "Access passcode: $Passcode" -ForegroundColor Yellow
+# Show the passcode from .env (re-runs print the real value) with the
+# write-it-down / `.\decloud.ps1 pin` instructions.
+& $VenvPython scripts\decloud_pin.py show
 Write-Host ""
 Write-Host "Remote access (optional):" -ForegroundColor Cyan
 Write-Host "  1. Install Tailscale: https://tailscale.com/download/windows"
 Write-Host "  2. In an elevated PowerShell: tailscale up"
-Write-Host "  3. Enable Funnel: tailscale funnel 8899"
+Write-Host "  3. Enable Funnel: tailscale funnel --bg 8899"
 Write-Host "     (Funnel gives a public https://...ts.net URL; the passcode"
 Write-Host "      still protects everything behind it.)"
 Write-Host ""
-Write-Host "Management: .\decloud.ps1 start|stop|status|restart" -ForegroundColor Cyan
+Write-Host "Management: .\decloud.ps1 start|stop|status|restart|pin" -ForegroundColor Cyan

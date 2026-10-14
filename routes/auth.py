@@ -1,9 +1,11 @@
 """Authentication routes: passcode login for DeCloud."""
 from flask import Blueprint, jsonify, request, make_response
 from shared import (
-    app, DECLOUD_PIN, limiter, SESSIONS, SESSION_TTL_SECONDS, MAX_SESSIONS,
+    DECLOUD_PIN, limiter, SESSIONS, SESSION_TTL_SECONDS, MAX_SESSIONS,
     _LOGIN_ATTEMPTS, _LOGIN_BACKOFF_WINDOW, _LOGIN_BACKOFF_MAX,
-    _csrf_for_token, _purge_expired_sessions, save_sessions,
+    _LOGIN_GLOBAL_FAILS, _LOGIN_GLOBAL_WINDOW, _LOGIN_GLOBAL_MAX,
+    _csrf_for_token, _extract_session_token, _purge_expired_sessions,
+    _session_lock, save_sessions,
 )
 import hmac
 import secrets
@@ -14,12 +16,21 @@ bp = Blueprint('auth', __name__)
 def _client_addr():
     return request.remote_addr or 'unknown'
 
+def _global_locked() -> bool:
+    """True while too many failures (from any address) sit in the window."""
+    cutoff = time.time() - _LOGIN_GLOBAL_WINDOW
+    with _session_lock:
+        _LOGIN_GLOBAL_FAILS[:] = [t for t in _LOGIN_GLOBAL_FAILS if t > cutoff]
+        return len(_LOGIN_GLOBAL_FAILS) >= _LOGIN_GLOBAL_MAX
+
 def _record_failure(addr: str) -> float:
     """Record a failed attempt for an address; return seconds to back off."""
     now = time.time()
-    attempts = [t for t in _LOGIN_ATTEMPTS.get(addr, []) if now - t < _LOGIN_BACKOFF_WINDOW]
-    attempts.append(now)
-    _LOGIN_ATTEMPTS[addr] = attempts
+    with _session_lock:
+        attempts = [t for t in _LOGIN_ATTEMPTS.get(addr, []) if now - t < _LOGIN_BACKOFF_WINDOW]
+        attempts.append(now)
+        _LOGIN_ATTEMPTS[addr] = attempts
+        _LOGIN_GLOBAL_FAILS.append(now)
     # Exponential backoff once past the threshold
     over = max(0, len(attempts) - _LOGIN_BACKOFF_MAX)
     return min(8.0, 0.5 * (2 ** over)) if over else 0.0
@@ -40,6 +51,13 @@ def login():
     if not isinstance(pin, str) or not pin:
         return jsonify({'error': 'Invalid passcode'}), 401
 
+    if _global_locked():
+        return jsonify({
+            'error': 'Too many wrong passcodes — sign-in is paused for a few '
+                     'minutes. On the computer, `./decloud pin reset` clears it.',
+            'code': 'LOGIN_LOCKED',
+        }), 429
+
     if not hmac.compare_digest(pin, DECLOUD_PIN):
         backoff = _record_failure(addr)
         if backoff > 0:
@@ -50,18 +68,18 @@ def login():
 
     # Mint a fresh opaque session token. The passcode never leaves the server.
     token = secrets.token_urlsafe(32)
-    _purge_expired_sessions()
-    # Bound the session table so an attacker cannot fill memory with tokens
-    if len(SESSIONS) >= MAX_SESSIONS:
-        oldest = sorted(SESSIONS.items(), key=lambda kv: kv[1])[:1]
-        for old_token, _ in oldest:
-            SESSIONS.pop(old_token, None)
-    SESSIONS[token] = time.time() + SESSION_TTL_SECONDS
+    with _session_lock:
+        _purge_expired_sessions()
+        # Bound the session table so an attacker cannot fill memory with tokens
+        while len(SESSIONS) >= MAX_SESSIONS:
+            SESSIONS.pop(min(SESSIONS, key=SESSIONS.get), None)
+        SESSIONS[token] = time.time() + SESSION_TTL_SECONDS
     save_sessions()
 
+    # The token itself only travels in the HttpOnly cookie — page JS never
+    # sees it. (The TUI reads it from Set-Cookie and sends it as Bearer.)
     resp = make_response(jsonify({
         'ok': True,
-        'session': token,
         'csrf': _csrf_for_token(token),
     }))
     resp.set_cookie(
@@ -79,11 +97,7 @@ def check_auth():
     if not DECLOUD_PIN:
         return jsonify({'authenticated': True, 'open_mode': True})
 
-    token = request.cookies.get('decloud_session')
-    if not token:
-        auth_header = request.headers.get('Authorization', '')
-        if auth_header.startswith('Bearer '):
-            token = auth_header[7:].strip()
+    token = _extract_session_token()
     valid = bool(token) and token in SESSIONS and SESSIONS.get(token, 0) > time.time()
     if valid:
         return jsonify({
@@ -96,11 +110,7 @@ def check_auth():
 @bp.route('/api/auth/logout', methods=['POST'])
 def logout():
     """Invalidate the current session token."""
-    token = request.cookies.get('decloud_session')
-    if not token:
-        auth_header = request.headers.get('Authorization', '')
-        if auth_header.startswith('Bearer '):
-            token = auth_header[7:].strip()
+    token = _extract_session_token()
     if token:
         SESSIONS.pop(token, None)
         save_sessions()

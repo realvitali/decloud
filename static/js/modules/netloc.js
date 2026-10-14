@@ -52,7 +52,7 @@ const NetLoc = (() => {
     try {
       const r = await fetch('/api/netloc', { cache: 'no-store' });
       const d = await r.json();
-      if (d.type !== 'tailscale' && !dismissed()) {
+      if ((d.type === 'lan' || d.type === 'public') && !dismissed()) {
         banner(d.type, d.hint);
       }
     } catch { /* offline or auth wall — stay quiet */ }

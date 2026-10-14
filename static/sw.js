@@ -1,19 +1,18 @@
 // DeCloud Service Worker
-const CACHE_NAME = 'decloud-v94';
+const CACHE_NAME = 'decloud-v96';
 
 self.addEventListener('install', e => {
   self.skipWaiting(); // activate immediately
 });
 
 self.addEventListener('activate', e => {
+  // Drop old caches. We don't force-navigate open pages: the page shows an
+  // "Update ready — tap to reload" toast on controllerchange instead.
   e.waitUntil(
     caches.keys().then(keys =>
-      // Nuke ALL caches — forces clean slate on every SW update
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    ).then(() => self.clients.matchAll()).then(clients =>
-      clients.forEach(c => c.navigate(c.url)))
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', e => {

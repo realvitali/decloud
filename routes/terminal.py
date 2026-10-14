@@ -1,7 +1,7 @@
 """Terminal command and interactive PTY WebSocket route."""
 from flask import Blueprint, jsonify, request
 from shared import limiter, ws_is_authenticated
-import os, json, subprocess, threading, platform
+import os, json, subprocess, threading, time
 
 # POSIX-only imports for the PTY terminal (Windows gets a clean error)
 try:
@@ -218,137 +218,103 @@ def register(sock):
                 pass
             return
 
-        import os as _os
+        # Build everything BEFORE forking: this is a threaded process, so
+        # the child must do nothing but exec (no allocation, no locks).
+        env = dict(os.environ, TERM='xterm-256color', COLORTERM='truecolor',
+                   LANG='en_US.UTF-8', LC_ALL='en_US.UTF-8')
+        # ponytail: pty.fork's child still runs a few lines of Python before
+        # exec; a C-level spawn would need a controlling-tty helper per OS.
+        pid, master_fd = _pty.fork()  # child: setsid + slave PTY as stdio
+        if pid == 0:
+            try:
+                os.execve('/bin/bash', ['/bin/bash', '--login'], env)
+            except OSError:
+                try:
+                    os.execve('/bin/sh', ['/bin/sh'], env)
+                except OSError:
+                    pass
+            os._exit(127)  # never fall back into the Flask app
 
-        # Create a pseudo-terminal
-        master_fd, slave_fd = _pty.openpty()
+        _set_winsize(master_fd, 24, 80)  # frontend sends the real size
+        stop = threading.Event()
 
-        # Set terminal size (80x24 default, will be updated by frontend)
+        def pty_to_ws():
+            """Read from PTY master, send to WebSocket. Never closes the fd —
+            the handler below is its only owner."""
+            try:
+                while not stop.is_set():
+                    ready, _, _ = _select.select([master_fd], [], [], 0.1)
+                    if not ready:
+                        continue
+                    try:
+                        data = os.read(master_fd, 65536)
+                    except OSError:
+                        data = b''  # EIO: the shell exited
+                    if not data:
+                        ws.send(json.dumps({'type': 'exit'}))
+                        ws.close()
+                        return
+                    ws.send(data.decode('utf-8', errors='replace'))
+            except Exception:
+                pass
+
+        reader = threading.Thread(target=pty_to_ws, daemon=True)
+        reader.start()
         try:
-            _winsize = _struct.pack('HHHH', 24, 80, 0, 0)
-            _fcntl.ioctl(slave_fd, _termios.TIOCSWINSZ, _winsize)
+            while True:
+                msg = ws.receive()
+                if msg is None:
+                    break
+                try:
+                    data = json.loads(msg)
+                except (json.JSONDecodeError, TypeError):
+                    data = None
+                if isinstance(data, dict) and data.get('type') == 'resize':
+                    _set_winsize(master_fd, data.get('rows', 24), data.get('cols', 80))
+                elif isinstance(data, dict) and data.get('type') == 'input':
+                    os.write(master_fd, str(data.get('data', '')).encode('utf-8'))
+                else:
+                    os.write(master_fd, msg.encode('utf-8'))  # raw input (backward compat)
         except Exception:
             pass
-
-        # Fork a child process attached to the slave PTY
-        pid = _os.fork()
-
-        if pid == 0:
-            # Child process
-            _os.close(master_fd)
-            _os.setsid()
-
-            # Set controlling terminal
-            try:
-                _fcntl.ioctl(slave_fd, _termios.TIOCSCTTY, 0)
-            except Exception:
-                pass
-
-            # Set up stdin/stdout/stderr to the slave PTY
-            _os.dup2(slave_fd, 0)
-            _os.dup2(slave_fd, 1)
-            _os.dup2(slave_fd, 2)
-            if slave_fd > 2:
-                _os.close(slave_fd)
-
-            # Set terminal environment
-            env = dict(_os.environ)
-            env['TERM'] = 'xterm-256color'
-            env['COLORTERM'] = 'truecolor'
-            env['LANG'] = 'en_US.UTF-8'
-            env['LC_ALL'] = 'en_US.UTF-8'
-
-            # Start the shell
-            try:
-                _os.execvpe('/bin/bash', ['/bin/bash', '--login'], env)
-            except Exception:
-                _os.execvpe('/bin/sh', ['/bin/sh'], env)
-        else:
-            # Parent process
-            _os.close(slave_fd)
-
-            def pty_to_ws():
-                """Read from PTY master, send to WebSocket as binary."""
-                try:
-                    while True:
-                        ready, _, _ = _select.select([master_fd], [], [], 0.1)
-                        if ready:
-                            try:
-                                data = _os.read(master_fd, 65536)
-                                if not data:
-                                    break
-                                ws.send(data.decode('utf-8', errors='replace'))
-                            except (OSError, _os.error):
-                                break
-                        # Check if child is still alive
-                        try:
-                            wpid, _ = _os.waitpid(pid, _os.WNOHANG)
-                            if wpid != 0:
-                                # Child exited
-                                try:
-                                    remaining = _os.read(master_fd, 65536)
-                                    if remaining:
-                                        ws.send(remaining.decode('utf-8', errors='replace'))
-                                except Exception:
-                                    pass
-                                ws.send(json.dumps({'type': 'exit'}))
-                                break
-                        except ChildProcessError:
-                            ws.send(json.dumps({'type': 'exit'}))
-                            break
-                except Exception:
-                    pass
-                finally:
-                    try:
-                        _os.close(master_fd)
-                    except Exception:
-                        pass
-
-            def ws_to_pty():
-                """Read from WebSocket, write to PTY master."""
-                try:
-                    while True:
-                        msg = ws.receive()
-                        if msg is None:
-                            break
-                        # Check for resize commands
-                        try:
-                            data = json.loads(msg)
-                            if data.get('type') == 'resize':
-                                cols = data.get('cols', 80)
-                                rows = data.get('rows', 24)
-                                try:
-                                    _winsize = _struct.pack('HHHH', rows, cols, 0, 0)
-                                    _fcntl.ioctl(master_fd, _termios.TIOCSWINSZ, _winsize)
-                                except Exception:
-                                    pass
-                                continue
-                            elif data.get('type') == 'input':
-                                _os.write(master_fd, data.get('data', '').encode('utf-8'))
-                                continue
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-                        # Raw input (backward compat)
-                        _os.write(master_fd, msg.encode('utf-8'))
-                except Exception:
-                    pass
-
-            # Start PTY reader thread
-            reader = threading.Thread(target=pty_to_ws, daemon=True)
-            reader.start()
-
-            # Handle WebSocket input (blocking)
-            ws_to_pty()
-
-            # Cleanup — kill the whole process group so no orphan shells live on
-            try:
-                _os.killpg(pid, _signal.SIGTERM)
-                _os.waitpid(pid, 0)
-            except Exception:
-                pass
-            try:
-                _os.close(master_fd)
-            except Exception:
-                pass
-
+        finally:
+            stop.set()
             reader.join(timeout=2)
+            _end_shell(pid, master_fd)
+
+
+def _set_winsize(fd, rows, cols):
+    try:
+        _fcntl.ioctl(fd, _termios.TIOCSWINSZ, _struct.pack('HHHH', int(rows), int(cols), 0, 0))
+    except Exception:
+        pass
+
+
+def _end_shell(pid, master_fd, grace=2.0):
+    """Hang up the shell's session (interactive bash ignores SIGTERM but
+    exits on SIGHUP), give it `grace` seconds, then SIGKILL. Always reaps
+    the child and closes the master fd exactly once."""
+    try:
+        os.killpg(pid, _signal.SIGHUP)
+    except OSError:
+        pass
+    try:
+        os.close(master_fd)
+    except OSError:
+        pass
+    deadline = time.monotonic() + grace
+    while time.monotonic() < deadline:
+        try:
+            if os.waitpid(pid, os.WNOHANG)[0]:
+                return
+        except ChildProcessError:
+            return
+        time.sleep(0.05)
+    try:
+        os.killpg(pid, _signal.SIGKILL)
+    except OSError:
+        pass
+    try:
+        os.waitpid(pid, 0)
+    except ChildProcessError:
+        pass

@@ -17,8 +17,38 @@ class TestLogin:
 
     def test_correct_passcode_mints_session_and_csrf(self, client, login):
         assert login['ok'] is True
-        assert len(login['session']) >= 32          # opaque token
+        assert len(login['session']) >= 32          # opaque token (from cookie)
         assert len(login['csrf']) >= 32
+
+    def test_session_token_never_in_body(self, client):
+        r = client.post('/api/auth/login', json={'pin': TEST_PASSCODE})
+        assert set(r.get_json()) == {'ok', 'csrf'}
+        assert 'HttpOnly' in r.headers['Set-Cookie']
+
+    def test_query_token_not_accepted(self, client, login):
+        token = login['session']
+        client.delete_cookie('decloud_session')
+        assert client.get(f'/api/system?token={token}').status_code == 401
+
+    def test_global_throttle_ignores_ip(self, client):
+        import shared
+        shared._LOGIN_GLOBAL_FAILS[:] = [time.time()] * shared._LOGIN_GLOBAL_MAX
+        r = client.post('/api/auth/login', json={'pin': TEST_PASSCODE},
+                        environ_base={'REMOTE_ADDR': '10.9.8.7'})
+        assert r.status_code == 429
+        assert 'decloud pin reset' in r.get_json()['error']
+        shared._LOGIN_GLOBAL_FAILS.clear()
+        assert client.post('/api/auth/login', json={'pin': TEST_PASSCODE}).status_code == 200
+
+    def test_forwarded_for_trusted_only_from_loopback(self, client):
+        import shared
+        h = {'X-Forwarded-For': '203.0.113.9'}
+        client.post('/api/auth/login', json={'pin': '00000000'}, headers=h,
+                    environ_base={'REMOTE_ADDR': '192.168.1.50'})
+        assert '192.168.1.50' in shared._LOGIN_ATTEMPTS
+        assert '203.0.113.9' not in shared._LOGIN_ATTEMPTS
+        client.post('/api/auth/login', json={'pin': '00000000'}, headers=h)  # via local proxy
+        assert '203.0.113.9' in shared._LOGIN_ATTEMPTS
 
     def test_raw_pin_is_never_accepted_as_bearer(self, client):
         # The passcode itself must not work as an auth credential —
@@ -99,10 +129,44 @@ class TestCsrf:
         assert r.status_code == 200
 
     def test_bearer_post_is_csrf_safe(self, client, login):
-        # Bearer-authenticated requests cannot be CSRF'd (cross-origin
+        # Bearer-only requests (the TUI) cannot be CSRF'd (cross-origin
         # callers can't set the header) — no CSRF token required.
+        client.delete_cookie('decloud_session')
         r = client.post('/api/auth/logout', headers={'Authorization': f"Bearer {login['session']}"})
         assert r.status_code == 200
+
+    def test_bogus_bearer_does_not_skip_csrf_for_cookie(self, client, login):
+        # A cookie-carrying request must pass CSRF whatever headers it adds.
+        r = client.post('/api/auth/logout', headers={'Authorization': 'Bearer junk'})
+        assert r.status_code == 403
+        r = client.post('/api/auth/logout', headers={'Authorization': f"Bearer {login['session']}"})
+        assert r.status_code == 403
+
+
+class TestHostAllowlist:
+    @pytest.mark.parametrize('host,ok', [
+        ('localhost:8899', True), ('127.0.0.1:8899', True), ('[::1]:8899', True),
+        ('192.168.1.20:8899', True), ('box.tail1234.ts.net', True),
+        ('evil.example.com', False), ('localhost.evil.com', False), ('', False),
+    ])
+    def test_host_allowed(self, host, ok):
+        from shared import host_allowed
+        assert host_allowed(host) is ok
+
+    def test_rebinding_host_rejected(self, client):
+        r = client.get('/api/auth/check', headers={'Host': 'attacker.example'})
+        assert r.status_code == 421
+
+    def test_env_allowlist(self, monkeypatch):
+        import shared
+        monkeypatch.setenv('DECLOUD_ALLOWED_HOSTS', 'cloud.example.org, other.example')
+        shared._machine_hostnames.cache_clear()
+        try:
+            assert shared.host_allowed('cloud.example.org')
+            assert shared.host_allowed('other.example:443')
+        finally:
+            monkeypatch.delenv('DECLOUD_ALLOWED_HOSTS')
+            shared._machine_hostnames.cache_clear()
 
 
 class TestOpenMode:

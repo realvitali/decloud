@@ -65,9 +65,14 @@ If you prefer your own domain (`decloud.yourdomain.com`):
 
 If you don't want any public access:
 
-1. Don't run `./decloud start` (skip tunnel)
-2. Access via Tailscale directly: `http://your-machine:8899`
-3. Friends/family need Tailscale app + your approval to join tailnet
+1. Turn the public funnel off: `tailscale funnel --https=443 off`
+2. Serve to your tailnet only: `tailscale serve --bg http://localhost:8899`
+3. Open the same `https://your-machine.tail1234.ts.net` URL from any device
+   on your tailnet (DeCloud listens on localhost only, so `http://your-machine:8899`
+   won't work)
+4. Friends/family need the Tailscale app + your approval to join the tailnet
+
+Note: `./decloud start`/`restart` turns the public funnel back on.
 
 ## Troubleshooting
 

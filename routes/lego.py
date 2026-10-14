@@ -1,6 +1,6 @@
 """Lego file browser (Files) routes."""
-from flask import Blueprint, jsonify, request, send_file
-import os, json, subprocess
+from flask import Blueprint, jsonify, request, send_file, current_app
+import subprocess
 from pathlib import Path
 import random as _random
 import shutil as _shutil
@@ -102,9 +102,6 @@ def lego_browse():
         'has_more': start + per_page < total,
     })
 
-# In-memory cache for folder info (child_count, has_images)
-_folder_info_cache = {}  # path -> (mtime, child_count, has_images)
-
 @bp.route('/api/lego/folder_info')
 def lego_folder_info():
     """Lazy get folder child_count + has_images. Query: path=<relative>"""
@@ -138,14 +135,6 @@ def lego_folder_info():
 
     _folder_info_cache[cache_key] = (mtime, child_count, has_images)
     return jsonify({'child_count': child_count, 'has_images': has_images})
-
-def format_size(size):
-    """Format bytes as human-readable."""
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size < 1024:
-            return f'{size:.0f} {unit}' if unit == 'B' else f'{size:.1f} {unit}'
-        size /= 1024
-    return f'{size:.1f} TB'
 
 @bp.route('/api/lego/download')
 def lego_download():
@@ -206,7 +195,6 @@ def lego_thumbnail():
 
 
 # ─── API: Lego Swipe Mode ──────────────────────────────────
-import random as _random
 
 @bp.route('/api/lego/random_image')
 def lego_random_image():
@@ -270,12 +258,12 @@ def lego_trash():
     try:
         _shutil.move(str(target_resolved), str(dest))
         return jsonify({'ok': True, 'moved_to': str(dest.relative_to(shared.FILES_DIR))})
-    except Exception as e:
-        return jsonify({'error': f'trash error: {str(e)}'}), 500
+    except Exception:
+        current_app.logger.exception('[LEGO] trash failed')
+        return jsonify({'error': 'Could not move to trash'}), 500
 
 
 # ─── API: Lego Shred & Poof ────────────────────────────────
-import shutil as _shutil
 
 @bp.route('/api/lego/shred', methods=['POST'])
 def lego_shred():
@@ -313,8 +301,9 @@ def lego_shred():
         return jsonify({'ok': True, 'shredded': target_resolved.name})
     except subprocess.TimeoutExpired:
         return jsonify({'error': 'shred timed out'}), 500
-    except Exception as e:
-        return jsonify({'error': f'shred error: {str(e)}'}), 500
+    except Exception:
+        current_app.logger.exception('[LEGO] shred failed')
+        return jsonify({'error': 'Could not shred file'}), 500
 
 
 @bp.route('/api/lego/poof', methods=['POST'])
@@ -359,57 +348,8 @@ def lego_poof():
     try:
         _shutil.move(str(target_resolved), str(dest))
         return jsonify({'ok': True, 'moved_to': str(dest.relative_to(shared.FILES_DIR))})
-    except Exception as e:
-        return jsonify({'error': f'poof error: {str(e)}'}), 500
+    except Exception:
+        current_app.logger.exception('[LEGO] poof failed')
+        return jsonify({'error': 'Could not delete'}), 500
 
 
-@bp.route('/api/lego/mark_done', methods=['POST'])
-def lego_mark_done():
-    """Rename a folder by appending ' (MANUALLY DONE)' to its name."""
-    data = request.get_json(silent=True) or {}
-    subpath = data.get('path', '')
-    if not subpath:
-        return jsonify({'error': 'path required'}), 400
-
-    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
-
-    files_root_resolved = shared.FILES_DIR.resolve()
-    target_resolved = target.resolve()
-
-    # Must be inside Files
-    if not str(target_resolved).startswith(str(files_root_resolved) + '/') and target_resolved != files_root_resolved:
-        return jsonify({'error': 'path outside Files'}), 403
-
-    # Must be a directory
-    if not target_resolved.is_dir():
-        return jsonify({'error': 'can only mark folders'}), 400
-
-    # Must not be a symlink
-    if target.is_symlink():
-        return jsonify({'error': 'cannot mark symlinks'}), 400
-
-    # Must not be the root
-    if target_resolved == files_root_resolved:
-        return jsonify({'error': 'cannot mark root'}), 400
-
-    # Already marked?
-    if ' (MANUALLY DONE)' in target_resolved.name:
-        return jsonify({'error': 'already marked done'}), 400
-
-    new_name = target_resolved.name + ' (MANUALLY DONE)'
-
-    # Move into /manually done/ folder
-    done_dir = shared.FILES_DIR / 'manually done'
-    done_dir.mkdir(parents=True, exist_ok=True)
-    dest = done_dir / new_name
-
-    # Name collision check
-    if dest.exists():
-        return jsonify({'error': 'a folder with that name already exists in manually done/'}), 409
-
-    try:
-        _shutil.move(str(target_resolved), str(dest))
-        new_rel = str(dest.relative_to(shared.FILES_DIR))
-        return jsonify({'ok': True, 'new_path': new_rel, 'new_name': new_name})
-    except Exception as e:
-        return jsonify({'error': f'move/rename error: {str(e)}'}), 500

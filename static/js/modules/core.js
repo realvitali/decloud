@@ -1,28 +1,14 @@
 // ===== Module: core =====
 // ═══ DeCloud ═══
 
-// ─── Auth: wrap all fetch calls with session-token header ────────
-// The session cookie (decloud_session) is set by /api/auth/login and
-// sent automatically with same-origin requests. We also add a Bearer
-// header carrying the opaque session token as a fallback for
-// cross-origin (tunnel) scenarios. The PIN itself never lives in
-// browser storage.
+// ─── Auth: wrap all fetch calls ────────────────────────────────
+// Auth is the HttpOnly session cookie (sent automatically same-origin).
+// We add the CSRF token to state-changing requests and send the user back
+// to the login screen once if the session expires (401 AUTH_REQUIRED).
 const _originalFetch = window.fetch;
+let _authExpiredShown = false;
 window.fetch = function(input, init) {
   init = init || {};
-  // Don't modify if already has Authorization header
-  if (!init.headers || (init.headers instanceof Headers && !init.headers.has('Authorization'))) {
-    // Add auth header from sessionStorage if we have a session token
-    const token = sessionStorage.getItem('decloud_session');
-    if (token) {
-      init.headers = init.headers || {};
-      if (init.headers instanceof Headers) {
-        init.headers.set('Authorization', 'Bearer ' + token);
-      } else {
-        init.headers['Authorization'] = 'Bearer ' + token;
-      }
-    }
-  }
   // CSRF token on state-changing requests (server requires it when the
   // request is authenticated only by cookie)
   const method = (init.method || 'GET').toUpperCase();
@@ -39,7 +25,17 @@ window.fetch = function(input, init) {
   }
   // Always include credentials (cookies)
   init.credentials = 'same-origin';
-  return _originalFetch.call(this, input, init);
+  return _originalFetch.call(this, input, init).then(function(r) {
+    if (r.status === 401 && !_authExpiredShown && typeof showLoginScreen === 'function') {
+      r.clone().json().then(function(d) {
+        if (d && d.code === 'AUTH_REQUIRED' && !_authExpiredShown) {
+          _authExpiredShown = true;
+          showLoginScreen();
+        }
+      }).catch(function() {});
+    }
+    return r;
+  });
 };
 
 // ─── Shared helpers (single source of truth) ──────────────────────
@@ -55,6 +51,49 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+// Turn low-level errors into plain words for non-technical users.
+function friendlyError(e) {
+  var msg = (e && e.message) ? e.message : String(e || '');
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(msg)) return "Can't reach your computer";
+  if (e instanceof SyntaxError || /JSON|unexpected token|unexpected end/i.test(msg)) return 'Something went wrong — try again';
+  return msg || 'Something went wrong — try again';
+}
+
+// Promise-based confirm dialog (replaces native confirm()).
+// appConfirm('Delete forever?', {danger: true, ok: 'Delete'}) → Promise<boolean>
+function appConfirm(message, opts) {
+  opts = opts || {};
+  return new Promise(function(resolve) {
+    var wrap = document.createElement('div');
+    wrap.className = 'app-confirm-overlay';
+    wrap.innerHTML = '<div class="app-confirm-card" role="alertdialog" aria-modal="true">' +
+      '<p class="app-confirm-msg"></p>' +
+      '<div class="app-confirm-actions">' +
+      '<button class="app-confirm-cancel">Cancel</button>' +
+      '<button class="app-confirm-ok' + (opts.danger ? ' danger' : '') + '"></button>' +
+      '</div></div>';
+    wrap.querySelector('.app-confirm-msg').textContent = message;
+    wrap.querySelector('.app-confirm-ok').textContent = opts.ok || 'OK';
+    function done(v) { document.removeEventListener('keydown', onKey); wrap.remove(); resolve(v); }
+    function onKey(e) { if (e.key === 'Escape') done(false); }
+    wrap.querySelector('.app-confirm-cancel').onclick = function() { done(false); };
+    wrap.querySelector('.app-confirm-ok').onclick = function() { done(true); };
+    wrap.onclick = function(e) { if (e.target === wrap) done(false); };
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(wrap);
+    wrap.querySelector('.app-confirm-cancel').focus();
+  });
+}
+
+// Keyboard: Enter/Space activates non-<button> elements marked role="button"
+document.addEventListener('keydown', function(e) {
+  var t = e.target;
+  if ((e.key === 'Enter' || e.key === ' ') && t && t.tagName !== 'BUTTON' && t.getAttribute && t.getAttribute('role') === 'button') {
+    e.preventDefault();
+    t.click();
+  }
+});
 
 // ─── Crash Recovery (runs before anything else can break) ──
 window.addEventListener('error', function(e) {
@@ -80,7 +119,7 @@ function showCrashRecovery(err) {
     '<p style="margin:0 0 20px;opacity:0.7;font-size:14px;max-width:320px">Something went wrong loading the dashboard. A Force Refresh will clear the cache and reload.</p>' +
     '<button onclick="forceRefresh()" style="background:#6366f1;color:white;border:none;padding:14px 28px;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:12px">Force Refresh</button>' +
     '<details style="margin-top:16px;opacity:0.5;font-size:12px;max-width:400px;word-break:break-word"><summary>Error details</summary><pre style="text-align:left;white-space:pre-wrap;padding:8px">' +
-    (err && err.stack ? err.stack : (err && err.message ? err.message : String(err))) +
+    escapeHtml(err && err.stack ? err.stack : (err && err.message ? err.message : String(err))) +
     '</pre></details>';
   document.body.appendChild(overlay);
 }
@@ -125,16 +164,17 @@ const APPS = [
   { id: 'ai',         svg: ICONS.brain,   label: 'AI',        color: '#8b5cf6', screen: null, spread: true },
   { id: 'legos',      svg: ICONS.brick,   label: 'Legos',     color: '#ef4444', screen: 'legos-screen', experimental: true },
   { id: 'projects',   svg: ICONS.layers,  label: 'Projects',  color: '#0ea5e9', screen: 'project-screen', experimental: true },
-  { id: 'system',     svg: ICONS.activity,label: 'Lab',       color: '#4ade80', screen: 'system-screen' },
-  { id: 'terminal',   svg: ICONS.terminal,label: 'Terminal',  color: '#fbbf24', screen: 'terminal-screen' },
+  { id: 'system',     svg: ICONS.activity,label: 'My Lab',    color: '#4ade80', screen: 'system-screen' },
+  { id: 'terminal',   svg: ICONS.terminal,label: 'Terminal',  color: '#fbbf24', screen: 'terminal-screen', experimental: true },
+  { id: 'privacy',    svg: ICONS.shield,  label: 'Privacy Watcher', color: '#14b8a6', screen: 'osint-screen', experimental: true },
   { id: 'settings',   svg: ICONS.settings, label: 'Settings', color: '#6b7280', screen: 'settings-screen' },
 ];
 
 // AI sub-apps (shown in radial spread)
 const AI_SUBAPPS = [
   { id: 'ollama',  svg: ICONS.brain,  label: 'AI Chat',  color: '#8b5cf6', screen: 'ollama-screen' },
-  { id: 'comfy',   svg: ICONS.image,  label: 'Generate', color: '#ec4899', screen: 'comfy-screen', experimental: true },
-  { id: 'musicgen', svg: ICONS.music, label: 'Music',    color: '#f43f5e', screen: 'musicgen-screen' },
+  { id: 'comfy',   svg: ICONS.image,  label: 'Image Maker', color: '#ec4899', screen: 'comfy-screen', experimental: true },
+  { id: 'musicgen', svg: ICONS.music, label: 'Song Maker', color: '#f43f5e', screen: 'musicgen-screen' },
   { id: 'agents',  svg: ICONS.bot,    label: 'Agents',  color: '#34d399', screen: 'agents-screen' },
 ];
 
