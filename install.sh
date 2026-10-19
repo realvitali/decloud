@@ -55,7 +55,7 @@ fi
 PYVER=$($PYBIN -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
 echo "✓ Python $PYVER found"
 
-if ! "$PYBIN" -c 'import sys; sys.exit(sys.version_info < (3, 10))'; then
+if [[ "$PYVER" < "3.10" ]]; then
     echo "✗ Python 3.10+ required. You have $PYVER"
     exit 1
 fi
@@ -113,14 +113,21 @@ fi
 # own machine and requires your own tailnet. We deliberately do NOT use
 # third-party relays (localhost.run, localhost tunnel via SSH) — those
 # forward plaintext HTTP through someone else's box, which contradicts
-# DeCloud's privacy story.
+# DeCloud's privacy story. cloudflared (your own Cloudflare account) is the
+# fallback.
+TUNNEL_TOOL=""
 
 if command -v tailscale &>/dev/null; then
+    TUNNEL_TOOL="tailscale"
     echo "✓ Tunnel client ready (Tailscale Funnel)"
+elif command -v cloudflared &>/dev/null; then
+    TUNNEL_TOOL="cloudflared"
+    echo "✓ Tunnel client ready (cloudflared — your own Cloudflare account)"
 else
     echo "⚠ No tunnel client available."
     echo "  Install Tailscale: curl -fsSL https://tailscale.com/install.sh | sh"
     echo "  Then: sudo tailscale up  (login to your account)"
+    echo "  (Alternative: install cloudflared from developers.cloudflare.com)"
 fi
 
 # ─── Create venv + install deps ─────────────────────────────────
@@ -175,7 +182,7 @@ PIPER_DIR=$(grep '^DECLOUD_PIPER_DIR=' .env 2>/dev/null | cut -d= -f2- | sed 's/
 if [ -z "$PIPER_DIR" ]; then
     PIPER_DIR="$HOME/.local/share/piper"
 fi
-PIPER_DIR="${PIPER_DIR/#\~/$HOME}"  # expand ~ (no eval: .env values are data)
+PIPER_DIR=$(eval echo "$PIPER_DIR")  # expand ~
 mkdir -p "$PIPER_DIR"
 _fetch_voice() {
     local name="$1" quality="$2"
@@ -194,8 +201,8 @@ _fetch_voice "lessac" "medium"
 _fetch_voice "kathleen" "low"
 
 # ─── SSL certs not needed — tunnel handles HTTPS ────────────────
-# The app runs HTTP on localhost only (not exposed). Tailscale Funnel
-# provides trusted HTTPS externally. No local certs needed.
+# The app runs HTTP on localhost only (not exposed). The cloudflared
+# tunnel provides trusted HTTPS externally. No local certs needed.
 
 # ─── Service setup (platform-specific) ──────────────────────────
 echo ""
@@ -295,7 +302,7 @@ echo "✓ 'decloud' command installed to ~/.local/bin (decloud update, status, q
 # Get the funnel URL (can take a few seconds to appear)
 TUNNEL_URL=""
 for _ in 1 2 3 4 5; do
-    TUNNEL_URL=$(tailscale funnel status 2>/dev/null | grep -oE 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
+    TUNNEL_URL=$(tailscale funnel status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
     [ -n "$TUNNEL_URL" ] && break
     sleep 2
 done
@@ -320,14 +327,44 @@ echo "╚═══════════════════════�
 echo ""
 echo "🌐 LOCAL ACCESS: http://localhost:${PORT}"
 if [ -n "$TUNNEL_URL" ]; then
-    echo "📱 PHONE ACCESS: $TUNNEL_URL"
+    echo "📱 PUBLIC URL (Tailscale Funnel): $TUNNEL_URL"
+    echo "   PIN: ${PIN:-set in .env}"
+    echo ""
+    echo "⚠️  This tunnel URL changes every few hours. For permanent access:"
+    echo ""
+    echo "📌 SETUP PERMANENT TUNNEL (5 min):"
+    echo ""
+    echo "   1. Install cloudflared:"
+    if [ "$OS_TYPE" = "macos" ]; then
+        echo "      brew install cloudflared"
+    else
+        echo "      sudo apt install cloudflared  # or: sudo dnf install cloudflared"
+    fi
+    echo ""
+    echo "   2. Create a free Cloudflare account & tunnel:"
+    echo "      cloudflared tunnel login"
+    echo "      cloudflared tunnel create decloud"
+    echo ""
+    echo "   3. Point a domain (yours or free subdomain):"
+    echo "      cloudflared tunnel route dns decloud mydomain.com"
+    echo ""
+    echo "   4. Run the tunnel:"
+    echo "      cloudflared tunnel run decloud"
+    echo ""
+    echo "   Result: https://decloud.mydomain.com (permanent, never changes)"
+    echo ""
+    echo "🔐 ALTERNATIVE (Private-only access):"
+    echo "   Use Tailscale for permanent HTTPS from your own devices:"
+    echo "      sudo tailscale serve https / http://localhost:${PORT}"
+    echo ""
 fi
+echo ""
 
-# The passcode is shown here once, loudly — it's the only key to the app.
+# Print PIN
 if [ -n "$PIN" ]; then
-    "$PYBIN" scripts/decloud_pin.py show | sed '$d'
-    printf "Wrote it down? Press Enter to continue... "
-    read -r _ < /dev/tty 2>/dev/null || echo ""
+    echo "🔐 Your access PIN: $PIN"
+    echo "   It unlocks a shell on this machine — don't share it."
+    echo "   (Change it: nano ${APP_DIR}/.env)"
     echo ""
 fi
 
@@ -338,28 +375,27 @@ if [ -n "$TUNNEL_URL" ] && command -v qrencode &>/dev/null; then
     qrencode -t ANSIUTF8 "$TUNNEL_URL" 2>/dev/null || qrencode -t ANSI "$TUNNEL_URL" 2>/dev/null
     echo ""
     echo "Or open manually: $TUNNEL_URL"
-    echo "Passcode: $PIN"
+    echo "PIN: $PIN"
     echo ""
     echo "   Add to Home Screen for a native app experience:"
     echo "   • iPhone: Safari → Share → Add to Home Screen"
     echo "   • Android: Chrome → ⋮ → Add to Home screen"
 elif [ -n "$TUNNEL_URL" ]; then
     echo "📱 Open on your phone: $TUNNEL_URL"
-    echo "   Passcode: $PIN"
+    echo "   PIN: $PIN"
     echo ""
     echo "   Add to Home Screen for a native app experience:"
     echo "   • iPhone: Safari → Share → Add to Home Screen"
     echo "   • Android: Chrome → ⋮ → Add to Home screen"
 else
-    echo "📱 For phone access, install Tailscale (https://tailscale.com/download),"
-    echo "   run: sudo tailscale up   then: ./decloud restart"
+    echo "📱 Install cloudflared for phone access:"
+    echo "   https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/"
 fi
 
 echo ""
 echo "Manage DeCloud:"
 echo "  ./decloud status   — check what's running"
 echo "  ./decloud qr       — show current tunnel URL + QR code"
-echo "  ./decloud pin      — show your passcode (pin reset — get a new one)"
 echo "  ./decloud restart  — restart app + tunnel (new QR if tunnel changed)"
 echo ""
 echo "System service:"

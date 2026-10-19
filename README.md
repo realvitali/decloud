@@ -10,14 +10,14 @@ A self-hosted PWA dashboard for audiobooks, AI chat, file browsing, system monit
 - **💬 AI Chat** — Local LLM via Ollama, or cloud models
 - **📁 Files** — Fast file browser with thumbnail previews, image gallery
 - **🎨 Generate** — AI image generation via ComfyUI (FLUX, SDXL, etc)
-- **📊 My Lab** — CPU, RAM, GPU, network stats in real time
+- **📊 System Monitor** — CPU, RAM, GPU, network stats in real time
 - **🧠 AI Model Advisor** — reads your hardware, scores chat/image/video/music
   models from HuggingFace (real file sizes, not guesses), and downloads them
   into the right app folders — split GGUF archives merge automatically and
   chat models import straight into Ollama. No terminal needed.
 - **🖥️ Terminal** — Full interactive web terminal (WebSocket-based)
 - **🎵 Music** — Browse and play your local music library
-- **🔐 Privacy Watcher** — Optional OSINT tool to find and remove your data from broker sites
+- **🔐 Privacy Scanner** — Optional OSINT tool to find and remove your data from broker sites
 - **📓 Journal** — Optional Obsidian vault integration with voice notes (Whisper STT)
 
 All features are optional — the app works with zero configuration. Features that need external services (Ollama, ComfyUI, Piper) gracefully degrade and show helpful messages until configured.
@@ -43,7 +43,7 @@ The installer:
 2. Installs all dependencies
 3. Creates a `.env` config file with a random secret key
 4. Sets up a systemd service (auto-starts on boot, auto-restarts on crash)
-5. Starts a secure tunnel via Tailscale Funnel
+5. Starts a **public** tunnel via Tailscale Funnel (only when a passcode is set)
 6. Prints the URL + QR code for your phone
 
 ### Access from anywhere
@@ -53,9 +53,15 @@ DeCloud uses **Tailscale Funnel** for secure remote access:
 - **Permanent URL**: `https://your-machine.tail1234.ts.net`
 - **No port forwarding** — works behind NAT/firewalls
 - **End-to-end encrypted** — WireGuard + TLS 1.3
-- **Friends don't need Tailscale** — they just open the link
+- **Public** — anyone with the link reaches the login screen
 
-The first time you open DeCloud, enter your passcode to unlock (tap ✓ after typing). The installer shows it once — write it down. Forgot it? `./decloud pin` shows it; `./decloud pin reset` makes a new one (works even if you forgot the old one).
+The first time you open DeCloud, enter your passcode to unlock (tap ✓ after typing).
+
+> ⚠️ **The passcode unlocks a shell on your machine** (terminal, files,
+> updates). Funnel URLs are public, so the passcode is all that stands
+> between the internet and your computer. **Don't share it** — DeCloud is a
+> single-owner app. If only your own devices need access, prefer
+> tailnet-only Tailscale Serve; see [PERMANENT_TUNNEL.md](PERMANENT_TUNNEL.md).
 
 ## Configuration
 
@@ -64,7 +70,7 @@ All configuration is via environment variables in `.env` (see `.env.example`):
 | Variable | Default | Description |
 |---|---|---|
 | `DECLOUD_PORT` | `8899` | Port to run on |
-| `DECLOUD_PIN` | *(random)* | Passcode to unlock the app (8–10 digits; made for you on first start) |
+| `DECLOUD_PIN` | *(random)* | Passcode to unlock the app (8+ chars recommended). Unlocks a shell — never share it |
 | `DECLOUD_BOOKS_DIR` | `~/Books` | Where your books live |
 | `DECLOUD_FILES_DIR` | `~` (home) | Directory for the Files browser |
 | `DECLOUD_MUSIC_DIR` | `~/Music` | Music library path |
@@ -77,7 +83,7 @@ All configuration is via environment variables in `.env` (see `.env.example`):
 
 | Variable | Description |
 |---|---|
-| `DECLOUD_OSINT_DIR` | Path to osint-tools for Privacy Watcher |
+| `DECLOUD_OSINT_DIR` | Path to osint-tools for privacy scanner |
 | `DECLOUD_JOURNAL_DIR` | Obsidian vault path for journal features |
 | `DECLOUD_HERMES_HOME` | Hermes Agent home for the Agents panel |
 
@@ -89,7 +95,6 @@ All configuration is via environment variables in `.env` (see `.env.example`):
 ./decloud restart    # Restart app + tunnel
 ./decloud status     # Show what's running
 ./decloud qr         # Show current URL + QR code
-./decloud pin        # Show your passcode (pin reset = new one)
 ./decloud version    # Show version
 ```
 
@@ -202,14 +207,21 @@ never break your machine:
 
 ## Security
 
-- **Passcode authentication** — the app is locked behind `DECLOUD_PIN`
-  (8 digits generated for you; change it in Settings to any 8–10 digits). The
+- **Passcode authentication** — the app is locked behind `DECLOUD_PIN`.
+  The passcode grants full control of the machine (terminal, files,
+  updater), so keep it to yourself. Without a passcode the app refuses
+  every API call (open mode needs `DECLOUD_INSECURE_OPEN=1` and is
+  localhost-only, never behind Funnel)
+  (8 digits generated at install; passphrases up to 64 chars). The
   passcode is only used at login; after that the app uses an opaque
   session token (never the passcode) with a 30-day expiry.
 - **CSRF protection** — state-changing requests require a per-session
   CSRF token.
 - **Rate limiting + lockout** — 5 login attempts per minute per IP, with
-  exponential backoff after repeated failures.
+  exponential backoff after repeated failures, plus a global cap of 20
+  failed logins per minute across all clients.
+- **Origin / Host checks** — cross-site requests and DNS-rebinding hosts
+  are refused, including on the terminal WebSocket.
 - **Localhost by default** — the app binds to 127.0.0.1 unless you
   explicitly set `DECLOUD_HOST`; binding wider prints a loud warning.
 - **Tailscale Funnel only** — no third-party relay fallbacks. End-to-end
@@ -230,7 +242,7 @@ accepted limitations.
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests/        # security + smoke tests
+python -m pytest tests/        # 99 security + smoke tests
 ```
 
 CI runs the suite on Ubuntu, macOS, and Windows.

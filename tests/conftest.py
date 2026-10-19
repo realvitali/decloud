@@ -42,11 +42,11 @@ def client():
 def _reset_limiter():
     """flask-limiter keys by IP (127.0.0.1 for the test client) — reset
     the counter after every test so login rate limits don't leak."""
-    import shared
+    from shared import limiter
+    import routes.auth as auth_module
     yield
-    shared.limiter.reset()
-    shared._LOGIN_GLOBAL_FAILS.clear()
-    shared._LOGIN_ATTEMPTS.clear()
+    limiter.reset()
+    auth_module._GLOBAL_FAILURES.clear()  # global failed-login throttle (N4)
 
 
 @pytest.fixture
@@ -55,10 +55,7 @@ def login(client):
     (contains session + csrf tokens)."""
     resp = client.post('/api/auth/login', json={'pin': TEST_PASSCODE})
     assert resp.status_code == 200, resp.get_data(as_text=True)
-    data = resp.get_json()
-    # The token is only in the HttpOnly cookie now; expose it for tests.
-    data['session'] = client.get_cookie('decloud_session').value
-    return data
+    return resp.get_json()
 
 
 @pytest.fixture

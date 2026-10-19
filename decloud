@@ -187,6 +187,7 @@ show_qr() {
     echo ""
     echo "🔒 The URL is public (https://….ts.net) — anyone who opens it"
     echo "   still needs the passcode to unlock anything."
+    echo "⚠  The passcode unlocks a shell on this machine. Don't share it."
     echo "   For private (tailnet-only) access, see: PERMANENT_TUNNEL.md"
     echo ""
 }

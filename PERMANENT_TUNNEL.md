@@ -1,8 +1,10 @@
 # Permanent Tunnel Setup
 
-DeCloud uses **Tailscale Funnel** for secure, permanent remote access. This gives you a URL like `https://your-machine.tail1234.ts.net` that never changes.
+DeCloud uses **Tailscale Funnel** for permanent remote access. This gives you a URL like `https://your-machine.tail1234.ts.net` that never changes.
 
-## Quick Setup (Recommended)
+> ⚠️ **Funnel makes DeCloud public.** Anyone on the internet can open the URL, and the only thing between them and your machine is the passcode. **The passcode unlocks a shell on this machine** (terminal, files, updates). Never share it. If only your own devices need access, use [Private-Only Mode](#private-only-mode-no-public-url) (Tailscale Serve) instead.
+
+## Quick Setup
 
 1. **Install Tailscale** (if not already):
    ```bash
@@ -14,7 +16,8 @@ DeCloud uses **Tailscale Funnel** for secure, permanent remote access. This give
    sudo tailscale up
    ```
 
-3. **Start DeCloud** — it auto-detects Tailscale and uses Funnel:
+3. **Start DeCloud** — it auto-detects Tailscale and starts a **public** Funnel
+   (it refuses to if no passcode is set):
    ```bash
    ./decloud start
    ```
@@ -25,17 +28,19 @@ Your URL: `https://your-machine-name.tail1234.ts.net`
 
 - **Permanent URL** — never changes, bookmark it
 - **End-to-end encrypted** — WireGuard + TLS 1.3
-- **No account needed** — uses your existing Tailscale
-- **Free** — 100 devices on free tier
+- **Free Tailscale account required** — the free tier is enough
 - **Works on any network** — no port forwarding
 
-## Sharing with Friends/Family
+## Don't share your passcode
 
-They **don't need Tailscale installed**. Just send them:
-1. The URL: `https://your-machine.tail1234.ts.net`
-2. Your DeCloud passcode
+The passcode is not a "view-only" password: it unlocks the interactive
+terminal, the file manager (including delete/shred) and the self-updater —
+in effect, a shell on this machine as your user. Treat it like your login
+password:
 
-They can add it to their phone home screen like any app.
+- Don't send it to friends or family, or share it alongside the URL or QR code.
+- If you think it leaked, change it in Settings (this signs out every device).
+- DeCloud is a single-owner app; there are no per-person accounts.
 
 ## Alternative: Cloudflare Named Tunnel
 
@@ -59,20 +64,28 @@ If you prefer your own domain (`decloud.yourdomain.com`):
        service: http://localhost:8899
      - service: http_status:404
    ```
-6. Start: `cloudflared tunnel run`
+6. Allow the hostname (DeCloud refuses unknown Host headers), in `.env`:
+   ```bash
+   DECLOUD_ALLOWED_HOSTS=decloud.yourdomain.com
+   ```
+7. Start: `cloudflared tunnel run`
+
+The same warning applies: this is public, and the passcode is a shell.
 
 ## Private-Only Mode (No Public URL)
 
-If you don't want any public access:
+Recommended if only your own devices need DeCloud. Tailscale Serve gives
+HTTPS on your tailnet only — nothing is reachable from the internet:
 
-1. Turn the public funnel off: `tailscale funnel --https=443 off`
-2. Serve to your tailnet only: `tailscale serve --bg http://localhost:8899`
-3. Open the same `https://your-machine.tail1234.ts.net` URL from any device
-   on your tailnet (DeCloud listens on localhost only, so `http://your-machine:8899`
-   won't work)
-4. Friends/family need the Tailscale app + your approval to join the tailnet
-
-Note: `./decloud start`/`restart` turns the public funnel back on.
+1. Don't run `./decloud start` (it starts the public Funnel); the service
+   installed by `install.sh` runs the app. If a Funnel is on, turn it off:
+   `sudo tailscale funnel --https=443 off`
+2. Serve it to your tailnet:
+   ```bash
+   sudo tailscale serve --bg http://localhost:8899
+   ```
+3. Open `https://your-machine.tail1234.ts.net` from any device signed in to
+   your tailnet.
 
 ## Troubleshooting
 
@@ -86,7 +99,7 @@ Note: `./decloud start`/`restart` turns the public funnel back on.
 - Check: `curl -I https://your-machine.tail1234.ts.net`
 - Regenerate QR: `./decloud qr`
 
-**"Friends can't access"**
-- Make sure you gave them the full URL (including `https://`)
+**"Can't open it from my phone"**
+- Make sure you use the full URL (including `https://`)
 - Check your passcode is correct
 - Verify funnel is on: `tailscale funnel status`

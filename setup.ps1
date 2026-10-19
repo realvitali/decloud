@@ -57,11 +57,20 @@ if (-not (Test-Path ".env")) {
     Write-Host "-> Creating .env from template..."
     Copy-Item .env.example .env
     $Secret = & $VenvPython -c "import secrets; print(secrets.token_hex(32))"
-    $Passcode = & $VenvPython -c "import secrets; print(''.join(str(secrets.randbelow(10)) for _ in range(8)))"
-    (Get-Content .env -Raw) -replace 'change-me-to-a-random-string', $Secret | Set-Content .env -NoNewline
-    # .env.example only has a commented-out DECLOUD_PIN, so append the real one
-    Add-Content .env "`nDECLOUD_PIN=$Passcode"
+    (Get-Content .env -Raw) `
+        -replace 'change-me-to-a-random-string', $Secret | Set-Content .env -NoNewline
     Write-Host "OK .env created" -ForegroundColor Green
+}
+
+# Generate a passcode whenever .env has none — the template's line is the
+# comment "# DECLOUD_PIN=", and a hand-copied .env.example has no PIN either.
+# Appending is enough: the .env loader is last-wins.
+if (-not (Select-String -Path .env -Pattern '^\s*DECLOUD_PIN=["'']?[^\s"'']' -Quiet)) {
+    $Passcode = & $VenvPython -c "import secrets; print(''.join(str(secrets.randbelow(10)) for _ in range(8)))"
+    $Raw = Get-Content .env -Raw
+    if ($Raw -and -not $Raw.EndsWith("`n")) { Add-Content .env "" }
+    Add-Content .env "DECLOUD_PIN=$Passcode"
+    Write-Host "OK Access passcode generated" -ForegroundColor Green
 }
 
 # ─── 4. Lock .env down to the current user only ────────────────
@@ -85,15 +94,17 @@ Start-Sleep -Seconds 3
 
 Write-Host ""
 Write-Host "DeCloud is running at http://localhost:8899" -ForegroundColor Green
-# Show the passcode from .env (re-runs print the real value) with the
-# write-it-down / `.\decloud.ps1 pin` instructions.
-& $VenvPython scripts\decloud_pin.py show
+# Read the passcode from .env so re-runs still print the real value.
+$Passcode = ((Get-Content .env | Where-Object { $_ -match '^DECLOUD_PIN=' } | Select-Object -Last 1) -replace '^DECLOUD_PIN=', '')
+Write-Host "Access passcode: $Passcode" -ForegroundColor Yellow
+Write-Host "  It unlocks a shell on this machine - don't share it." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Remote access (optional):" -ForegroundColor Cyan
 Write-Host "  1. Install Tailscale: https://tailscale.com/download/windows"
 Write-Host "  2. In an elevated PowerShell: tailscale up"
-Write-Host "  3. Enable Funnel: tailscale funnel --bg 8899"
-Write-Host "     (Funnel gives a public https://...ts.net URL; the passcode"
-Write-Host "      still protects everything behind it.)"
+Write-Host "  3. Your devices only (recommended): tailscale serve --bg 8899"
+Write-Host "     Public URL instead: tailscale funnel --bg 8899"
+Write-Host "     (Funnel is public: anyone can reach the login, and the"
+Write-Host "      passcode is all that protects this machine.)"
 Write-Host ""
-Write-Host "Management: .\decloud.ps1 start|stop|status|restart|pin" -ForegroundColor Cyan
+Write-Host "Management: .\decloud.ps1 start|stop|status|restart" -ForegroundColor Cyan
