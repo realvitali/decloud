@@ -238,6 +238,9 @@ never break your machine:
 See [SECURITY_AUDIT.md](SECURITY_AUDIT.md) for the full audit and its
 accepted limitations.
 
+Found a vulnerability? Report it privately — see [SECURITY.md](SECURITY.md).
+Please don't open a public issue.
+
 ## Testing
 
 ```bash
