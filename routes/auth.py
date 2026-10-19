@@ -10,6 +10,9 @@ from shared import (
 import hmac
 import secrets
 import time
+import shared
+
+_NO_PIN_ERROR = 'No passcode is set. Add DECLOUD_PIN=<passcode> to .env and restart DeCloud.'
 
 bp = Blueprint('auth', __name__)
 
@@ -43,7 +46,9 @@ def _clear_failures(addr: str):
 def login():
     """Authenticate with the passcode. Sets a session-token cookie on success."""
     if not DECLOUD_PIN:
-        return jsonify({'ok': True, 'message': 'Open mode — no passcode required'})
+        if shared.INSECURE_OPEN:
+            return jsonify({'ok': True, 'message': 'Open mode — no passcode required'})
+        return jsonify({'error': _NO_PIN_ERROR, 'code': 'NO_PIN'}), 503
 
     addr = _client_addr()
     data = request.get_json(silent=True) or {}
@@ -95,7 +100,10 @@ def login():
 def check_auth():
     """Check if the current session is authenticated."""
     if not DECLOUD_PIN:
-        return jsonify({'authenticated': True, 'open_mode': True})
+        if shared.INSECURE_OPEN:
+            return jsonify({'authenticated': True, 'open_mode': True})
+        return jsonify({'authenticated': False, 'open_mode': False,
+                        'error': _NO_PIN_ERROR, 'code': 'NO_PIN'}), 401
 
     token = _extract_session_token()
     valid = bool(token) and token in SESSIONS and SESSIONS.get(token, 0) > time.time()

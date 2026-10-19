@@ -70,6 +70,7 @@ def _clear_session():
 def api(path, method='GET', data=None):
     """Call the local DeCloud API. Returns (dict, ok)."""
     req = urllib.request.Request(BASE + path, method=method)
+    req.add_header('Origin', BASE)  # the app refuses state-changing calls without one
     sess = _load_session()
     if sess:
         req.add_header('Authorization', 'Bearer ' + sess)

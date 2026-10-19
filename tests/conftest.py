@@ -32,6 +32,9 @@ from app import app  # noqa: E402
 def client():
     app.config['TESTING'] = True
     with app.test_client() as c:
+        # Behave like a same-origin browser: the app refuses state-changing
+        # API calls whose Origin is missing or doesn't match Host (N1).
+        c.environ_base['HTTP_ORIGIN'] = 'http://localhost'
         yield c
 
 

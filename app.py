@@ -43,6 +43,51 @@ except Exception:
     raise
 
 
+_LOOPBACK_HOSTS = ('127.0.0.1', 'localhost', '::1')
+
+
+def _funnel_active() -> bool:
+    """True when `tailscale funnel status` reports a public Funnel."""
+    import shutil, subprocess
+    tailscale = shutil.which('tailscale')
+    if not tailscale:
+        return False
+    try:
+        out = subprocess.run([tailscale, 'funnel', 'status'], capture_output=True,
+                             text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return 'Funnel on' in out
+
+
+def open_mode_refusal(bind_host: str):
+    """Open mode (no passcode) is loopback-only and never behind Funnel.
+    Returns the reason to refuse, or None when it's fine to run."""
+    import shared
+    if shared.DECLOUD_PIN or not shared.INSECURE_OPEN:
+        return None
+    if bind_host not in _LOOPBACK_HOSTS:
+        return (f'open mode (DECLOUD_INSECURE_OPEN=1) refuses to bind {bind_host}. '
+                'Set DECLOUD_PIN, or bind 127.0.0.1.')
+    if _funnel_active():
+        return ('open mode (DECLOUD_INSECURE_OPEN=1) refuses to run while Tailscale '
+                'Funnel is on. Run `tailscale funnel --https=443 off`, or set DECLOUD_PIN.')
+    return None
+
+
+def _watch_funnel_in_open_mode():
+    """Exit if a Funnel is switched on while open mode is running."""
+    import threading, time
+    def _loop():
+        while True:
+            time.sleep(30)
+            reason = open_mode_refusal('127.0.0.1')
+            if reason:
+                print(f'[DeCloud] REFUSING TO KEEP RUNNING: {reason}', flush=True)
+                os._exit(1)
+    threading.Thread(target=_loop, daemon=True).start()
+
+
 if __name__ == '__main__':
     PORT = int(os.environ.get('DECLOUD_PORT', '8899'))
 
@@ -54,8 +99,15 @@ if __name__ == '__main__':
     #   - No need for local SSL certs (tunnel handles HTTPS)
     bind_host = os.environ.get('DECLOUD_HOST', '127.0.0.1')
 
+    _refusal = open_mode_refusal(bind_host)
+    if _refusal:
+        raise SystemExit(f'[DeCloud] REFUSING TO START: {_refusal}')
+    import shared as _shared
+    if _shared.INSECURE_OPEN and not _shared.DECLOUD_PIN:
+        _watch_funnel_in_open_mode()
+
     print(f'[DeCloud] Running on http://localhost:{PORT}')
-    if bind_host not in ('127.0.0.1', 'localhost', '::1'):
+    if bind_host not in _LOOPBACK_HOSTS:
         print('*' * 70)
         print(f'[DeCloud] WARNING: bound to {bind_host} — NOT localhost-only!')
         print('[DeCloud] Anyone on the same network can reach this app. Only')

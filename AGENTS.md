@@ -73,7 +73,9 @@ curl -s http://localhost:8899/ -o /dev/null -w "%{http_code}\n"   # expect 200
 
 # 2. Exercise the API you changed (needs a session)
 PIN=$(grep '^DECLOUD_PIN=' .env | cut -d= -f2- | tr -d '[:space:]')
+# POST/PUT/PATCH/DELETE on /api/* need an Origin that matches the Host
 SESS=$(curl -s -X POST localhost:8899/api/auth/login -H 'Content-Type: application/json' \
+  -H 'Origin: http://localhost:8899' \
   -d "{\"pin\":\"$PIN\"}" | python -c "import sys,json;print(json.load(sys.stdin)['session'])")
 curl -s localhost:8899/api/<your-endpoint> -H "Authorization: Bearer $SESS"
 

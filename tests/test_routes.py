@@ -31,6 +31,7 @@ def client():
     """Flask test client, authenticated with the test passcode."""
     app.config['TESTING'] = True
     with app.test_client() as client:
+        client.environ_base['HTTP_ORIGIN'] = 'http://localhost'  # same-origin browser
         client.post('/api/auth/login', json={'pin': os.environ.get('DECLOUD_PIN', '')})
         yield client
 
@@ -110,6 +111,7 @@ class TestAuth:
         import routes.auth as auth_module
         monkeypatch.setattr(shared, 'DECLOUD_PIN', '')
         monkeypatch.setattr(auth_module, 'DECLOUD_PIN', '')
+        monkeypatch.setattr(shared, 'INSECURE_OPEN', True)
         resp = client.get('/api/auth/check')
         assert resp.status_code == 200
         data = resp.get_json()
@@ -122,6 +124,7 @@ class TestAuth:
         import routes.auth as auth_module
         monkeypatch.setattr(shared, 'DECLOUD_PIN', '')
         monkeypatch.setattr(auth_module, 'DECLOUD_PIN', '')
+        monkeypatch.setattr(shared, 'INSECURE_OPEN', True)
         resp = client.post('/api/auth/login', json={'pin': ''})
         assert resp.status_code == 200
 

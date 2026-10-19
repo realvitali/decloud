@@ -175,6 +175,7 @@ class TestOpenMode:
         import routes.auth as auth_module
         monkeypatch.setattr(shared, 'DECLOUD_PIN', '')
         monkeypatch.setattr(auth_module, 'DECLOUD_PIN', '')
+        monkeypatch.setattr(shared, 'INSECURE_OPEN', True)
         r = client.get('/api/system')
         assert r.status_code == 200
         r2 = client.get('/api/auth/check')
