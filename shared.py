@@ -906,11 +906,20 @@ def save_settings(data):
         return False
 
 
+def env_value_is_single_line(value) -> bool:
+    """False if value contains CR, LF, or any other break that
+    str.splitlines() — and so the .env loader — treats as a new line."""
+    value = str(value)
+    return ''.join(value.splitlines()) == value
+
+
 def set_env_value(key, value):
     """Write key=value to .env (preserving other lines) and update the
     running process environment. Replaces the first occurrence and drops
     any duplicate lines so a key never appears twice. Used for secrets like
     the cloud LLM API key and the access passcode."""
+    if not env_value_is_single_line(value):
+        return False  # a newline would inject extra .env lines (e.g. DECLOUD_COMFY_CMD)
     env_path = BASE_DIR / '.env'
     try:
         lines = env_path.read_text(errors='replace').splitlines() if env_path.exists() else []
