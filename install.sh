@@ -143,11 +143,17 @@ if [ ! -f .env ]; then
     else
         sed -i "s/change-me-to-a-random-string/$SECRET/" .env
     fi
+    echo "✓ .env created (edit it to customize paths)"
+fi
 
-    # Generate a random 8-digit passcode for app access (longer = harder
-    # to brute-force; the app warns if you shorten it below 8 characters)
+# Generate a passcode whenever .env has none — not only for a fresh .env:
+# a hand-copied .env.example only has a commented-out DECLOUD_PIN line, and
+# `decloud start` below must never put a passcode-less app behind Funnel.
+if ! grep -qE "^[[:space:]]*DECLOUD_PIN=[\"']?[^[:space:]\"']" .env 2>/dev/null; then
+    # Random 8-digit passcode (longer = harder to brute-force; the app
+    # warns if you shorten it below 8 characters)
     PIN=$($PYBIN -c "import secrets; print(''.join(str(secrets.randbelow(10)) for _ in range(8)))")
-    # Idempotent: replace any existing DECLOUD_PIN line, else append.
+    # Idempotent: replace an existing (empty) DECLOUD_PIN line, else append.
     if grep -q '^DECLOUD_PIN=' .env 2>/dev/null; then
         if [ "$OS_TYPE" = "macos" ]; then
             sed -i '' "s/^DECLOUD_PIN=.*/DECLOUD_PIN=$PIN/" .env
@@ -155,9 +161,10 @@ if [ ! -f .env ]; then
             sed -i "s/^DECLOUD_PIN=.*/DECLOUD_PIN=$PIN/" .env
         fi
     else
+        if [ -s .env ] && [ -n "$(tail -c1 .env)" ]; then echo >> .env; fi
         echo "DECLOUD_PIN=$PIN" >> .env
     fi
-    echo "✓ .env created (edit it to customize paths)"
+    echo "✓ Access passcode generated"
 fi
 
 # Lock down .env — contains PIN, SECRET_KEY, and any user-supplied tokens.
