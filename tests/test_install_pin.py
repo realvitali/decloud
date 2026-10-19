@@ -128,7 +128,10 @@ def _powershell():
 
 def test_setup_ps1_broken_replace_is_gone():
     text = (ROOT / 'setup.ps1').read_text(encoding='utf-8')
-    assert "-replace '^DECLOUD_PIN=" not in text
+    # The broken construct was a multiline -replace of 'DECLOUD_PIN=.*' over a
+    # -Raw string (commented template line never matched). The single-line
+    # prefix-strip '-replace '^DECLOUD_PIN=', '' is legitimate and stays.
+    assert "-replace '^DECLOUD_PIN=.*$'" not in text
 
 
 @pytest.mark.skipif(not _powershell(), reason='PowerShell not installed')
