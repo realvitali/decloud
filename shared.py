@@ -1,11 +1,10 @@
 """DeCloud — shared state and helpers."""
-from flask import Flask, send_from_directory, jsonify, request, send_file, Response, stream_with_context
+from flask import Flask, jsonify, request
 from flask_sock import Sock
-import os, sys, json, subprocess, platform, psutil, uuid, re, time, threading, secrets, hmac, shutil
+import os, sys, json, platform, re, time, threading, secrets, hmac, shutil
 from pathlib import Path
 from functools import lru_cache
 import requests as _requests
-import websocket as _ws_lib
 import hashlib
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
@@ -19,10 +18,22 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
 # is always loopback. ProxyFix restores the real client IP (so rate limits and
 # login backoff are per-client, not one shared bucket) and sets request.is_secure
 # from X-Forwarded-Proto (so session cookies get the Secure flag). We trust only
-# one hop (x_for=1/x_proto=1) — the immediate proxy — which is safe because the
-# app binds 127.0.0.1 by default and is never directly internet-facing.
+# one hop (x_for=1/x_proto=1) — the immediate proxy — and only when the direct
+# peer is loopback (the tunnel/serve proxy). A LAN client (DECLOUD_HOST=0.0.0.0)
+# could otherwise forge X-Forwarded-For to dodge the per-IP login backoff.
 from werkzeug.middleware.proxy_fix import ProxyFix
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+_direct_wsgi = app.wsgi_app
+_proxied_wsgi = ProxyFix(_direct_wsgi, x_for=1, x_proto=1)
+
+
+def _wsgi_entry(environ, start_response):
+    peer = environ.get('REMOTE_ADDR', '')
+    if peer == '::1' or peer.startswith('127.'):
+        return _proxied_wsgi(environ, start_response)
+    return _direct_wsgi(environ, start_response)
+
+
+app.wsgi_app = _wsgi_entry
 
 # ─── Rate Limiting ──────────────────────────────────────────────
 from flask_limiter import Limiter
@@ -67,9 +78,7 @@ _load_env_file()
 
 # ─── Authentication ─────────────────────────────────────────────
 # DeCloud requires a passcode (DECLOUD_PIN) to access the app. If not
-# set, the app fails closed (every /api call is refused) unless open mode
-# is explicitly requested with DECLOUD_INSECURE_OPEN=1 — and open mode
-# refuses non-loopback binds and Tailscale Funnel (see app.py).
+# set, one is generated on first start (see below) — `./decloud pin` shows it.
 #
 # Security model:
 #   - The passcode is the *credential* — only used during /api/auth/login.
@@ -82,6 +91,22 @@ _load_env_file()
 #     after 30 days. A restart invalidates all sessions, forcing
 #     re-login — acceptable for a personal self-hosted app.
 DECLOUD_PIN = os.environ.get('DECLOUD_PIN', '')
+
+# Open mode (no passcode, no auth) only when explicitly opted in.
+INSECURE_OPEN = os.environ.get('DECLOUD_INSECURE_OPEN', '') == '1'
+
+def env_value_is_single_line(value) -> bool:
+    """True when a value can be written to .env without injecting lines."""
+    return isinstance(value, str) and '\n' not in value and '\r' not in value
+if not DECLOUD_PIN and not INSECURE_OPEN:
+    # First run without the installer: never run open (any website could
+    # reach the terminal). Make a passcode, save it, and show it once.
+    sys.path.insert(0, str(Path(__file__).parent / 'scripts'))
+    import decloud_pin
+    DECLOUD_PIN = decloud_pin.new_pin()
+    decloud_pin.write_pin(DECLOUD_PIN)
+    os.environ['DECLOUD_PIN'] = DECLOUD_PIN
+    decloud_pin.banner(DECLOUD_PIN, 'DeCloud made you a passcode:')
 if DECLOUD_PIN:
     if len(DECLOUD_PIN) > 64:
         raise SystemExit('[decloud] DECLOUD_PIN is longer than 64 characters.')
@@ -89,21 +114,6 @@ if DECLOUD_PIN:
         print('[decloud] WARNING: DECLOUD_PIN is short. Use at least 8 '
               'characters (a passphrase, not just digits) — the install '
               'default is now 8 digits.', flush=True)
-
-# Open mode (no passcode, no auth) only when explicitly opted in.
-INSECURE_OPEN = os.environ.get('DECLOUD_INSECURE_OPEN', '') == '1'
-if not DECLOUD_PIN:
-    print('*' * 70, flush=True)
-    if INSECURE_OPEN:
-        print('[decloud] WARNING: OPEN MODE (DECLOUD_INSECURE_OPEN=1) — NO passcode.\n'
-              '[decloud] Anyone who can reach this app gets a shell on this machine.\n'
-              '[decloud] Localhost only; Tailscale Funnel and LAN binds are refused.',
-              flush=True)
-    else:
-        print('[decloud] WARNING: DECLOUD_PIN is not set — every API call is refused.\n'
-              '[decloud] Add DECLOUD_PIN=<passcode> to .env and restart DeCloud.',
-              flush=True)
-    print('*' * 70, flush=True)
 
 # Refuse to start with the placeholder SECRET_KEY. Generate one if missing.
 _env_secret = os.environ.get('SECRET_KEY', '')
@@ -121,7 +131,22 @@ app.secret_key = SECRET_KEY
 SESSIONS_FILE = Path(__file__).parent / 'sessions.json'
 SESSION_TTL_SECONDS = 30 * 24 * 60 * 60  # 30 days
 MAX_SESSIONS = 50
-_session_lock = threading.Lock()
+_session_lock = threading.RLock()  # re-entrant: save_sessions -> _purge_expired_sessions
+
+
+def _write_private(path, text):
+    """Atomically replace `path` with `text`, created 0600 (never briefly
+    world-readable). Raises OSError on failure."""
+    path = Path(path)
+    tmp = path.with_name(path.name + f'.{os.getpid()}.{threading.get_ident()}.tmp')
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, 'w') as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def _load_sessions():
@@ -149,13 +174,7 @@ def save_sessions():
     with _session_lock:
         try:
             _purge_expired_sessions()
-            tmp = SESSIONS_FILE.with_suffix('.tmp')
-            tmp.write_text(json.dumps(SESSIONS))
-            tmp.replace(SESSIONS_FILE)
-            try:
-                os.chmod(SESSIONS_FILE, 0o600)
-            except OSError:
-                pass
+            _write_private(SESSIONS_FILE, json.dumps(SESSIONS))
         except Exception:
             pass
 
@@ -163,99 +182,39 @@ def save_sessions():
 _LOGIN_ATTEMPTS: dict[str, list[float]] = {}
 _LOGIN_BACKOFF_WINDOW = 60.0  # seconds of history kept per address
 _LOGIN_BACKOFF_MAX = 10       # failures before a hard cooldown applies
+# Global (IP-independent) cap, so rotating addresses can't brute-force the
+# passcode: past this many failures in the window, every login gets a 429
+# until the window drains. An app restart (e.g. `./decloud pin reset`) clears it.
+_LOGIN_GLOBAL_FAILS: list[float] = []
+_LOGIN_GLOBAL_WINDOW = 15 * 60.0
+_LOGIN_GLOBAL_MAX = 30
 
 def _purge_expired_sessions():
     """Drop expired tokens. Called on every authenticated request — cheap
     because the dict stays small (a handful of devices per install)."""
     now = time.time()
-    for t in [t for t, exp in SESSIONS.items() if exp <= now]:
-        SESSIONS.pop(t, None)
+    with _session_lock:
+        for t in [t for t, exp in SESSIONS.items() if exp <= now]:
+            SESSIONS.pop(t, None)
 
 def _csrf_for_token(token: str) -> str:
     """CSRF token derived from a session token and the app secret."""
     return hmac.new(SECRET_KEY.encode(), token.encode(), hashlib.sha256).hexdigest()
 
+def _bearer_token() -> str:
+    auth_header = request.headers.get('Authorization', '')
+    return auth_header[7:].strip() if auth_header.startswith('Bearer ') else ''
+
 def _extract_session_token():
-    """Return the session token from cookie, Authorization header, or the
-    ?token= query parameter (the cross-origin tunnel fallback for
-    WebSocket handshakes, where browsers cannot set headers)."""
-    token = request.cookies.get('decloud_session')
-    if not token:
-        auth_header = request.headers.get('Authorization', '')
-        if auth_header.startswith('Bearer '):
-            token = auth_header[7:].strip()
-    if not token:
-        token = request.args.get('token', '') or ''
-    return token or None
-
-# ─── Host / Origin checks (DNS rebinding + cross-site WebSocket) ──
-# Browsers don't apply CORS to WebSockets, and DNS rebinding makes a
-# hostile site same-origin with 127.0.0.1. So in EVERY mode: the Host
-# header must be allowlisted, and WebSocket upgrades + state-changing
-# API calls must carry an Origin matching that Host.
-import ipaddress
-from urllib.parse import urlsplit
-
-# Tunnel domains whose DNS a third party cannot point at 127.0.0.1.
-_ALLOWED_HOST_SUFFIXES = ('.ts.net', '.trycloudflare.com')
-# Extra hostnames (comma-separated), e.g. a MagicDNS short name or a
-# custom cloudflared domain: DECLOUD_ALLOWED_HOSTS=mybox,cloud.example.com
-ALLOWED_HOSTS = {h.strip().lower().rstrip('.') for h in
-                 os.environ.get('DECLOUD_ALLOWED_HOSTS', '').split(',') if h.strip()}
-
-
-def host_allowed(host: str) -> bool:
-    """True for localhost, IP literals (rebinding needs a hostname),
-    tunnel domains, and DECLOUD_ALLOWED_HOSTS entries."""
-    try:
-        name = (urlsplit('//' + (host or '')).hostname or '').rstrip('.')
-    except ValueError:
-        return False
-    if not name:
-        return False
-    if name == 'localhost' or name in ALLOWED_HOSTS:
-        return True
-    try:
-        ipaddress.ip_address(name)
-        return True
-    except ValueError:
-        pass
-    return name.endswith(_ALLOWED_HOST_SUFFIXES)
-
-
-def origin_matches_host(origin: str, host: str) -> bool:
-    """True when Origin is present and names the same host:port as Host."""
-    if not origin or not host:
-        return False
-    try:
-        o = urlsplit(origin)
-        h = urlsplit('//' + host)
-        if o.scheme not in ('http', 'https') or not o.hostname or not h.hostname:
-            return False
-        default = 443 if o.scheme == 'https' else 80
-        return (o.hostname == h.hostname
-                and (o.port or default) == (h.port or default))
-    except ValueError:
-        return False
-
-
-@app.before_request
-def _check_host_and_origin():
-    """Runs before _require_auth, in every mode (including open mode)."""
-    host = request.headers.get('Host', '')
-    if not host_allowed(host):
-        return jsonify({'error': 'Host not allowed', 'code': 'BAD_HOST'}), 403
-    is_ws = request.headers.get('Upgrade', '').lower() == 'websocket'
-    if is_ws or (request.method in ('POST', 'PUT', 'PATCH', 'DELETE')
-                 and request.path.startswith('/api/')):
-        if not origin_matches_host(request.headers.get('Origin', ''), host):
-            return jsonify({'error': 'Cross-site request refused', 'code': 'BAD_ORIGIN'}), 403
-
+    """Return the session token from the HttpOnly cookie (browsers) or the
+    Authorization header (the terminal TUI). Never from the query string —
+    URLs end up in logs and history."""
+    return request.cookies.get('decloud_session') or _bearer_token() or None
 
 def _is_authenticated():
     """Check if the current request carries a valid session token."""
     if not DECLOUD_PIN:
-        return INSECURE_OPEN  # explicit open mode; otherwise fail closed
+        return INSECURE_OPEN  # open mode only when explicitly opted in
     token = _extract_session_token()
     if not token:
         return False
@@ -263,23 +222,69 @@ def _is_authenticated():
     return token in SESSIONS
 
 def _authed_by_bearer() -> bool:
-    """True when auth came from an Authorization header (CSRF-safe)."""
-    return bool(request.headers.get('Authorization', '').startswith('Bearer '))
+    """True only when a valid Bearer token is what authenticated the request
+    and no session cookie rode along (a cookie-carrying request must pass
+    CSRF no matter what headers it adds)."""
+    if request.cookies.get('decloud_session'):
+        return False
+    token = _bearer_token()
+    return bool(token) and token in SESSIONS
+
+# ─── Host allowlist (DNS rebinding defense) ─────────────────────
+# A rebinding page reaches 127.0.0.1 under ITS OWN hostname, so reject any
+# Host that isn't loopback, an IP literal (LAN), this machine's name, a
+# tunnel domain, or listed in DECLOUD_ALLOWED_HOSTS (comma-separated).
+_TUNNEL_SUFFIXES = ('.ts.net', '.trycloudflare.com')
+
+@lru_cache(maxsize=1)
+def _machine_hostnames() -> frozenset:
+    import socket
+    names = {'localhost', socket.gethostname(), socket.getfqdn()}
+    names |= {n.split('.')[0] + '.local' for n in list(names) if n}
+    names |= {h.strip() for h in os.environ.get('DECLOUD_ALLOWED_HOSTS', '').split(',')}
+    return frozenset(n.lower().rstrip('.') for n in names if n)
+
+def host_allowed(host: str) -> bool:
+    import ipaddress
+    from urllib.parse import urlsplit
+    try:
+        name = (urlsplit('//' + (host or '')).hostname or '').rstrip('.')
+    except ValueError:
+        return False
+    if not name:
+        return False
+    try:
+        ipaddress.ip_address(name)
+        return True  # IP literals can't be rebound
+    except ValueError:
+        pass
+    return name.endswith(_TUNNEL_SUFFIXES) or name in _machine_hostnames()
+
+def ws_origin_ok(environ: dict) -> bool:
+    """A browser WebSocket always sends Origin and can't set it; require it
+    to match the Host it connected to (or the tunnel's X-Forwarded-Host),
+    so another site — even another localhost port — can't ride the cookie."""
+    from urllib.parse import urlsplit
+    origin = environ.get('HTTP_ORIGIN', '')
+    try:
+        netloc = urlsplit(origin).netloc.lower()
+    except ValueError:
+        return False
+    hosts = {environ.get('HTTP_HOST', '').lower(),
+             environ.get('HTTP_X_FORWARDED_HOST', '').lower()}
+    return bool(netloc) and netloc in hosts
 
 def ws_is_authenticated(environ: dict) -> bool:
-    """Check a WebSocket handshake for a valid session.
+    """Check a WebSocket handshake for a same-origin, valid session.
 
-    Flask's before_request hooks do NOT run for WebSocket upgrades, so
-    every WebSocket handler must call this itself. Accepts the session
-    token via cookie, Authorization header, or ?token= query parameter
-    (the query parameter is the cross-origin tunnel fallback).
-    The Host/Origin check is repeated here as defense in depth.
+    Every WebSocket handler calls this itself (defense in depth on top of
+    before_request). The session comes from the cookie (or a Bearer header
+    for non-browser clients); the query string is never accepted.
     """
-    host = environ.get('HTTP_HOST', '')
-    if not host_allowed(host) or not origin_matches_host(environ.get('HTTP_ORIGIN', ''), host):
+    if not ws_origin_ok(environ):
         return False
     if not DECLOUD_PIN:
-        return INSECURE_OPEN  # explicit open mode; otherwise fail closed
+        return INSECURE_OPEN  # open mode only when explicitly opted in
     token = ''
     auth = environ.get('HTTP_AUTHORIZATION', '')
     if auth.startswith('Bearer '):
@@ -292,10 +297,6 @@ def ws_is_authenticated(environ: dict) -> bool:
                 token = val
                 break
     if not token:
-        from urllib.parse import parse_qs
-        qs = parse_qs(environ.get('QUERY_STRING', ''))
-        token = (qs.get('token') or [''])[0]
-    if not token:
         return False
     _purge_expired_sessions()
     return token in SESSIONS
@@ -304,8 +305,11 @@ def ws_is_authenticated(environ: dict) -> bool:
 def _require_auth():
     """Gate all API endpoints behind session-token authentication."""
     from flask import request as req
-    if not DECLOUD_PIN and INSECURE_OPEN:
-        return  # Explicit open mode, no auth needed
+    if not host_allowed(req.host):
+        return jsonify({'error': 'Unknown host — add it to DECLOUD_ALLOWED_HOSTS in .env',
+                        'code': 'BAD_HOST'}), 421
+    if not DECLOUD_PIN:
+        return  # Open mode, no auth needed
     # Allow static files and the login page
     if req.path.startswith('/static/') or req.path == '/manifest.json' or req.path == '/sw.js':
         return
@@ -320,9 +324,9 @@ def _require_auth():
             return jsonify({'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}), 401
         # For non-API requests, serve the page (frontend will redirect to login)
 
-    # CSRF defense for state-changing requests authenticated only by
-    # cookie. Bearer-header auth is CSRF-safe (cross-origin callers
-    # cannot set custom headers without a CORS preflight).
+    # CSRF defense for state-changing requests authenticated by cookie.
+    # Only a valid Bearer token with no cookie skips it (cross-origin
+    # callers cannot set custom headers without a CORS preflight).
     if (req.method in ('POST', 'PUT', 'PATCH', 'DELETE')
             and req.path.startswith('/api/')
             and not _authed_by_bearer()):
@@ -379,7 +383,8 @@ BASE_DIR = Path(__file__).parent
 import logging as _logging
 
 _req_logger = _logging.getLogger('decloud.requests')
-_req_handler = _logging.FileHandler(BASE_DIR / 'app.log')
+from logging.handlers import RotatingFileHandler as _RotatingFileHandler
+_req_handler = _RotatingFileHandler(BASE_DIR / 'app.log', maxBytes=5 * 1024 * 1024, backupCount=2)
 _req_handler.setFormatter(_logging.Formatter('%(asctime)s %(levelname)s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
 _req_logger.addHandler(_req_handler)
 _req_logger.setLevel(_logging.INFO)
@@ -395,17 +400,20 @@ def _harden_response(resp):
         'Permissions-Policy',
         'camera=(), geolocation=(), microphone=(self)',
     )
-    # CSP: script-src needs 'unsafe-inline' because the SPA uses inline
-    # onclick handlers; everything else is locked down. jsdelivr hosts
-    # the xterm terminal assets.
+    # CSP: every third-party lib is vendored under /static/vendor, so only
+    # 'self' loads code. connect-src 'self' covers same-origin ws:/wss: in
+    # current browsers (CSP3; Safari 15.4+), so no wildcard socket hosts.
+    # ponytail: 'unsafe-inline' stays because index.html uses inline onclick
+    # handlers + an inline importmap; the upgrade path is moving those to
+    # addEventListener/data-* and switching to a nonce or hash.
     resp.headers.setdefault(
         'Content-Security-Policy',
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob:; "
         "media-src 'self' blob:; "
-        "connect-src 'self' ws: wss:; "
+        "connect-src 'self'; "
         "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; "
         "form-action 'self'",
     )
@@ -455,8 +463,46 @@ def reload_env_paths():
 PIPER_DIR = _env_path('DECLOUD_PIPER_DIR', Path.home() / '.local/share/piper')
 
 # In-memory cache for parsed PDF text (avoids re-parsing on every request)
-_pdf_text_cache = {}  # key: (book_id, chapter_idx) -> text
-_pdf_chapters_cache = {}  # key: book_id -> [{start, end, title}]
+_pdf_text_cache = {}  # key: book_id -> {chapter_idx: text}
+_pdf_chapters_cache = {}  # key: book_id -> [{start, end, title, level}]
+_pdf_cache_lock = threading.Lock()
+_PDF_CACHE_BOOKS = 4  # ponytail: FIFO-evict to the few most recent books
+
+
+def _cache_book(cache, key, value):
+    with _pdf_cache_lock:
+        cache[key] = value
+        while len(cache) > _PDF_CACHE_BOOKS:
+            cache.pop(next(iter(cache)), None)
+
+
+def pdf_sections(key, pdf_path):
+    """PDF TOC chapters (levels 1-2) with start/end pages, cached per book."""
+    sections = _pdf_chapters_cache.get(key)
+    if sections is None:
+        import fitz
+        with fitz.open(str(pdf_path)) as doc:
+            sections = [{'start': e[2] - 1, 'title': e[1].strip(), 'level': e[0]}
+                        for e in doc.get_toc() if e[0] <= 2 and e[1].strip() and e[2] - 1 >= 0]
+            for i, sec in enumerate(sections):
+                sec['end'] = sections[i + 1]['start'] - 1 if i + 1 < len(sections) else len(doc) - 1
+        _cache_book(_pdf_text_cache, key, {})
+        _cache_book(_pdf_chapters_cache, key, sections)
+    return sections
+
+
+def pdf_chapter_text(key, pdf_path, idx):
+    """(text, title) of one PDF chapter, cached; ('', '') if out of range."""
+    sections = pdf_sections(key, pdf_path)
+    if not 0 <= idx < len(sections):
+        return '', ''
+    texts = _pdf_text_cache.get(key, {})
+    if idx not in texts:
+        import fitz
+        ch = sections[idx]
+        with fitz.open(str(pdf_path)) as doc:
+            texts[idx] = '\n'.join(doc[p].get_text() for p in range(ch['start'], ch['end'] + 1))
+    return texts[idx], sections[idx]['title']
 
 # ─── Available TTS Voices ─────────────────────────────────────
 VOICES = {
@@ -492,65 +538,40 @@ LLM_MODEL = os.environ.get('DECLOUD_LLM_MODEL', 'llama3.2')
 LLM_TIMEOUT = 90
 
 def llm_chat(messages, timeout=LLM_TIMEOUT):
-    """Call local Ollama model. Returns assistant text or error string."""
+    """Chat via the user's configured LLM backend (see llm_complete).
+    Returns assistant text, or an '[LLM error: ...]' string on failure."""
     try:
-        import urllib.request
-        payload = json.dumps({
-            'model': LLM_MODEL,
-            'messages': messages,
-            'stream': False,
-            'options': {'temperature': 0.4, 'num_ctx': 8192}
-        }).encode()
-        req = urllib.request.Request(
-            f'{OLLAMA_URL}/api/chat',
-            data=payload,
-            headers={'Content-Type': 'application/json'},
-            method='POST'
-        )
-        resp = urllib.request.urlopen(req, timeout=timeout)
-        data = json.loads(resp.read())
-        return data.get('message', {}).get('content', '').strip()
+        return (llm_complete(messages, temperature=0.4, timeout=timeout) or '').strip()
     except Exception as e:
         return f'[LLM error: {e}]'
+
+def find_book_source(book_id):
+    """One library scan: {'.json'|'.txt'|'.pdf': path} for a (safe) book id."""
+    found = {}
+    for p in BOOKS_DIR.rglob(f'{book_id}.*'):
+        if p.stem == book_id and p.suffix in ('.json', '.txt', '.pdf') and p.is_file():
+            found.setdefault(p.suffix, p)
+    return found
+
 
 def get_book_chapter_text(book_id, chapter_idx):
     """Get full text of a specific chapter from JSON, PDF, or TXT source."""
     if not is_safe_book_ref(book_id):
         return '', ''
-    json_matches = list(BOOKS_DIR.rglob(f'{book_id}.json'))
-    json_source = json_matches[0] if json_matches else (BOOKS_DIR / f'{book_id}.json')
-    if json_source.exists():
-        with open(json_source) as f:
+    src = find_book_source(book_id)
+    if '.json' in src:
+        with open(src['.json']) as f:
             chapters = json.load(f)
         if 0 <= chapter_idx < len(chapters):
             return chapters[chapter_idx].get('text', ''), chapters[chapter_idx].get('title', f'Chapter {chapter_idx+1}')
-    # Fallback to TXT (entire file is one chapter)
-    txt_matches = list(BOOKS_DIR.rglob(f'{book_id}.txt'))
-    txt_path = txt_matches[0] if txt_matches else None
-    if txt_path and txt_path.exists():
-        text = txt_path.read_text(encoding='utf-8', errors='replace')
-        return text, txt_path.stem.replace('_', ' ')
-    # Fallback to PDF
-    import fitz
-    pdf_matches = list(BOOKS_DIR.rglob(f'{book_id}.pdf'))
-    pdf_path = pdf_matches[0] if pdf_matches else (BOOKS_DIR / f'{book_id}.pdf')
-    if not pdf_path.exists():
-        return '', ''
-    doc = fitz.open(str(pdf_path))
-    toc = doc.get_toc()
-    # Find chapter boundaries (same logic as text API)
-    sections = []
-    for entry in toc:
-        level, title, page = entry[0], entry[1].strip(), entry[2]
-        if level <= 2 and title and page - 1 >= 0:
-            sections.append({'start': page - 1, 'title': title})
-    if chapter_idx < 0 or chapter_idx >= len(sections):
-        return '', ''
-    start = sections[chapter_idx]['start']
-    end = sections[chapter_idx + 1]['start'] - 1 if chapter_idx + 1 < len(sections) else len(doc) - 1
-    text = ' '.join([doc[p].get_text() for p in range(start, end + 1)])
-    doc.close()
-    return text, sections[chapter_idx]['title']
+    # Fallback to TXT (entire file is one chapter, index 0 only)
+    if '.txt' in src:
+        if chapter_idx != 0:
+            return '', ''
+        return src['.txt'].read_text(encoding='utf-8', errors='replace'), book_id.replace('_', ' ')
+    if '.pdf' in src:
+        return pdf_chapter_text(book_id, src['.pdf'], chapter_idx)
+    return '', ''
 
 def get_text_up_to_position(text, word_index):
     """Get text from start up to a given word index."""
@@ -622,9 +643,12 @@ def is_safe_book_ref(value):
     bare `..` or slash would escape the library directory."""
     if not isinstance(value, str) or not value:
         return False
-    if '/' in value or '\\' in value or '..' in value:
+    if '/' in value or '\\' in value or '..' in value or '\0' in value:
         return False
     if value.startswith('.'):
+        return False
+    # Windows: 'C:x' is drive-relative and would escape a Path join
+    if os.name == 'nt' and ':' in value:
         return False
     return True
 
@@ -647,20 +671,22 @@ COMFY_INPUT = _env_path('DECLOUD_COMFY_INPUT', Path.home() / 'ComfyUI' / 'input'
 # ─── Voice System: Whisper + Engines ────────────────────────────
 _whisper_model = None
 _whisper_model_name = None
+_whisper_lock = threading.Lock()
 
 def get_whisper_model(model_name='base'):
     """Lazy-load faster-whisper model. Sizes: tiny, base, small, medium, large-v3"""
     global _whisper_model, _whisper_model_name
-    if _whisper_model and _whisper_model_name == model_name:
+    with _whisper_lock:
+        if _whisper_model and _whisper_model_name == model_name:
+            return _whisper_model
+        from faster_whisper import WhisperModel
+        # Use int8 for speed on CPU, float16 if GPU available
+        try:
+            _whisper_model = WhisperModel(model_name, device='cuda', compute_type='float16')
+        except Exception:
+            _whisper_model = WhisperModel(model_name, device='cpu', compute_type='int8')
+        _whisper_model_name = model_name
         return _whisper_model
-    from faster_whisper import WhisperModel
-    # Use int8 for speed on CPU, float16 if GPU available
-    try:
-        _whisper_model = WhisperModel(model_name, device='cuda', compute_type='float16')
-    except Exception:
-        _whisper_model = WhisperModel(model_name, device='cpu', compute_type='int8')
-    _whisper_model_name = model_name
-    return _whisper_model
 
 # Available TTS engines
 def piper_bin():
@@ -887,39 +913,49 @@ _network_last = {'bytes_sent': 0, 'bytes_recv': 0, 'ts': 0}
 SETTINGS_FILE = BASE_DIR / 'settings.json'
 
 
+_settings_lock = threading.Lock()
+
+
 def load_settings():
-    """Read settings.json as a dict, tolerating a missing/corrupt file."""
+    """Read settings.json as a dict, tolerating a missing/corrupt file. A
+    corrupt file is copied to settings.json.corrupt first, so the next save
+    can't silently destroy the only copy of the owner's config."""
     if SETTINGS_FILE.exists():
         try:
-            return json.loads(SETTINGS_FILE.read_text())
+            data = json.loads(SETTINGS_FILE.read_text())
+            return data if isinstance(data, dict) else {}
         except Exception:
+            try:
+                shutil.copyfile(SETTINGS_FILE, SETTINGS_FILE.with_name('settings.json.corrupt'))
+            except OSError:
+                pass
             return {}
     return {}
 
 
 def save_settings(data):
-    """Persist the settings dict to settings.json. Returns True on success."""
-    try:
-        SETTINGS_FILE.write_text(json.dumps(data, indent=2))
-        return True
-    except Exception:
-        return False
-
-
-def env_value_is_single_line(value) -> bool:
-    """False if value contains CR, LF, or any other break that
-    str.splitlines() — and so the .env loader — treats as a new line."""
-    value = str(value)
-    return ''.join(value.splitlines()) == value
+    """Persist the settings dict to settings.json (atomic, 0600). Returns
+    True on success. The single writer for settings.json.
+    ponytail: the lock serializes writes only; two concurrent
+    load→modify→save callers can still lose one update. Add an
+    update_settings(fn) that holds the lock across the read if that bites."""
+    with _settings_lock:
+        try:
+            _write_private(SETTINGS_FILE, json.dumps(data, indent=2))
+            return True
+        except Exception:
+            return False
 
 
 def set_env_value(key, value):
     """Write key=value to .env (preserving other lines) and update the
     running process environment. Replaces the first occurrence and drops
     any duplicate lines so a key never appears twice. Used for secrets like
-    the cloud LLM API key and the access passcode."""
-    if not env_value_is_single_line(value):
-        return False  # a newline would inject extra .env lines (e.g. DECLOUD_COMFY_CMD)
+    the cloud LLM API key and the access passcode. Refuses values with
+    CR/LF/NUL (they would inject extra .env lines)."""
+    value = str(value)
+    if any(c in value for c in '\r\n\0'):
+        return False
     env_path = BASE_DIR / '.env'
     try:
         lines = env_path.read_text(errors='replace').splitlines() if env_path.exists() else []
@@ -938,7 +974,7 @@ def set_env_value(key, value):
     if not written:
         out.append(f'{key}={value}')
     try:
-        env_path.write_text('\n'.join(out) + '\n')
+        _write_private(env_path, '\n'.join(out) + '\n')
         os.environ[key] = value
         return True
     except Exception:
@@ -955,14 +991,18 @@ LOG_FILE = BASE_DIR / 'app.log'
 def _read_logs(limit=100):
     """Return list of {timestamp, level, message} parsed from log file."""
     log_lines = []
-    if LOG_FILE.exists():
-        try:
-            lines = LOG_FILE.read_text(errors='replace').splitlines()
-        except Exception:
-            lines = []
-    else:
-        # fallback: no stderr capture available; return empty
-        lines = []
+    lines = []
+    try:
+        # Only the tail: app.log rotates at 5 MB, never slurp it whole.
+        with open(LOG_FILE, 'rb') as f:
+            f.seek(0, os.SEEK_END)
+            start = max(0, f.tell() - 1024 * 1024)
+            f.seek(start)
+            lines = f.read().decode('utf-8', errors='replace').splitlines()
+        if start and lines:
+            lines = lines[1:]  # first line is probably cut in half
+    except OSError:
+        pass
     lines = lines[-limit:]
     log_re = re.compile(
         r'^(?P<ts>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})\s*'

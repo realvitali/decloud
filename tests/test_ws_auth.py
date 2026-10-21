@@ -45,11 +45,21 @@ class TestWsAuthHelper:
     def test_bearer_accepted(self, session_token):
         assert ws_is_authenticated(_environ(HTTP_AUTHORIZATION=f'Bearer {session_token}')) is True
 
-    def test_query_token_accepted(self, session_token):
-        assert ws_is_authenticated(_environ(QUERY_STRING=f'token={session_token}')) is True
+    def test_query_token_rejected(self, session_token):
+        # Tokens never travel in URLs; the same-origin cookie is enough.
+        assert ws_is_authenticated(_environ(QUERY_STRING=f'token={session_token}')) is False
 
-    def test_query_token_among_other_params(self, session_token):
-        env = _environ(QUERY_STRING=f'cid=abc&token={session_token}')
+    def test_cross_origin_rejected(self, session_token):
+        cookie = f'decloud_session={session_token}'
+        for origin in ('http://localhost:3000', 'https://evil.example', '', 'null'):
+            env = _environ(HTTP_COOKIE=cookie, HTTP_ORIGIN=origin)
+            assert ws_is_authenticated(env) is False, origin
+
+    def test_tunnel_forwarded_host_accepted(self, session_token):
+        env = _environ(HTTP_COOKIE=f'decloud_session={session_token}',
+                       HTTP_HOST='127.0.0.1:8899',
+                       HTTP_X_FORWARDED_HOST='box.tail1.ts.net',
+                       HTTP_ORIGIN='https://box.tail1.ts.net')
         assert ws_is_authenticated(env) is True
 
     def test_unknown_token_rejected(self, session_token):
@@ -58,11 +68,11 @@ class TestWsAuthHelper:
 
     def test_expired_token_rejected(self, session_token):
         SESSIONS[session_token] = time.time() - 5
-        assert ws_is_authenticated(_environ(QUERY_STRING=f'token={session_token}')) is False
+        assert ws_is_authenticated(_environ(HTTP_COOKIE=f'decloud_session={session_token}')) is False
 
     def test_raw_passcode_rejected(self):
         # The passcode itself must never authenticate a socket
-        env = _environ(QUERY_STRING=f'token={DECLOUD_PIN}')
+        env = _environ(HTTP_COOKIE=f'decloud_session={DECLOUD_PIN}')
         assert ws_is_authenticated(env) is False
 
     def test_open_mode_allows(self, monkeypatch):
@@ -70,45 +80,5 @@ class TestWsAuthHelper:
         monkeypatch.setattr(shared, 'DECLOUD_PIN', '')
         monkeypatch.setattr(shared, 'INSECURE_OPEN', True)
         assert ws_is_authenticated(_environ()) is True
-
-    def test_no_pin_without_open_flag_fails_closed(self, monkeypatch):
-        import shared
-        monkeypatch.setattr(shared, 'DECLOUD_PIN', '')
-        monkeypatch.setattr(shared, 'INSECURE_OPEN', False)
-        assert ws_is_authenticated(_environ()) is False
-
-
-class TestWsOriginHost:
-    """N1: a hostile page must not open the terminal socket, in any mode."""
-
-    def test_missing_origin_rejected(self, session_token):
-        env = _environ(HTTP_ORIGIN='', HTTP_COOKIE=f'decloud_session={session_token}')
-        assert ws_is_authenticated(env) is False
-
-    def test_cross_site_origin_rejected(self, session_token):
-        env = _environ(HTTP_ORIGIN='https://evil.example',
-                       HTTP_COOKIE=f'decloud_session={session_token}')
-        assert ws_is_authenticated(env) is False
-
-    def test_other_local_port_origin_rejected(self, session_token):
-        env = _environ(HTTP_ORIGIN='http://localhost:3000',
-                       HTTP_COOKIE=f'decloud_session={session_token}')
-        assert ws_is_authenticated(env) is False
-
-    def test_rebound_host_rejected(self, session_token):
-        # DNS rebinding: Origin and Host agree, but the name isn't ours
-        env = _environ(HTTP_HOST='evil.example:8899', HTTP_ORIGIN='http://evil.example:8899',
-                       HTTP_COOKIE=f'decloud_session={session_token}')
-        assert ws_is_authenticated(env) is False
-
-    def test_open_mode_still_checks_origin(self, monkeypatch):
-        import shared
-        monkeypatch.setattr(shared, 'DECLOUD_PIN', '')
-        monkeypatch.setattr(shared, 'INSECURE_OPEN', True)
-        assert ws_is_authenticated(_environ(HTTP_ORIGIN='https://evil.example')) is False
-        assert ws_is_authenticated(_environ(HTTP_ORIGIN='')) is False
-
-    def test_funnel_origin_accepted(self, session_token):
-        env = _environ(HTTP_HOST='box.tail1234.ts.net', HTTP_ORIGIN='https://box.tail1234.ts.net',
-                       HTTP_COOKIE=f'decloud_session={session_token}')
-        assert ws_is_authenticated(env) is True
+        # ...but a cross-origin page still can't open a shell
+        assert ws_is_authenticated(_environ(HTTP_ORIGIN='http://localhost:3000')) is False

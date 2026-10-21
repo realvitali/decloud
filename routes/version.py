@@ -7,9 +7,22 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.5.1"
+VERSION = "0.5.2"
 
 CHANGELOG = [
+    {
+        "version": "0.5.2",
+        "date": "2026-10-20",
+        "changes": [
+            "Security: WebSocket and state-changing APIs validate Origin/Host (no drive-by shell)",
+            "Security: open mode is explicit (DECLOUD_INSECURE_OPEN=1), loopback-only, refuses Funnel",
+            "Security: installers always provision a passcode; Funnel refused without one",
+            "Security: global login throttle with Retry-After",
+            "Security: release only after CI passes; actions SHA-pinned",
+            "Security: .env values reject line breaks",
+            "Docs: SECURITY.md with private vulnerability reporting",
+        ]
+    },
     {
         "version": "0.5.1",
         "date": "2026-10-14",

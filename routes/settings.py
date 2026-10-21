@@ -114,6 +114,8 @@ def settings_paths():
             updates[field] = val
     if not updates:
         return jsonify({'error': 'no valid paths provided'}), 400
+    if not all(shared.env_value_is_single_line(v) for v in updates.values()):
+        return jsonify({'error': 'a path cannot contain a line break'}), 400
     if not _update_env_file(updates):
         return jsonify({'error': 'could not write .env (check permissions)'}), 500
     # Apply immediately: update the process env + shared globals so the

@@ -32,9 +32,6 @@ from app import app  # noqa: E402
 def client():
     app.config['TESTING'] = True
     with app.test_client() as c:
-        # Behave like a same-origin browser: the app refuses state-changing
-        # API calls whose Origin is missing or doesn't match Host (N1).
-        c.environ_base['HTTP_ORIGIN'] = 'http://localhost'
         yield c
 
 
@@ -42,11 +39,11 @@ def client():
 def _reset_limiter():
     """flask-limiter keys by IP (127.0.0.1 for the test client) — reset
     the counter after every test so login rate limits don't leak."""
-    from shared import limiter
-    import routes.auth as auth_module
+    import shared
     yield
-    limiter.reset()
-    auth_module._GLOBAL_FAILURES.clear()  # global failed-login throttle (N4)
+    shared.limiter.reset()
+    shared._LOGIN_GLOBAL_FAILS.clear()
+    shared._LOGIN_ATTEMPTS.clear()
 
 
 @pytest.fixture
@@ -55,7 +52,10 @@ def login(client):
     (contains session + csrf tokens)."""
     resp = client.post('/api/auth/login', json={'pin': TEST_PASSCODE})
     assert resp.status_code == 200, resp.get_data(as_text=True)
-    return resp.get_json()
+    data = resp.get_json()
+    # The token is only in the HttpOnly cookie now; expose it for tests.
+    data['session'] = client.get_cookie('decloud_session').value
+    return data
 
 
 @pytest.fixture
