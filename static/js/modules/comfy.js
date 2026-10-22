@@ -104,7 +104,7 @@ async function comfyGenerate() {
       elapsed += 1;
       try {
         const pr = await fetch(`/api/comfy/progress/${encodeURIComponent(promptId)}`);
-        if (pr.status === 503) return;  // ComfyUI hiccup — keep polling
+        if (pr.status === 503) return;  // ComfyUI hiccup. Keep polling
         const pd = await pr.json().catch(() => ({}));
         if (pd.error || !pr.ok) {
           clearInterval(comfyPollTimer);

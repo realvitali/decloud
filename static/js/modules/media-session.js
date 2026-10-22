@@ -1,55 +1,70 @@
 // ===== Module: media-session =====
-// Media Session API integration — feeds iOS lock screen / Dynamic Island / Android notification
+// Media Session API integration - feeds iOS lock screen / Dynamic Island / Android notification
 // with title, artist, artwork, progress bar, and play/pause/seek controls
 
 var mediaSessionActive = false;
 
+// Which player do the OS media controls (KDE systray, lock screen, headset keys) belong to?
+// The one that is playing; if none is, the one that last published its metadata.
+var mediaSessionLast = 'music';
+
+function mediaTarget() {
+  var bookOn = typeof player !== 'undefined' && player && player.src && !player.paused;
+  var musicOn = typeof musicAudio !== 'undefined' && musicAudio && musicAudio.src && !musicAudio.paused;
+  if (typeof mz !== 'undefined' && mz.remote) return 'music';          // mirroring another device: still control the music
+  if (bookOn && !musicOn) return 'book';
+  if (musicOn && !bookOn) return 'music';
+  return mediaSessionLast;
+}
+
 function initMediaSession() {
   if (!('mediaSession' in navigator)) return;
+  var ms = navigator.mediaSession;
+  function on(action, fn) { try { ms.setActionHandler(action, fn); } catch (e) { /* action not supported by this browser */ } }
 
-  // Action handlers — these let the lock screen control playback
-  navigator.mediaSession.setActionHandler('play', function() {
-    if (player && !player.paused) return; // already playing
-    if (typeof togglePlay === 'function') togglePlay();
-    else if (typeof togglePlayMusic === 'function') togglePlayMusic();
+  on('play', function() {
+    if (mediaTarget() === 'book') { if (typeof player !== 'undefined' && player && player.paused && typeof togglePlay === 'function') togglePlay(); }
+    else if (typeof mzMediaPlay === 'function') mzMediaPlay();
   });
 
-  navigator.mediaSession.setActionHandler('pause', function() {
-    if (player && player.paused) return;
-    if (typeof togglePlay === 'function') togglePlay();
-    else if (typeof togglePlayMusic === 'function') togglePlayMusic();
+  on('pause', function() {
+    if (mediaTarget() === 'book') { if (typeof player !== 'undefined' && player && !player.paused && typeof togglePlay === 'function') togglePlay(); }
+    else if (typeof mzMediaPause === 'function') mzMediaPause();
   });
 
-  navigator.mediaSession.setActionHandler('seekbackward', function(details) {
+  on('stop', function() {
+    if (mediaTarget() === 'book') { if (typeof player !== 'undefined' && player && !player.paused && typeof togglePlay === 'function') togglePlay(); }
+    else if (typeof mzStop === 'function') mzStop();
+  });
+
+  on('seekbackward', function(details) {
+    var skip = (details && details.seekOffset) || 15;
+    if (mediaTarget() === 'music' && typeof mzMediaSeekBy === 'function') { mzMediaSeekBy(-skip); return; }
     var audio = getActiveAudio();
-    if (audio) {
-      var skip = details.seekOffset || 15;
-      audio.currentTime = Math.max(0, audio.currentTime - skip);
-    }
+    if (audio) audio.currentTime = Math.max(0, audio.currentTime - skip);
   });
 
-  navigator.mediaSession.setActionHandler('seekforward', function(details) {
+  on('seekforward', function(details) {
+    var skip = (details && details.seekOffset) || 15;
+    if (mediaTarget() === 'music' && typeof mzMediaSeekBy === 'function') { mzMediaSeekBy(skip); return; }
     var audio = getActiveAudio();
-    if (audio) {
-      var skip = details.seekOffset || 15;
-      audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + skip);
-    }
+    if (audio) audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + skip);
   });
 
-  navigator.mediaSession.setActionHandler('seekto', function(details) {
+  on('seekto', function(details) {
+    if (!details || details.seekTime == null) return;
+    if (mediaTarget() === 'music' && typeof mzMediaSeekTo === 'function') { mzMediaSeekTo(details.seekTime); return; }
     var audio = getActiveAudio();
-    if (audio && details.seekTime != null) {
-      audio.currentTime = details.seekTime;
-    }
+    if (audio) audio.currentTime = details.seekTime;
   });
 
-  navigator.mediaSession.setActionHandler('previoustrack', function() {
-    if (typeof prevChapter === 'function') prevChapter();
+  on('previoustrack', function() {
+    if (mediaTarget() === 'book') { if (typeof prevChapter === 'function') prevChapter(); }
     else if (typeof prevSong === 'function') prevSong();
   });
 
-  navigator.mediaSession.setActionHandler('nexttrack', function() {
-    if (typeof nextChapter === 'function') nextChapter();
+  on('nexttrack', function() {
+    if (mediaTarget() === 'book') { if (typeof nextChapter === 'function') nextChapter(); }
     else if (typeof nextSong === 'function') nextSong();
   });
 
@@ -57,17 +72,20 @@ function initMediaSession() {
 }
 
 function getActiveAudio() {
+  var book = typeof player !== 'undefined' ? player : null;
+  var music = typeof musicAudio !== 'undefined' ? musicAudio : null;
   // Prefer whichever is currently playing
-  if (player && !player.paused && player.src) return player;
-  if (musicAudio && !musicAudio.paused && musicAudio.src) return musicAudio;
-  // Fallback to whichever has a src
-  if (player && player.src) return player;
-  if (musicAudio && musicAudio.src) return musicAudio;
+  if (book && !book.paused && book.src) return book;
+  if (music && !music.paused && music.src) return music;
+  // Otherwise the one that last published its metadata
+  var order = mediaSessionLast === 'book' ? [book, music] : [music, book];
+  for (var i = 0; i < order.length; i++) if (order[i] && order[i].src) return order[i];
   return null;
 }
 
 // Called by audiobook player when a chapter starts playing
 function updateMediaSessionBook(bookTitle, chapterTitle, coverUrl) {
+  mediaSessionLast = 'book';
   if (!mediaSessionActive) return;
 
   var artwork = [];
@@ -90,6 +108,7 @@ function updateMediaSessionBook(bookTitle, chapterTitle, coverUrl) {
 
 // Called by music player when a song starts playing
 function updateMediaSessionMusic(songName, artistName, coverUrl) {
+  mediaSessionLast = 'music';
   if (!mediaSessionActive) return;
 
   var artwork = [];

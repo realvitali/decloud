@@ -14,6 +14,9 @@ os.environ.setdefault('DECLOUD_PIN', '24681357')           # 8-digit test passco
 os.environ.setdefault('SECRET_KEY', 'decloud-test-secret-key')
 os.environ.setdefault('DECLOUD_BOOKS_DIR', str(_TMP / 'books'))
 os.environ.setdefault('DECLOUD_FILES_DIR', str(_TMP / 'files'))
+os.environ['DECLOUD_BROWSE_ROOT'] = ''          # tests browse the sandbox, never a machine-wide root from a real .env
+os.environ['DECLOUD_TOTP_FILE'] = str(_TMP / 'totp.json')
+os.environ['DECLOUD_AUDIT_FILE'] = str(_TMP / 'audit.log')
 os.environ.setdefault('DECLOUD_MUSIC_DIR', str(_TMP / 'music'))
 os.environ.setdefault('DECLOUD_PIPER_DIR', str(_TMP / 'piper'))
 os.environ.setdefault('DECLOUD_HOST', '127.0.0.1')

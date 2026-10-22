@@ -8,9 +8,23 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.4.1"
+VERSION = "0.5.0"
 
 CHANGELOG = [
+    {
+        "version": "0.5.0",
+        "date": "2026-10-23",
+        "changes": [
+            "Gallery, Files browser, Logs, two-step Terminal, XSS hardening",
+            "Gallery: iOS/Google-Photos style library with viewer",
+            "Files: Finder/Nautilus style browser over the whole machine (opt-in via DECLOUD_BROWSE_ROOT)",
+            "Terminal needs a TOTP code (scripts/totp_setup.py)",
+            "Logs screen with audit trail",
+            "CSP: no CDN, no inline scripts, many XSS sinks escaped",
+            "Music: glossy and Spotify themes, Connect, visualizer",
+            "Router: back/forward navigation",
+        ]
+    },
     {
         "version": "0.4.1",
         "date": "2026-10-11",
@@ -87,7 +101,7 @@ CHANGELOG = [
         "date": "2026-09-06",
         "changes": [
             "One-click updates: auto-release pipeline, semver compare, supervised restarts",
-            "Updater only offers genuine upgrades (semver compare — no more downgrade offers)",
+            "Updater only offers genuine upgrades (semver compare. No more downgrade offers)",
             "GitHub Action auto-creates a git tag + release for each version bump (no manual tagging)",
             "Manual ./decloud starts now supervise the app so self-update restarts work without systemd",
             "install.sh warns when the install is not a git checkout (updates need git)",
@@ -122,7 +136,7 @@ CHANGELOG = [
         "date": "2026-09-06",
         "changes": [
             "Voice agent: drives Hermes natively with a persistent session (falls back to local Ollama/cloud when Hermes isn't installed)",
-            "Voice agent: modular STT/LLM/TTS engines configurable from Settings → Voice — no terminal needed",
+            "Voice agent: modular STT/LLM/TTS engines configurable from Settings → Voice. No terminal needed",
             "Voice agent: command access tiers (Talk / Basic / Full) with a confirmation for unrestricted access",
             "Voice agent: remembers your conversation, can be named, and shows clear errors instead of failing silently",
             "Voice agent: browser or Whisper speech recognition, Piper or browser speech",
@@ -138,12 +152,12 @@ CHANGELOG = [
         "version": "0.0.2",
         "date": "2026-08-19",
         "changes": [
-            "Security: opaque session tokens replace the PIN cookie — the passcode is never stored in the browser",
+            "Security: opaque session tokens replace the PIN cookie. The passcode is never stored in the browser",
             "Security: CSRF protection on all state-changing requests",
             "Security: WebSocket terminal/voice sockets require the session token (works over tunnels now)",
             "Security: quick commands run shell-free (allowlisted argv table, no shell=True)",
             "Security: brute-force backoff + rate limits on login; 8-digit passcode default",
-            "Security: removed third-party localhost.run relay — Tailscale Funnel only",
+            "Security: removed third-party localhost.run relay, Tailscale Funnel only",
             "Security: binds 127.0.0.1 by default; loud warning otherwise",
             "Security: CSP, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy headers",
             "Books: correct chapter counts per book (no more 30-chapter cap)",
@@ -159,7 +173,7 @@ CHANGELOG = [
         "version": "0.0.1",
         "date": "2026-08-14",
         "changes": [
-            "First public release — experimental alpha",
+            "First public release. Experimental alpha",
             "Report issues on GitHub",
             ".env now loaded on manual start (not just systemd)",
             "Settings: library paths save to .env for real",

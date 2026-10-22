@@ -11,6 +11,10 @@ from shared import (
 )
 
 import shared
+import audit
+from shared import limiter
+from shared import browse_root as _root
+from .gallery import _taken as _gallery_taken
 
 bp = Blueprint('lego', __name__)
 
@@ -19,15 +23,24 @@ bp = Blueprint('lego', __name__)
 def lego_browse():
     """Browse Files drive. Query: path=<relative>, page=<n>, per_page=<n>"""
     import os as _os, time as _time
-    subpath = request.args.get('path', '')
+    root = _root()
+    if 'path' in request.args:
+        subpath = request.args.get('path', '')
+    else:                                            # no path given: start in the user's home folder when it is inside the root
+        try:
+            subpath = str(Path.home().resolve().relative_to(root)).replace('\\', '/')
+            subpath = '' if subpath == '.' else subpath
+        except ValueError:
+            subpath = ''
     page = max(1, request.args.get('page', 1, type=int))
-    per_page = min(500, request.args.get('per_page', 200, type=int))
-    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/')) if subpath else shared.FILES_DIR
+    per_page = min(5000, request.args.get('per_page', 200, type=int))
+    date_sort = request.args.get('date_sort', '')  # '' (by name) | 'newest' | 'oldest'
+    target = safe_join_browse(_root(), *subpath.split('/')) if subpath else _root()
 
     if not target.exists() or not target.is_dir():
         return jsonify({'error': 'not found or not a directory'}), 404
 
-    # Use os.scandir — gets is_dir and stat from the directory entry itself
+    # Use os.scandir - gets is_dir and stat from the directory entry itself
     # much faster than pathlib iterdir + stat on slow exfat
     all_items = []
     try:
@@ -37,8 +50,12 @@ def lego_browse():
                     continue
                 try:
                     is_dir = entry.is_dir()
-                    rel_path = str(Path(entry.path).relative_to(shared.FILES_DIR))
+                    rel_path = str(Path(entry.path).relative_to(_root()))
                     if is_dir:
+                        try:
+                            dir_mtime = entry.stat().st_mtime
+                        except OSError:
+                            dir_mtime = 0
                         all_items.append({
                             'name': entry.name,
                             'is_dir': True,
@@ -46,11 +63,13 @@ def lego_browse():
                             'size_human': '',
                             'modified': '',
                             'ext': '',
+                            'mtime': int(dir_mtime),
                             'path': rel_path,
                             'child_count': -1,
                             'has_images': False,
                             '_sort_name': entry.name.lower(),
                             '_sort_dir': 0,
+                            '_mtime': dir_mtime,
                         })
                     else:
                         st = entry.stat()
@@ -61,19 +80,26 @@ def lego_browse():
                             'size_human': format_size(st.st_size),
                             'modified': _time.strftime('%Y-%m-%d %H:%M', _time.localtime(st.st_mtime)),
                             'ext': Path(entry.name).suffix.lower().lstrip('.'),
+                            'mtime': int(st.st_mtime),
+                            'taken': _gallery_taken(entry.name, st.st_mtime),
                             'path': rel_path,
                             'child_count': 0,
                             'has_images': False,
                             '_sort_name': entry.name.lower(),
                             '_sort_dir': 1,
+                            '_mtime': st.st_mtime,
                         })
                 except (PermissionError, OSError):
                     continue
     except PermissionError:
         return jsonify({'error': 'permission denied'}), 403
 
-    # Sort: folders first, then alpha
-    all_items.sort(key=lambda x: (x['_sort_dir'], x['_sort_name']))
+    # Sort: folders first, then alpha (or by modified date when requested)
+    if date_sort in ('newest', 'oldest'):
+        sign = -1 if date_sort == 'newest' else 1
+        all_items.sort(key=lambda x: (x['_sort_dir'], sign * x['_mtime'], x['_sort_name']))
+    else:
+        all_items.sort(key=lambda x: (x['_sort_dir'], x['_sort_name']))
     total = len(all_items)
 
     # Paginate
@@ -83,16 +109,32 @@ def lego_browse():
     for item in page_items:
         item.pop('_sort_name', None)
         item.pop('_sort_dir', None)
+        item.pop('_mtime', None)
 
     # Build breadcrumb path
-    breadcrumbs = [{'name': 'Files', 'path': ''}]
+    breadcrumbs = [{'name': 'Computer' if str(root) == '/' else 'Files', 'path': ''}]
     if subpath:
         parts = subpath.split('/')
         for i, part in enumerate(parts):
             if part:
                 breadcrumbs.append({'name': part, 'path': '/'.join(parts[:i+1])})
 
+    def _rel(pth):
+        try:
+            r = str(Path(pth).resolve().relative_to(root)).replace('\\', '/')
+            return '' if r == '.' else r
+        except ValueError:
+            return None
+    places = []
+    home = Path.home()
+    cand = [('Home', home, 'home')] + [(n, home / n, n.lower()) for n in ('Desktop', 'Documents', 'Downloads', 'Pictures', 'Music', 'Videos')]
+    cand += [('Backup', Path(shared.FILES_DIR), 'backup'), ('Camera', Path(shared.FILES_DIR) / 'Camera', 'camera'), ('Screenshots', Path(shared.FILES_DIR) / 'Screenshots', 'screenshots')]
+    for nm, pth, ic in cand:
+        r = _rel(pth) if pth.is_dir() else None
+        if r is not None:
+            places.append({'name': nm, 'path': r, 'icon': ic})
     return jsonify({
+        'places': places, 'backup': _rel(shared.FILES_DIR), 'is_root': str(root) == '/',
         'items': page_items,
         'path': subpath,
         'breadcrumbs': breadcrumbs,
@@ -111,7 +153,7 @@ def lego_folder_info():
     subpath = request.args.get('path', '')
     if not subpath:
         return jsonify({'error': 'path required'}), 400
-    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
+    target = safe_join_browse(_root(), *subpath.split('/'))
     if not target.exists() or not target.is_dir():
         return jsonify({'error': 'not found'}), 404
 
@@ -148,23 +190,25 @@ def format_size(size):
     return f'{size:.1f} TB'
 
 @bp.route('/api/lego/download')
+@limiter.exempt
 def lego_download():
     """Download a file from Files. Query: path=<relative path>"""
     subpath = request.args.get('path', '')
     if not subpath:
         return jsonify({'error': 'path required'}), 400
-    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
+    target = safe_join_browse(_root(), *subpath.split('/'))
     if not target.exists() or not target.is_file():
         return jsonify({'error': 'not found'}), 404
     return send_file(str(target), as_attachment=True, download_name=target.name)
 
 @bp.route('/api/lego/thumbnail')
+@limiter.exempt
 def lego_thumbnail():
     """Serve a cached WebP thumbnail. Query: path=<relative path>"""
     subpath = request.args.get('path', '')
     if not subpath:
         return jsonify({'error': 'path required'}), 400
-    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
+    target = safe_join_browse(_root(), *subpath.split('/'))
     if not target.exists():
         return jsonify({'error': 'not found'}), 404
 
@@ -212,7 +256,7 @@ import random as _random
 def lego_random_image():
     """Get a random image file from a folder (non-recursive, fast). Query: path=<relative>"""
     subpath = request.args.get('path', '')
-    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/')) if subpath else shared.FILES_DIR
+    target = safe_join_browse(_root(), *subpath.split('/')) if subpath else _root()
     if not target.exists() or not target.is_dir():
         return jsonify({'error': 'not found'}), 404
 
@@ -230,7 +274,7 @@ def lego_random_image():
 
     pick = _random.choice(images)
     return jsonify({
-        'path': str(pick.relative_to(shared.FILES_DIR)),
+        'path': str(pick.relative_to(_root())),
         'name': pick.name,
         'total_images': len(images),
     })
@@ -244,8 +288,8 @@ def lego_trash():
     if not subpath:
         return jsonify({'error': 'path required'}), 400
 
-    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
-    files_root_resolved = shared.FILES_DIR.resolve()
+    target = safe_join_browse(_root(), *subpath.split('/'))
+    files_root_resolved = _root()
     target_resolved = target.resolve()
 
     if not str(target_resolved).startswith(str(files_root_resolved) + '/') and target_resolved != files_root_resolved:
@@ -269,7 +313,8 @@ def lego_trash():
 
     try:
         _shutil.move(str(target_resolved), str(dest))
-        return jsonify({'ok': True, 'moved_to': str(dest.relative_to(shared.FILES_DIR))})
+        audit.log('file_trash', str(target_resolved))
+        return jsonify({'ok': True, 'moved_to': str(dest.relative_to(_root()))})
     except Exception as e:
         return jsonify({'error': f'trash error: {str(e)}'}), 500
 
@@ -285,10 +330,10 @@ def lego_shred():
     if not subpath:
         return jsonify({'error': 'path required'}), 400
 
-    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
+    target = safe_join_browse(_root(), *subpath.split('/'))
 
     # Hard safety checks
-    files_root_resolved = shared.FILES_DIR.resolve()
+    files_root_resolved = _root()
     target_resolved = target.resolve()
 
     # Must be inside Files (strict prefix match)
@@ -310,6 +355,7 @@ def lego_shred():
         )
         if result.returncode != 0:
             return jsonify({'error': f'shred failed: {result.stderr.strip()}'}), 500
+        audit.log('file_shred', str(target_resolved))
         return jsonify({'ok': True, 'shredded': target_resolved.name})
     except subprocess.TimeoutExpired:
         return jsonify({'error': 'shred timed out'}), 500
@@ -325,9 +371,9 @@ def lego_poof():
     if not subpath:
         return jsonify({'error': 'path required'}), 400
 
-    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
+    target = safe_join_browse(_root(), *subpath.split('/'))
 
-    files_root_resolved = shared.FILES_DIR.resolve()
+    files_root_resolved = _root()
     target_resolved = target.resolve()
 
     # Must be inside Files (strict prefix match)
@@ -358,7 +404,8 @@ def lego_poof():
 
     try:
         _shutil.move(str(target_resolved), str(dest))
-        return jsonify({'ok': True, 'moved_to': str(dest.relative_to(shared.FILES_DIR))})
+        audit.log('file_poof', str(target_resolved))
+        return jsonify({'ok': True, 'moved_to': str(dest.relative_to(_root()))})
     except Exception as e:
         return jsonify({'error': f'poof error: {str(e)}'}), 500
 
@@ -371,9 +418,9 @@ def lego_mark_done():
     if not subpath:
         return jsonify({'error': 'path required'}), 400
 
-    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
+    target = safe_join_browse(_root(), *subpath.split('/'))
 
-    files_root_resolved = shared.FILES_DIR.resolve()
+    files_root_resolved = _root()
     target_resolved = target.resolve()
 
     # Must be inside Files
@@ -387,6 +434,11 @@ def lego_mark_done():
     # Must not be a symlink
     if target.is_symlink():
         return jsonify({'error': 'cannot mark symlinks'}), 400
+
+    try:
+        target_resolved.relative_to(Path(shared.FILES_DIR).resolve())
+    except ValueError:
+        return jsonify({'error': 'only folders inside the backup drive can be marked done'}), 400
 
     # Must not be the root
     if target_resolved == files_root_resolved:
@@ -409,7 +461,8 @@ def lego_mark_done():
 
     try:
         _shutil.move(str(target_resolved), str(dest))
-        new_rel = str(dest.relative_to(shared.FILES_DIR))
+        audit.log('file_done', str(target_resolved))
+        new_rel = str(dest.relative_to(_root()))
         return jsonify({'ok': True, 'new_path': new_rel, 'new_name': new_name})
     except Exception as e:
         return jsonify({'error': f'move/rename error: {str(e)}'}), 500

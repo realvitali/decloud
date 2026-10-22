@@ -1,10 +1,10 @@
 // ===== Module: models =====
-// AI Model Advisor — this machine's specs vs. real model sizes,
+// AI Model Advisor - this machine's specs vs. real model sizes,
 // with one-tap downloads into the right app folders.
 
 const MODEL_TIERS = {
   'runs-well': { label: 'Runs well', cls: 'models-tier-good' },
-  'tight':     { label: 'Tight — may offload', cls: 'models-tier-tight' },
+  'tight':     { label: 'Tight: may offload', cls: 'models-tier-tight' },
   'cpu-only':  { label: 'CPU only (slow)', cls: 'models-tier-cpu' },
   'too-big':   { label: 'Too big for this machine', cls: 'models-tier-bad' },
 };
@@ -38,7 +38,7 @@ function renderModelsData(d) {
   document.getElementById('models-catalog').innerHTML = order.map((cat) => {
     if (!groups[cat]) return '';
     return `<div class="models-group">
-      <div class="models-group-title">${cat[0].toUpperCase() + cat.slice(1)} models</div>
+      <div class="models-group-title">${escapeHtml(cat[0].toUpperCase() + cat.slice(1))} models</div>
       ${groups[cat].map(renderModelCard).join('')}
     </div>`;
   }).join('');
@@ -55,7 +55,7 @@ function renderModelCard(item) {
     const t = MODEL_TIERS[f.tier] || MODEL_TIERS['too-big'];
     const canDownload = f.tier !== 'too-big';
     const partsNote = f.parts && f.parts.length > 1
-      ? ` (${f.parts.length} parts — merged automatically)` : '';
+      ? ` (${f.parts.length} parts. Merged automatically)` : '';
     return `<div class="models-file">
       <div class="models-file-name" title="${escapeHtml(f.file)}">${escapeHtml(f.file)}${partsNote}</div>
       <div class="models-file-size">${escapeHtml(f.size_gb)} GB</div>
@@ -78,7 +78,7 @@ function renderAnalyzed(container, result) {
   container.innerHTML = result.error
     ? `<div class="models-card"><div class="models-error">${escapeHtml(result.error)}</div></div>`
     : `<div class="models-group">
-        <div class="models-group-title">${escapeHtml(result.repo)} — ${escapeHtml(result.total_gb)} GB total</div>
+        <div class="models-group-title">${escapeHtml(result.repo)} · ${escapeHtml(result.total_gb)} GB total</div>
         ${renderModelCard({ ...result, label: result.repo, note: 'Files in this repo and how they fit:' })}
       </div>`;
 }
@@ -141,7 +141,7 @@ async function modelsPoll() {
         const total = dl.total_bytes || 0;
         const pct = total > 0 ? Math.min(100, Math.round((dl.done_bytes / total) * 100)) : 0;
         const status = dl.state === 'done'
-          ? (dl.ollama ? `Ready in AI Chat (${dl.ollama})` : 'Downloaded — restart ComfyUI if needed')
+          ? (dl.ollama ? `Ready in AI Chat (${dl.ollama})` : 'Downloaded. Restart ComfyUI if needed')
           : dl.state === 'error' ? `Error: ${dl.error || ''}`
           : dl.state === 'cancelled' ? 'Cancelled'
           : dl.state;

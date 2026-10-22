@@ -1,6 +1,7 @@
 """Terminal command and interactive PTY WebSocket route."""
 from flask import Blueprint, jsonify, request
-from shared import limiter, ws_is_authenticated
+from shared import limiter, ws_is_authenticated, ws_session_token
+import audit
 import os, json, subprocess, threading, platform
 
 # POSIX-only imports for the PTY terminal (Windows gets a clean error)
@@ -19,7 +20,7 @@ bp = Blueprint('terminal', __name__)
 
 # ─── Quick commands ────────────────────────────────────────────────
 # Each entry: (command string the user types, argv to execute, max output
-# lines). Executed WITHOUT a shell — argv lists only. Piped/glob forms are
+# lines). Executed WITHOUT a shell - argv lists only. Piped/glob forms are
 # replaced by capped equivalents so nothing ever goes through /bin/sh.
 _ALLOWED_COMMANDS = {
     # Filesystem
@@ -88,7 +89,7 @@ def _truncate_lines(text: str, max_lines: int) -> str:
     return '\n'.join(lines[:max_lines]) + f'\n… truncated ({len(lines) - max_lines} more lines)'
 
 def _native_stat_cwd() -> str:
-    """Python-native `stat *` — no shell, no subprocess."""
+    """Python-native `stat *` - no shell, no subprocess."""
     rows = []
     try:
         for entry in os.scandir('.'):
@@ -103,7 +104,7 @@ def _native_stat_cwd() -> str:
     return '\n'.join(sorted(rows))
 
 def _native_file_cwd() -> str:
-    """Python-native `file *` — no shell, no subprocess."""
+    """Python-native `file *` - no shell, no subprocess."""
     import mimetypes
     rows = []
     try:
@@ -127,7 +128,7 @@ def _native_file_cwd() -> str:
     return '\n'.join(rows)
 
 def _native_du_cwd() -> str:
-    """Python-native `du -sh *` — no shell, no subprocess."""
+    """Python-native `du -sh *` - no shell, no subprocess."""
     rows = []
     try:
         for entry in sorted(os.scandir('.'), key=lambda e: e.name):
@@ -152,7 +153,7 @@ def _native_du_cwd() -> str:
 @bp.route('/api/command', methods=['POST'])
 @limiter.limit("30 per minute")
 def run_command():
-    """Run one allowlisted diagnostic command. No shell involved — every
+    """Run one allowlisted diagnostic command. No shell involved - every
     entry is a fixed argv list executed with shell=False."""
     data = request.get_json(silent=True) or {}
     cmd = (data.get('command') or '').strip()
@@ -202,8 +203,19 @@ def register(sock):
                 pass
             return
 
+        from routes.security import terminal_unlocked
+        if not terminal_unlocked(ws_session_token(getattr(ws, 'environ', {}))):
+            audit.log('terminal_denied', 'terminal socket without a two-step unlock', ok=False)
+            try:
+                ws.send(json.dumps({'type': 'locked', 'error': 'Terminal is locked. Enter your two-step code.'}))
+                ws.close()
+            except Exception:
+                pass
+            return
+        audit.log('terminal_open', 'interactive terminal started')
+
         if not _PTY_AVAILABLE:
-            # Windows (or exotic platform) — PTY shells are POSIX-only
+            # Windows (or exotic platform) - PTY shells are POSIX-only
             try:
                 ws.send(json.dumps({
                     'type': 'error',
@@ -340,7 +352,7 @@ def register(sock):
             # Handle WebSocket input (blocking)
             ws_to_pty()
 
-            # Cleanup — kill the whole process group so no orphan shells live on
+            # Cleanup - kill the whole process group so no orphan shells live on
             try:
                 _os.killpg(pid, _signal.SIGTERM)
                 _os.waitpid(pid, 0)

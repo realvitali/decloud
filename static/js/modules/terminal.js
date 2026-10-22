@@ -8,10 +8,56 @@ let xtermFit = null;
 let xtermWs = null;
 let xtermReady = false;
 
+// ─── Two-step lock: the shell only opens after a correct authenticator code ───
+function termShowLock(msg, noInput) {
+  document.getElementById('term-lock').hidden = false;
+  document.getElementById('xterm-container').style.visibility = 'hidden';
+  document.getElementById('term-lock-msg').textContent = msg || 'Enter the 6-digit code from your authenticator app.';
+  document.getElementById('term-lock-code').style.display = noInput ? 'none' : '';
+  document.getElementById('term-lock-btn').style.display = noInput ? 'none' : '';
+  document.getElementById('term-lock-err').textContent = '';
+  if (!noInput) setTimeout(function () { var i = document.getElementById('term-lock-code'); i.value = ''; i.focus(); }, 60);
+}
+async function termGate(done) {
+  var st;
+  try { st = await (await fetch('/api/terminal/status')).json(); }
+  catch (_) { termShowLock('Could not reach the server.', true); return; }
+  if (st.unlocked) {
+    document.getElementById('term-lock').hidden = true;
+    document.getElementById('xterm-container').style.visibility = '';
+    done(); return;
+  }
+  if (!st.configured) { termShowLock('Two-step code is not set up yet. On the server run:  .venv/bin/python scripts/totp_setup.py', true); return; }
+  termShowLock();
+}
+async function termUnlock(e) {
+  e.preventDefault();
+  var inp = document.getElementById('term-lock-code'), err = document.getElementById('term-lock-err'), btn = document.getElementById('term-lock-btn');
+  var code = inp.value.replace(/\s/g, '');
+  if (!/^\d{6}$/.test(code)) { err.textContent = 'Enter the 6 digits.'; return; }
+  btn.disabled = true; err.textContent = '';
+  try {
+    var r = await fetch('/api/terminal/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: code }) });
+    var d = await r.json().catch(function () { return {}; });
+    if (r.ok && d.ok) { inp.value = ''; termOpen(); }
+    else { err.textContent = d.error || 'That code is not right.'; inp.select(); }
+  } catch (_) { err.textContent = 'Could not reach the server.'; }
+  btn.disabled = false;
+}
+function termOpen() {
+  termGate(function () {
+    if (!xterm) initXterm();
+    if (xtermFit) { xtermFit.fit(); sendResize(); }
+    if (xterm) xterm.focus();
+  });
+}
+
 function initXterm() {
   if (xterm) return;
   if (typeof Terminal === 'undefined') {
     console.warn('xterm.js not loaded yet');
+    const c = document.getElementById('xterm-container');
+    if (c) c.textContent = 'Terminal library failed to load. Reload the page (pull to refresh).';
     return;
   }
 
@@ -86,6 +132,13 @@ function initXterm() {
     // Check for exit message
     try {
       const parsed = JSON.parse(data);
+      if (parsed.type === 'locked') {
+        xterm.writeln('\r\n\x1b[33m[Locked: enter your code]\x1b[0m'); xtermReady = false;
+        try { xtermWs.close(); } catch (_) {}
+        try { xterm.dispose(); } catch (_) {}
+        xterm = null; xtermFit = null; xtermWs = null; termOpen();
+        return;
+      }
       if (parsed.type === 'exit') {
         xterm.writeln('\r\n\x1b[31m[Process exited]\x1b[0m');
         xtermReady = false;
@@ -111,7 +164,7 @@ function initXterm() {
     }
   });
 
-  // Mobile key bar — proper key mappings
+  // Mobile key bar - proper key mappings
   const TERM_KEYS = {
     esc: '\x1b', tab: '\t', enter: '\r', del: '\x7f',
     up: '\x1b[A', down: '\x1b[B', left: '\x1b[D', right: '\x1b[C',
@@ -161,11 +214,7 @@ function switchTerminalMode(mode) {
     quickTerm.style.display = 'none';
     tabInt.classList.add('active');
     tabQuick.classList.remove('active');
-    if (!xterm) initXterm();
-    if (xtermFit) {
-      setTimeout(() => { xtermFit.fit(); sendResize(); }, 50);
-    }
-    if (xterm) xterm.focus();
+    termOpen();
   } else {
     xtermContainer.style.display = 'none';
     quickTerm.style.display = 'block';

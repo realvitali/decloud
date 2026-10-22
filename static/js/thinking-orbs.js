@@ -1,4 +1,4 @@
-// thinking-orbs.js — Ported from Jakub Antalik's thinking-orbs
+// thinking-orbs.js - Ported from Jakub Antalik's thinking-orbs
 // Pure 2D canvas, no WebGL, no filters. Monochrome dot-based thinking orbs.
 // MIT License. https://github.com/Jakubantalik/thinking-orbs
 

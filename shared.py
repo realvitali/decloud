@@ -1,4 +1,4 @@
-"""DeCloud — shared state and helpers."""
+"""DeCloud - shared state and helpers."""
 from flask import Flask, send_from_directory, jsonify, request, send_file, Response, stream_with_context
 from flask_sock import Sock
 import os, sys, json, subprocess, platform, psutil, uuid, re, time, threading, secrets, hmac, shutil
@@ -19,7 +19,7 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
 # is always loopback. ProxyFix restores the real client IP (so rate limits and
 # login backoff are per-client, not one shared bucket) and sets request.is_secure
 # from X-Forwarded-Proto (so session cookies get the Secure flag). We trust only
-# one hop (x_for=1/x_proto=1) — the immediate proxy — which is safe because the
+# one hop (x_for=1/x_proto=1) - the immediate proxy - which is safe because the
 # app binds 127.0.0.1 by default and is never directly internet-facing.
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
@@ -70,7 +70,7 @@ _load_env_file()
 # set, the app runs in open mode (for local-only development).
 #
 # Security model:
-#   - The passcode is the *credential* — only used during /api/auth/login.
+#   - The passcode is the *credential* - only used during /api/auth/login.
 #   - On successful login the server mints a random opaque session token,
 #     stores it in the in-memory SESSIONS map with an expiry, and sets it
 #     as the `decloud_session` cookie. The passcode itself is NEVER sent
@@ -78,14 +78,14 @@ _load_env_file()
 #   - All subsequent requests are authenticated by the session token.
 #   - Sessions are scoped to a single process (in-memory) and expire
 #     after 30 days. A restart invalidates all sessions, forcing
-#     re-login — acceptable for a personal self-hosted app.
+#     re-login - acceptable for a personal self-hosted app.
 DECLOUD_PIN = os.environ.get('DECLOUD_PIN', '')
 if DECLOUD_PIN:
     if len(DECLOUD_PIN) > 64:
         raise SystemExit('[decloud] DECLOUD_PIN is longer than 64 characters.')
     if len(DECLOUD_PIN) < 8:
         print('[decloud] WARNING: DECLOUD_PIN is short. Use at least 8 '
-              'characters (a passphrase, not just digits) — the install '
+              'characters (a passphrase, not just digits). The install '
               'default is now 8 digits.', flush=True)
 
 # Refuse to start with the placeholder SECRET_KEY. Generate one if missing.
@@ -94,13 +94,13 @@ if _env_secret and _env_secret != 'change-me-to-a-random-string':
     SECRET_KEY = _env_secret
 else:
     SECRET_KEY = secrets.token_hex(32)
-    print('[decloud] WARNING: SECRET_KEY not set in .env — generated an ephemeral '
+    print('[decloud] WARNING: SECRET_KEY not set in .env. Generated an ephemeral '
           'one for this run. Sessions will not survive a restart. '
           'Set SECRET_KEY in .env to persist sessions.', flush=True)
 app.secret_key = SECRET_KEY
 
 # Session store: token -> expiry epoch seconds. Persisted to disk so sessions
-# survive an app restart (still single-process — see note in save_sessions).
+# survive an app restart (still single-process - see note in save_sessions).
 SESSIONS_FILE = Path(__file__).parent / 'sessions.json'
 SESSION_TTL_SECONDS = 30 * 24 * 60 * 60  # 30 days
 MAX_SESSIONS = 50
@@ -125,7 +125,7 @@ SESSIONS: dict[str, float] = _load_sessions()
 
 
 def save_sessions():
-    """Persist sessions to disk (atomic write, chmod 600). Best-effort — a
+    """Persist sessions to disk (atomic write, chmod 600). Best-effort - a
     failed write must not break auth. Single-process safe: this app is one
     Flask process (threaded), so a file store is sufficient; multi-worker
     deployments would need a shared store (Redis/DB)."""
@@ -148,7 +148,7 @@ _LOGIN_BACKOFF_WINDOW = 60.0  # seconds of history kept per address
 _LOGIN_BACKOFF_MAX = 10       # failures before a hard cooldown applies
 
 def _purge_expired_sessions():
-    """Drop expired tokens. Called on every authenticated request — cheap
+    """Drop expired tokens. Called on every authenticated request - cheap
     because the dict stays small (a handful of devices per install)."""
     now = time.time()
     for t in [t for t, exp in SESSIONS.items() if exp <= now]:
@@ -184,6 +184,23 @@ def _is_authenticated():
 def _authed_by_bearer() -> bool:
     """True when auth came from an Authorization header (CSRF-safe)."""
     return bool(request.headers.get('Authorization', '').startswith('Bearer '))
+
+def ws_session_token(environ: dict) -> str:
+    """The session token of a WebSocket handshake (Authorization header, cookie or ?token=), or ''."""
+    token = ''
+    auth = environ.get('HTTP_AUTHORIZATION', '')
+    if auth.startswith('Bearer '):
+        token = auth[7:].strip()
+    if not token:
+        for part in environ.get('HTTP_COOKIE', '').split(';'):
+            key, _, val = part.strip().partition('=')
+            if key == 'decloud_session':
+                token = val
+                break
+    if not token:
+        from urllib.parse import parse_qs
+        token = (parse_qs(environ.get('QUERY_STRING', '')).get('token') or [''])[0]
+    return token
 
 def ws_is_authenticated(environ: dict) -> bool:
     """Check a WebSocket handshake for a valid session.
@@ -310,21 +327,21 @@ def _harden_response(resp):
         'Permissions-Policy',
         'camera=(), geolocation=(), microphone=(self)',
     )
-    # CSP: script-src needs 'unsafe-inline' because the SPA uses inline
-    # onclick handlers; everything else is locked down. jsdelivr hosts
-    # the xterm terminal assets.
+    # CSP: no inline <script> blocks and no third-party hosts (every library is vendored under static/vendor).
+    # script-src-attr keeps the SPA's inline onclick="..." handlers working; injected <script> tags and javascript: URLs are blocked.
     resp.headers.setdefault(
         'Content-Security-Policy',
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "script-src 'self'; "
+        "script-src-attr 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob:; "
         "media-src 'self' blob:; "
         "connect-src 'self' ws: wss:; "
         "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; "
         "form-action 'self'",
     )
-    # Never cache API responses — they can contain personal data
+    # Never cache API responses - they can contain personal data
     if request.path.startswith('/api/'):
         resp.headers.setdefault('Cache-Control', 'no-store')
 
@@ -509,6 +526,13 @@ def _generate_thumbnail(source_path: Path, size: tuple = THUMB_SIZE) -> Path | N
         return cache_path
     except Exception:
         return None
+
+def browse_root():
+    """What the Files app and Gallery treat as the top of the tree. Opt in to the whole machine with
+    DECLOUD_BROWSE_ROOT=/ ; otherwise it is FILES_DIR, as before."""
+    r = os.environ.get('DECLOUD_BROWSE_ROOT', '').strip()
+    return Path(r).expanduser().resolve() if r else Path(FILES_DIR).resolve()
+
 
 def safe_join_browse(base, *parts):
     """Join parts under base, resolving symlinks, and clamp any result that
@@ -792,7 +816,7 @@ JOURNAL_DIR = _env_path('DECLOUD_JOURNAL_DIR', '')  # path to Obsidian vault
 HERMES_HOME = os.environ.get('DECLOUD_HERMES_HOME', '')  # path to .hermes
 
 # ─── Projects config (data-driven, edit in settings or .env) ───
-# Empty by default — users add their own projects in the UI
+# Empty by default - users add their own projects in the UI
 PROJECTS_CONFIG = json.loads(os.environ.get('DECLOUD_PROJECTS', '[]'))
 
 # ─── Network stats state ────────────────────────────────────────
@@ -885,7 +909,7 @@ def _read_logs(limit=100):
                 'message': m.group('msg').strip(),
             })
         else:
-            # non-matching line — append as INFO
+            # non-matching line - append as INFO
             log_lines.append({
                 'timestamp': '',
                 'level': 'INFO',
@@ -898,5 +922,5 @@ MUSIC_DIR = _env_path('DECLOUD_MUSIC_DIR', Path.home() / 'Music')
 try:
     MUSIC_DIR.mkdir(parents=True, exist_ok=True)
 except OSError:
-    pass  # read-only filesystem — music browsing will simply be empty
+    pass  # read-only filesystem. Music browsing will simply be empty
 MUSIC_EXTS = {'.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac'}

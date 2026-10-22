@@ -62,7 +62,7 @@ def system_info():
                             m = re.search(r'Display controller: (.+?)(?:\s*\(rev|$)', line)
                         gpu_name = re.sub(r'\s+Device\s+[0-9a-fA-F]{4}$', '', (m.group(1) if m else '')).strip()
                         if gpu_name.endswith('NVIDIA Corporation'):
-                            # lspci db too old to resolve the model — try nvidia-smi for a proper name
+                            # lspci db too old to resolve the model - try nvidia-smi for a proper name
                             try:
                                 ns = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'],
                                                     capture_output=True, text=True, timeout=4)

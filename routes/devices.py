@@ -1,4 +1,4 @@
-"""Devices route — real device list from Tailscale + active connections."""
+"""Devices route - real device list from Tailscale + active connections."""
 from flask import Blueprint, jsonify
 import json, subprocess, time
 import psutil
@@ -62,7 +62,7 @@ def devices():
             continue
         host = peer.get('HostName') or ''
         dns = (peer.get('DNSName') or '').rstrip('.')
-        # Tailscale's default hostname is 'localhost' — prefer the DNS
+        # Tailscale's default hostname is 'localhost' - prefer the DNS
         # machine name (e.g. 'my-phone.tailxxxx.ts.net').
         dns_short = dns.split('.')[0] if dns else ''
         if host and host.lower() not in ('localhost', 'unknown'):
@@ -80,7 +80,7 @@ def devices():
         })
 
     # 3. Active connections to the app that aren't tailnet peers
-    #    (LAN clients, localhost browser sessions) — merge by IP.
+    #    (LAN clients, localhost browser sessions) - merge by IP.
     known_ips = {d['ip'] for d in out if d['ip']}
     try:
         for c in psutil.net_connections(kind='inet'):

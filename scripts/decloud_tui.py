@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""DeCloud TUI — a brutalist terminal dashboard. Run with `decloud tui`.
+"""DeCloud TUI - a brutalist terminal dashboard. Run with `decloud tui`.
 
 Reads every value from the same JSON APIs the web app uses (no duplicated
 logic), and the update panel reuses routes.update directly. The app may be
-down — the dashboard shows OFFLINE and the updater still works.
+down. The dashboard shows OFFLINE and the updater still works.
 """
 import json
 import os
@@ -147,7 +147,7 @@ class LoginScreen(ModalScreen):
 
     def compose(self) -> ComposeResult:
         yield Container(
-            Static("[bold]DECLOUD[/] — enter your passcode", id="login-title"),
+            Static("[bold]DECLOUD[/]. Enter your passcode", id="login-title"),
             Input(password=True, placeholder="passcode…", id="pin"),
             Static("", id="login-error"),
             Horizontal(
@@ -173,7 +173,7 @@ class LoginScreen(ModalScreen):
             self.dismiss(True)
         else:
             self.query_one('#login-error', Static).update(
-                '[#ff4d4d]wrong passcode — try again[/]')
+                '[#ff4d4d]wrong passcode. Try again[/]')
 
 
 class ConfirmScreen(ModalScreen):
@@ -278,7 +278,7 @@ class DeCloudTUI(App):
 
     def compose(self) -> ComposeResult:
         yield Static('', id='header')
-        yield Static('OFFLINE — the DeCloud app is not answering on '
+        yield Static('OFFLINE. The DeCloud app is not answering on '
                      f'{BASE}', id='offline')
         yield Horizontal(
             Vertical(
@@ -470,16 +470,16 @@ class DeCloudTUI(App):
             status = f"[{MUTED}]updates need a git install[/]"
         elif d.get('update_available'):
             status = (f"[bold {ACCENT}]UPDATE AVAILABLE → {latest.get('tag')}[/]\n"
-                      f"{'— press U to install —'}")
+                      f"{'- press U to install -'}")
         else:
             status = f"[#4dff6a]up to date[/]"
         lines = [
             f"[bold]CURRENT[/] {cur}",
-            f"[bold]LATEST[/]  {latest.get('tag') or '—'}",
+            f"[bold]LATEST[/]  {latest.get('tag') or '-'}",
             status,
         ]
         if not d.get('tree_clean'):
-            lines.append(f"[#ff4d4d]local changes — updates paused[/]")
+            lines.append(f"[#ff4d4d]local changes. Updates paused[/]")
         if d.get('can_rollback'):
             lines.append(f"[{MUTED}]rollback available[/]")
         self.query_one('#update', Static).update('\n'.join(lines))
@@ -512,7 +512,7 @@ class DeCloudTUI(App):
             ConfirmScreen(f"Update DeCloud to [bold]{ref}[/]?\n\n"
                           "The new version is downloaded, verified, and "
                           "test-booted before anything restarts.\n\n"
-                          "This is safe — a broken update rolls back "
+                          "This is safe. A broken update rolls back "
                           "automatically."),
             lambda ok: self._confirm_update(ok, ref),
         )
@@ -528,7 +528,7 @@ class DeCloudTUI(App):
             import routes.update as upd
             code, payload = upd.perform_update(ref)
             if code == 200:
-                self.call_from_thread(self._update_done, 'update verified — '
+                self.call_from_thread(self._update_done, 'update verified, '
                                       'the app restarts in a moment')
             else:
                 self.call_from_thread(self._update_done,

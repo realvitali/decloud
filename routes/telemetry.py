@@ -28,7 +28,7 @@ def app_usage():
         USAGE_FILE.write_text(json.dumps(log, indent=2))
         return jsonify({'ok': True, 'entry': entry})
 
-    # GET — aggregated stats
+    # GET - aggregated stats
     log = []
     if USAGE_FILE.exists():
         try:

@@ -20,8 +20,8 @@ function loadAbout() {
     document.getElementById('about-updated').textContent = data.date;
     const cl = document.getElementById('about-changelog');
     cl.innerHTML = data.changelog.map(entry =>
-      '<h4>v' + entry.version + ' — ' + entry.date + '</h4>' +
-      '<ul>' + entry.changes.map(c => '<li>' + c + '</li>').join('') + '</ul>'
+      '<h4>v' + escapeHtml(entry.version) + ' · ' + escapeHtml(entry.date) + '</h4>' +
+      '<ul>' + entry.changes.map(c => '<li>' + escapeHtml(c) + '</li>').join('') + '</ul>'
     ).join('');
   }).catch(() => {
     document.getElementById('about-version').textContent = '?';
@@ -81,7 +81,7 @@ function savePaths() {
     var el = document.getElementById('paths-save-note');
     if (el) {
       if (res.ok) {
-        el.textContent = '✓ Saved — applied immediately';
+        el.textContent = '✓ Saved. Applied immediately';
         el.className = 'settings-note settings-note-ok';
       } else {
         el.textContent = '✗ ' + (res.d.error || 'Save failed');
@@ -133,7 +133,7 @@ function changePin() {
   }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
   .then(function(res) {
     if (res.ok) {
-      note.textContent = '✓ Passcode updated — signing out…';
+      note.textContent = '✓ Passcode updated. Signing out…';
       note.className = 'settings-note settings-note-ok';
       document.getElementById('pin-current').value = '';
       document.getElementById('pin-new').value = '';
@@ -168,7 +168,7 @@ function loadVoicePanel() {
     if (brainEl) {
       brainEl.textContent = hermes.available
         ? '✓ Using Hermes (' + hermes.bin + ')'
-        : '• Hermes not detected — falling back to the LLM below. Set the Hermes path or install Hermes for a smarter agent.';
+        : '• Hermes not detected. Falling back to the LLM below. Set the Hermes path or install Hermes for a smarter agent.';
     }
     var hermesHome = document.getElementById('voicecfg-hermes-home');
     if (hermesHome) hermesHome.value = hermes.home || '~/.hermes';
@@ -201,7 +201,7 @@ function loadVoicePanel() {
       if (models.indexOf(cfg.llm_local_model) === -1 && cfg.llm_local_model) models.push(cfg.llm_local_model);
       modelSel.innerHTML = models.map(function(m) {
         return '<option value="' + escapeHtml(m) + '"' + (m === cfg.llm_local_model ? ' selected' : '') + '>' + escapeHtml(m) + '</option>';
-      }).join('') || '<option value="">(no models — install below)</option>';
+      }).join('') || '<option value="">(no models: install below)</option>';
     }
 
     // Cloud fields
@@ -231,7 +231,7 @@ function renderVoiceSetupStatus(d) {
   var parts = [];
   parts.push(d.ollama.running
     ? '✓ Ollama running (local AI ready)'
-    : (d.ollama.installed ? '⚠ Ollama installed but not running' : '• Ollama not installed — use the button below for local AI'));
+    : (d.ollama.installed ? '⚠ Ollama installed but not running' : '• Ollama not installed. Use the button below for local AI'));
   parts.push(d.piper_available ? '✓ Piper TTS ready' : '• Piper TTS missing');
   parts.push(d.whisper_available ? '✓ Whisper STT ready' : '• Whisper STT not installed (browser speech is default)');
   parts.push(d.api_key && d.api_key.set ? '✓ Cloud API key saved' : '• No cloud API key');
@@ -242,7 +242,7 @@ function renderVoiceSetupStatus(d) {
     var active = Object.keys(j).filter(function(k) { return j[k].state === 'running'; });
     if (active.length) ollamaNote.textContent = j[active[0]].message;
     else if (!d.ollama.running) ollamaNote.textContent = 'Install Ollama, then download a small model like llama3.2:3b to get started.';
-    else ollamaNote.textContent = 'Local models run on this machine — private, no API costs.';
+    else ollamaNote.textContent = 'Local models run on this machine. Private, no API costs.';
   }
 }
 
@@ -426,7 +426,7 @@ function loadSettingsDevices() {
       el.innerHTML = '<div class="settings-empty">No devices found</div>';
       return;
     }
-    // Tailscale IP row — from this machine's own tailnet IP
+    // Tailscale IP row - from this machine's own tailnet IP
     var self = devices.find(function(d) { return d.is_local; });
     var ipEl = document.getElementById('settings-tailscale-ip');
     if (ipEl) ipEl.textContent = (self && self.ip) ? self.ip : '--';
@@ -495,9 +495,9 @@ function loadSettingsLogs() {
     }
     el.innerHTML = logs.map(function(l) {
       var level = l.level || 'INFO';
-      return '<div class="settings-log-row level-' + level.toLowerCase() + '">' +
+      return '<div class="settings-log-row level-' + escapeHtml(level.toLowerCase()) + '">' +
         '<span class="log-time">' + escapeHtml(l.timestamp || '') + '</span>' +
-        '<span class="log-level">' + level + '</span>' +
+        '<span class="log-level">' + escapeHtml(level) + '</span>' +
         '<span class="log-msg">' + escapeHtml(l.message || '') + '</span>' +
       '</div>';
     }).join('');
@@ -530,17 +530,17 @@ async function checkForUpdates(manual) {
     _updateState = d;
 
     if (!d.is_git) {
-      if (status) status.textContent = 'Updates unavailable — this install is not a git checkout.';
+      if (status) status.textContent = 'Updates unavailable. This install is not a git checkout.';
       if (actions) actions.style.display = 'none';
       return;
     }
     if (!d.tree_clean) {
-      if (status) status.textContent = 'Local files have been modified — updates are paused to protect your changes.';
+      if (status) status.textContent = 'Local files have been modified. Updates are paused to protect your changes.';
       if (actions) actions.style.display = 'none';
       return;
     }
     if (d.update_available && d.latest && d.latest.tag) {
-      var notes = d.latest.notes ? ' — ' + d.latest.notes.split('\n')[0].slice(0, 120) : '';
+      var notes = d.latest.notes ? ': ' + d.latest.notes.split('\n')[0].slice(0, 120) : '';
       if (status) status.textContent = 'Update available: ' + d.latest.tag +
         ' (you are on v' + d.current_version + ')' + notes;
       var go = document.getElementById('update-go-btn');
@@ -575,7 +575,7 @@ async function performUpdate() {
       if (status) status.textContent = 'Update did not apply: ' + (d.error || r.status);
       return;
     }
-    if (status) status.textContent = d.message + ' — ' + (d.to || ref);
+    if (status) status.textContent = d.message + ': ' + (d.to || ref);
     if (d.restart === 'scheduled') {
       _waitForRestart(ref);
     }
@@ -595,7 +595,7 @@ async function performRollback() {
       if (status) status.textContent = 'Revert did not apply: ' + (d.error || r.status);
       return;
     }
-    if (status) status.textContent = 'Reverted — restarting…';
+    if (status) status.textContent = 'Reverted. Restarting…';
     _waitForRestart(null);
   } catch (e) {
     if (status) status.textContent = 'Revert error: ' + (e.message || 'network');
@@ -619,7 +619,7 @@ async function _waitForRestart(toRef) {
     } catch (e) { /* still down */ }
   }
   var status = document.getElementById('update-status');
-  if (status) status.textContent = 'The app is taking a while to come back — refresh the page in a minute. If it is still down, DeCloud has automatically reverted; check again shortly.';
+  if (status) status.textContent = 'The app is taking a while to come back. Refresh the page in a minute. If it is still down, DeCloud has automatically reverted; check again shortly.';
 }
 
 // Expose for inline onclick handlers

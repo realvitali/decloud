@@ -1,5 +1,5 @@
 // ===== Module: liquid =====
-// DeCloud motion layer — REAL elements only. No goo filters, no clones:
+// DeCloud motion layer - REAL elements only. No goo filters, no clones:
 // a goo/metaball effect fundamentally requires rendered copies of the
 // shapes, so this version animates the actual DOM elements instead.
 //
@@ -8,7 +8,7 @@
 //      so swipe mode and other app animations are never clobbered).
 //   2. A subtle rounded-square click ripple on one shared canvas.
 //   3. The AI tile itself stretches and splats (the real tile in the
-//      grid — nothing drawn over it), while its satellites pop out
+//      grid - nothing drawn over it), while its satellites pop out
 //      with spring physics and ring still.
 //
 // Spring curves and easing shapes ported from liquid-taffy
@@ -261,7 +261,7 @@
   }, { passive: true });
 
   // ─── 3. AI SPREAD: THE REAL TILE STRETCHES ──────────────────────
-  // No overlay drawn over the tile — the tile you press is the tile
+  // No overlay drawn over the tile - the tile you press is the tile
   // that moves. Satellites are real buttons that spring out and ring.
 
   (function setupAISpread() {
@@ -338,10 +338,9 @@
           close();
           setTimeout(() => {
             showScreen(sub.screen);
-            if (sub.id === 'ollama') { location.hash = '#ollama'; loadOllamaModels(); }
-            if (sub.id === 'comfy') { location.hash = '#comfy'; loadComfyStatus(); loadComfyModels(); loadComfyGallery(); }
-            if (sub.id === 'musicgen') { location.hash = '#musicgen'; loadMusicGen(); }
-            if (sub.id === 'agents') { location.hash = '#agents'; }
+            if (sub.id === 'ollama') loadOllamaModels();
+            if (sub.id === 'comfy') { loadComfyStatus(); loadComfyModels(); loadComfyGallery(); }
+            if (sub.id === 'musicgen') loadMusicGen();
           }, 50);
         });
         wrap.appendChild(b);

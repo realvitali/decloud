@@ -8,6 +8,7 @@ from shared import (
 import hmac
 import secrets
 import time
+import audit
 
 bp = Blueprint('auth', __name__)
 
@@ -32,7 +33,7 @@ def _clear_failures(addr: str):
 def login():
     """Authenticate with the passcode. Sets a session-token cookie on success."""
     if not DECLOUD_PIN:
-        return jsonify({'ok': True, 'message': 'Open mode — no passcode required'})
+        return jsonify({'ok': True, 'message': 'Open mode. No passcode required'})
 
     addr = _client_addr()
     data = request.get_json(silent=True) or {}
@@ -41,12 +42,14 @@ def login():
         return jsonify({'error': 'Invalid passcode'}), 401
 
     if not hmac.compare_digest(pin, DECLOUD_PIN):
+        audit.log('login_fail', 'wrong password', ok=False)
         backoff = _record_failure(addr)
         if backoff > 0:
             time.sleep(backoff)
         return jsonify({'error': 'Invalid passcode'}), 401
 
     _clear_failures(addr)
+    audit.log('login_ok', 'signed in')
 
     # Mint a fresh opaque session token. The passcode never leaves the server.
     token = secrets.token_urlsafe(32)
@@ -104,6 +107,7 @@ def logout():
     if token:
         SESSIONS.pop(token, None)
         save_sessions()
+        audit.log('logout', 'signed out')
     resp = make_response(jsonify({'ok': True}))
     resp.delete_cookie('decloud_session')
     return resp
@@ -126,7 +130,7 @@ def change_pin():
     # In open mode there is no existing passcode to verify, so an
     # unauthenticated caller could set one and lock the owner out. Refuse.
     if not shared.DECLOUD_PIN:
-        return jsonify({'error': 'No passcode is set — configure DECLOUD_PIN in .env first.'}), 400
+        return jsonify({'error': 'No passcode is set. Configure DECLOUD_PIN in .env first.'}), 400
 
     if not hmac.compare_digest(current, shared.DECLOUD_PIN):
         return jsonify({'error': 'Current passcode is incorrect'}), 401
@@ -148,6 +152,7 @@ def change_pin():
     global DECLOUD_PIN
     DECLOUD_PIN = new
     SESSIONS.clear()
+    audit.log('password_changed', 'passcode changed, all sessions signed out')
     save_sessions()
 
-    return jsonify({'ok': True, 'message': 'Passcode updated — please sign in again'})
+    return jsonify({'ok': True, 'message': 'Passcode updated. Please sign in again'})

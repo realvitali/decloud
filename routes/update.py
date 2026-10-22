@@ -1,20 +1,20 @@
 """Safe self-update routes.
 
 Design goals (the machine matters more than the feature):
-  1. NEVER destroy user data — updates only move git-tracked files.
+  1. NEVER destroy user data - updates only move git-tracked files.
      `.env`, books, audio caches, and settings live outside the tree
      and are untouched.
-  2. NEVER update a tree the user has modified by hand — a dirty
+  2. NEVER update a tree the user has modified by hand - a dirty
      working tree refuses the update outright.
-  3. VERIFY before switching — after checkout, the new code must pass
+  3. VERIFY before switching - after checkout, the new code must pass
      a syntax compile AND a live boot probe on a scratch port before
      the running app is restarted. A failed verification rolls the
      checkout back immediately and reports the error.
-  4. SELF-HEAL — if the new code somehow still crashes on the real
+  4. SELF-HEAL - if the new code somehow still crashes on the real
      boot, app.py detects the fresh update marker and checks out the
      previous revision before exiting, so the service manager brings
      the OLD, working code back up.
-  5. EXPLICIT — the UI shows the exact target version and release
+  5. EXPLICIT - the UI shows the exact target version and release
      notes and asks for confirmation. Nothing updates silently.
 """
 from flask import Blueprint, jsonify, request
@@ -37,7 +37,7 @@ MARKER_CLEAR_AFTER_SECONDS = 120       # after this much healthy uptime, the upd
 # Only one update/rollback may run at a time
 _update_lock = threading.Lock()
 
-# Valid target refs: short tag-like names only (defense in depth —
+# Valid target refs: short tag-like names only (defense in depth -
 # the value is only ever passed to git as a single argv entry, but a
 # whitelist costs nothing and prevents exotic refs)
 _REF_PATTERN = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$')
@@ -212,7 +212,7 @@ def _version_tuple(v: str) -> tuple:
 
 
 def _version_newer(latest: str, current: str) -> bool:
-    """True only when `latest` is a genuine upgrade over `current` —
+    """True only when `latest` is a genuine upgrade over `current` -
     never a downgrade (e.g. a stale alpha tag must not be offered)."""
     try:
         return _version_tuple(latest) > _version_tuple(current)
@@ -312,7 +312,7 @@ def perform_update(ref):
         # 2. Never update a tree the user has modified
         if not _tree_clean():
             return 409, {
-                'error': 'local changes detected — refusing to update so your '
+                'error': 'local changes detected. Refusing to update so your '
                          'edits are not lost. Review `git status` over SSH, '
                          'then try again.',
                 'code': 'DIRTY_TREE',
@@ -346,13 +346,13 @@ def perform_update(ref):
         # 5. Switch the working tree (git refuses if anything conflicts)
         if not _checkout(target_sha):
             clear_update_meta()
-            return 500, {'error': 'checkout failed — your current version '
+            return 500, {'error': 'checkout failed. Your current version '
                                   'is still running, nothing changed'}
 
         # 6. Verify the NEW code before restarting
         if not _py_compile_all():
             _rollback_now(prev_sha)
-            return 500, {'error': 'new version failed syntax checks — '
+            return 500, {'error': 'new version failed syntax checks, '
                                   'rolled back, you are still on '
                                   f'{VERSION}'}
         probe_ok, probe_detail = _boot_probe()
@@ -364,7 +364,7 @@ def perform_update(ref):
                          'version is still running.',
             }
 
-        # 7. Verified — mark installed and schedule the restart
+        # 7. Verified - mark installed and schedule the restart
         meta = read_update_meta()
         meta['state'] = 'installed'
         meta['ts'] = time.time()
@@ -377,9 +377,9 @@ def perform_update(ref):
             'from': VERSION,
             'to': ref,
             'restart': 'scheduled' if restart_requested else 'manual',
-            'message': 'update verified — the app will restart in a moment' if
+            'message': 'update verified. The app will restart in a moment' if
                        restart_requested else
-                       'update verified — restart the app to switch to it',
+                       'update verified. Restart the app to switch to it',
         }
     finally:
         _update_lock.release()
@@ -398,10 +398,10 @@ def perform_rollback():
         if head == prev_sha:
             return 409, {'error': 'already on the previous version'}
         if not _tree_clean():
-            return 409, {'error': 'local changes detected — refusing to '
+            return 409, {'error': 'local changes detected. Refusing to '
                                   'touch the tree'}
         if not _checkout(prev_sha):
-            return 500, {'error': 'rollback checkout failed — nothing changed'}
+            return 500, {'error': 'rollback checkout failed. Nothing changed'}
         meta['state'] = 'rolled_back'
         meta['ts'] = time.time()
         write_update_meta(meta)

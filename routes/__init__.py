@@ -1,4 +1,4 @@
-"""DeCloud — route blueprints registry."""
+"""DeCloud - route blueprints registry."""
 
 
 def register_blueprints(app, sock):
@@ -22,6 +22,12 @@ def register_blueprints(app, sock):
 
     from .lego import bp as lego_bp
     app.register_blueprint(lego_bp)
+
+    from .security import bp as security_bp
+    app.register_blueprint(security_bp)
+
+    from .gallery import bp as gallery_bp
+    app.register_blueprint(gallery_bp)
 
     from .ollama import bp as ollama_bp
     app.register_blueprint(ollama_bp)
@@ -72,3 +78,6 @@ def register_blueprints(app, sock):
     if sock is not None:
         from .terminal import register as register_terminal
         register_terminal(sock)
+
+        from .music import register as register_music
+        register_music(sock)

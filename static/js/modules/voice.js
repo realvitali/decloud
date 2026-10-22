@@ -28,9 +28,9 @@ async function syncVoiceSettingsFromServer() {
     if (cfg.stt) voiceSettings.stt = cfg.stt;
     if (cfg.tts) voiceSettings.tts = cfg.tts;
     if (cfg.llm_local_model) voiceSettings.llm = cfg.llm_local_model;
-    delete voiceSettings.hermes; // legacy flag — no longer used
+    delete voiceSettings.hermes; // legacy flag. No longer used
     localStorage.setItem('voiceSettings', JSON.stringify(voiceSettings));
-  } catch (e) { /* server unreachable — keep localStorage */ }
+  } catch (e) { /* server unreachable. Keep localStorage */ }
 }
 
 function toggleVoice() {
@@ -69,7 +69,7 @@ async function requestMicPermission() {
     hidePermissionButton();
     startAutoListen();
   } catch (e) {
-    status.textContent = 'Microphone blocked — enable it in your browser settings';
+    status.textContent = 'Microphone blocked. Enable it in your browser settings';
   }
 }
 
@@ -175,12 +175,12 @@ function updateMuteButton() {
   const icon = document.getElementById('voice-mute-icon');
   const label = document.getElementById('voice-mute-label');
   if (micMuted) {
-    // Muted — mic with slash
+    // Muted - mic with slash
     icon.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/></svg>';
     label.textContent = 'Unmute';
     btn.classList.add('muted');
   } else {
-    // Unmuted — mic icon
+    // Unmuted - mic icon
     icon.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>';
     label.textContent = 'Mute';
     btn.classList.remove('muted');
@@ -344,7 +344,7 @@ function stopListening() {
 function startBrowserSTT() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
-    document.getElementById('voice-status').textContent = 'Browser speech not supported — switch STT to Whisper in Settings → Voice.';
+    document.getElementById('voice-status').textContent = 'Browser speech not supported. Switch STT to Whisper in Settings → Voice.';
     return;
   }
 
@@ -383,7 +383,7 @@ function startBrowserSTT() {
   recognition.onerror = (e) => {
     if (e.error === 'no-speech') {
       setVoiceState('idle');
-      document.getElementById('voice-status').textContent = "Didn't hear anything — try again";
+      document.getElementById('voice-status').textContent = "Didn't hear anything. Try again";
     } else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
       setVoiceState('idle');
       showPermissionButton();
@@ -397,7 +397,7 @@ function startBrowserSTT() {
     // If recognition ended without producing a final result, don't hang.
     if (!gotFinal && voiceState === 'listening') {
       setVoiceState('idle');
-      document.getElementById('voice-status').textContent = "Didn't catch that — tap the mic to try again";
+      document.getElementById('voice-status').textContent = "Didn't catch that. Tap the mic to try again";
     }
   };
 
@@ -534,7 +534,7 @@ async function executeVoiceAction(action) {
     case 'run_command':
       pendingCommand = action;
       confirmEl.style.display = 'flex';
-      confirmTextEl.innerHTML = `Run: <strong>${action.command}</strong><br>${action.description || ''}`;
+      confirmTextEl.innerHTML = `Run: <strong>${escapeHtml(action.command)}</strong><br>${escapeHtml(action.description || '')}`;
       setVoiceState('idle');
       await speak(`I want to run: ${action.command}. ${action.description || ''}. Shall I proceed?`);
       break;
@@ -701,7 +701,7 @@ function browserSpeak(text) {
       utter.onend = finish;
       utter.onerror = finish;
       speechSynthesis.speak(utter);
-      // Safety net — never hang on "speaking".
+      // Safety net - never hang on "speaking".
       setTimeout(finish, Math.max(3000, text.length * 200));
     } catch (e) { finish(); }
   });
@@ -741,7 +741,7 @@ async function speak(text) {
           const p = audio.play();
           if (p && p.then) p.catch(() => finish(false));
         } catch (e) { finish(false); }
-        // Safety net — bail if the browser never signals playback end.
+        // Safety net - bail if the browser never signals playback end.
         setTimeout(() => finish(false), Math.max(6000, text.length * 250));
       });
       if (played) return;
@@ -827,7 +827,7 @@ function resumeAudioPlayback() {
 function searchLegoFiles(query) {
   // Navigate to lego and trigger search if available
   showScreen('lego-screen');
-  if (typeof loadLego === 'function') loadLego('');
+  if (typeof loadLego === 'function') loadLego();
 }
 
 function generateImageFromVoice(prompt) {
@@ -848,7 +848,7 @@ function sendChatFromVoice(message) {
   }
 }
 
-// ─── Push-to-talk: removed — mute toggle controls mic ───
+// ─── Push-to-talk: removed - mute toggle controls mic ───
 
 // ─── Auto-Listen Mode (continuous conversation with silence detection) ───
 

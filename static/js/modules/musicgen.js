@@ -1,5 +1,5 @@
 // ===== Module: musicgen =====
-// Music Generator — local MiniMax Music 3 via the user's ComfyUI.
+// Music Generator - local MiniMax Music 3 via the user's ComfyUI.
 
 let musicGenPromptId = null;
 let musicGenPollTimer = null;
@@ -15,7 +15,7 @@ async function musicGenCheckStatus() {
     const r = await fetch('/api/musicgen/status');
     const d = await r.json();
     if (!d.comfy_online) {
-      bar.innerHTML = 'ComfyUI is offline — ' +
+      bar.innerHTML = 'ComfyUI is offline, ' +
         '<button class="models-get-btn" style="margin-left:10px" onclick="comfyStart()">Start ComfyUI</button>' +
         '<button class="models-get-btn" style="margin-left:6px;background:var(--glass);color:var(--text);border:1px solid var(--glass-border)" onclick="musicGenCheckStatus()">Check again</button>';
       bar.className = 'musicgen-status offline';
@@ -27,7 +27,7 @@ async function musicGenCheckStatus() {
       document.getElementById('musicgen-setup-hint').style.display = '';
       return;
     }
-    bar.textContent = `Ready — ${d.history_count} songs in your library.`;
+    bar.textContent = `Ready, ${d.history_count} songs in your library.`;
     bar.className = 'musicgen-status online';
     document.getElementById('musicgen-setup-hint').style.display = 'none';
   } catch (e) {
@@ -79,7 +79,7 @@ async function musicGenGenerate() {
   const btn = document.getElementById('musicgen-generate-btn');
 
   if (!prompt && !lyrics) {
-    alert('Describe the song, or write lyrics — or both.');
+    alert('Describe the song, or write lyrics. Or both.');
     return;
   }
 
@@ -120,7 +120,7 @@ async function musicGenPoll() {
   try {
     const r = await fetch(`/api/musicgen/progress/${musicGenPromptId}`);
     if (r.status === 503) {
-      document.getElementById('musicgen-progress-text').textContent = 'ComfyUI hiccup — retrying…';
+      document.getElementById('musicgen-progress-text').textContent = 'ComfyUI hiccup. Retrying…';
       musicGenPollTimer = setTimeout(musicGenPoll, 4000);
       return;
     }
@@ -148,7 +148,7 @@ async function musicGenPoll() {
       if (w < 92) fill.style.width = Math.min(92, w + 1.5) + '%';
     }
   } catch (e) {
-    document.getElementById('musicgen-progress-text').textContent = 'Connection lost — retrying…';
+    document.getElementById('musicgen-progress-text').textContent = 'Connection lost. Retrying…';
   }
   musicGenPollTimer = setTimeout(musicGenPoll, 4000);
 }

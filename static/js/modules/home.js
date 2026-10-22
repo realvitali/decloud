@@ -25,7 +25,7 @@ async function loadAgents() {
       const tag = a.platform && a.platform !== 'this machine' ? `<span class="agent-tag">${escapeHtml(a.platform)}</span>` : '';
       const platformLine = [a.profile && a.profile !== 'local' ? 'Hermes · ' + a.profile : '', a.model].filter(Boolean).map(escapeHtml).join(' · ') || 'this machine';
       const hasJobs = a.jobs && a.jobs.length;
-      const note = a.profile === 'local' ? 'This workstation — always on' : 'No cron jobs configured';
+      const note = a.profile === 'local' ? 'This workstation. Always on' : 'No cron jobs configured';
       return `
       <div class="agent-card" data-id="${escapeHtml(a.id)}" onclick="toggleAgentDetail(this.dataset.id)">
         <div class="agent-header">
@@ -112,8 +112,8 @@ async function loadActivity() {
       const t = ev.ts ? relTime(ev.ts) : '';
       const label = ev.dir === 'in' ? 'IN' : 'OUT';
       return `
-        <div class="activity-item ${ev.dir}">
-          <span class="activity-dir ${ev.dir}">${label}</span>
+        <div class="activity-item ${escapeHtml(ev.dir)}">
+          <span class="activity-dir ${escapeHtml(ev.dir)}">${label}</span>
           <span class="activity-time">${escapeHtml(t)}</span>
           <span class="activity-text">${escapeHtml(ev.text || '')}</span>
         </div>
@@ -297,7 +297,7 @@ function setChipValue(key, val) {
 }
 
 // ─── Notifications ─────────────────────────────────────────
-// Built from real system state — no fake entries.
+// Built from real system state - no fake entries.
 var notifications = [];
 var notifRead = false;
 
@@ -305,10 +305,10 @@ function buildNotifications(sys) {
   notifications = [];
   if (!sys || sys.error) return notifications;
   if (sys.ram_percent >= 85) {
-    notifications.push({ text: 'RAM at ' + Math.round(sys.ram_percent) + '% — getting tight', type: 'warning', icon: 'server', time: 'now' });
+    notifications.push({ text: 'RAM at ' + Math.round(sys.ram_percent) + '%. Getting tight', type: 'warning', icon: 'server', time: 'now' });
   }
   if (sys.disk_percent >= 90) {
-    notifications.push({ text: 'Disk at ' + Math.round(sys.disk_percent) + '% — consider cleaning up', type: 'warning', icon: 'alert', time: 'now' });
+    notifications.push({ text: 'Disk at ' + Math.round(sys.disk_percent) + '%. Consider cleaning up', type: 'warning', icon: 'alert', time: 'now' });
   }
   return notifications;
 }
@@ -346,7 +346,7 @@ function renderNotifications() {
   list.innerHTML = notifications.map(function(n) {
     var iconSvg = ICONS[n.icon] || ICONS.alert;
     return '<div class="notif-item">' +
-      '<div class="notif-item-icon ' + n.type + '">' + iconSvg + '</div>' +
+      '<div class="notif-item-icon ' + escapeHtml(n.type) + '">' + iconSvg + '</div>' +
       '<div class="notif-item-body">' +
       '<div class="notif-item-text">' + escapeHtml(n.text) + '</div>' +
       '<div class="notif-item-time">' + escapeHtml(n.time) + '</div>' +
@@ -394,25 +394,27 @@ function openApp(id) {
   if (!app.screen) return;
   closeAISpread();
   showScreen(app.screen);
-  if (id === 'audiobooks') { location.hash = '#audiobooks'; loadBooks(); }
-  if (id === 'music') { location.hash = '#music'; loadMusic(); }
-  if (id === 'files') { loadLego(''); }
-  if (id === 'journal') { location.hash = '#journal'; switchJournalTab('journal-tab-voice'); }
-  if (id === 'legos') { location.hash = '#legos'; initLegos3D(); }
-  if (id === 'ollama') { location.hash = '#ollama'; loadOllamaModels(); }
-  if (id === 'comfy') { location.hash = '#comfy'; loadComfyStatus(); loadComfyModels(); loadComfyGallery(); }
-  if (id === 'system') { location.hash = '#system'; loadSystem(); }
-  if (id === 'agents') { location.hash = '#agents'; }
-  if (id === 'projects') { location.hash = '#projects'; openProjectList(); }
-  if (id === 'settings') { location.hash = '#settings'; loadSettings(); }
+  if (id === 'audiobooks') loadBooks();
+  if (id === 'music') { if (typeof mzApplyRoute === 'function') mzApplyRoute([]); navSet('music'); loadMusic(); }
+  if (id === 'files') { loadLego(); }
+  if (id === 'gallery') glOpen();
+  if (id === 'logs') loadLogs();
+  if (id === 'journal') switchJournalTab('journal-tab-voice');
+  if (id === 'legos') initLegos3D();
+  if (id === 'ollama') loadOllamaModels();
+  if (id === 'comfy') { loadComfyStatus(); loadComfyModels(); loadComfyGallery(); }
+  if (id === 'system') loadSystem();
+  if (id === 'projects') openProjectList();
+  if (id === 'settings') loadSettings();
 }
 
 // ─── Screen Management ───────────────────────────────────
 function showScreen(id) {
+  if (typeof navShow === 'function') navShow(id);
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id)?.classList.add('active');
   // Track app usage
-  var appMap = { 'book-screen': 'books', 'music-screen': 'music', 'lego-screen': 'files', 'ollama-screen': 'ai-chat', 'comfy-screen': 'ai-gen', 'agents-screen': 'agents', 'project-screen': 'projects', 'system-screen': 'system', 'terminal-screen': 'terminal', 'osint-screen': 'privacy', 'universe-screen': 'universe', 'journal-screen': 'journal', 'legos-screen': 'legos', 'settings-screen': 'settings' };
+  var appMap = { 'book-screen': 'books', 'music-screen': 'music', 'lego-screen': 'files', 'gallery-screen': 'gallery', 'logs-screen': 'logs', 'ollama-screen': 'ai-chat', 'comfy-screen': 'ai-gen', 'agents-screen': 'agents', 'project-screen': 'projects', 'system-screen': 'system', 'terminal-screen': 'terminal', 'osint-screen': 'privacy', 'universe-screen': 'universe', 'journal-screen': 'journal', 'legos-screen': 'legos', 'settings-screen': 'settings' };
   if (appMap[id] && typeof trackAppOpen === 'function') trackAppOpen(appMap[id]);  // hash restore runs before telemetry.js loads
   // Voice orb only shows on home screen
   const orb = document.getElementById('voice-orb');
@@ -429,14 +431,10 @@ function showScreen(id) {
   if (id === 'legos-screen') initLegos3D();
   // Initialize xterm when opening terminal screen
   if (id === 'terminal-screen') {
-    setTimeout(() => {
-      if (!xterm) initXterm();
-      if (xtermFit) { xtermFit.fit(); sendResize(); }
-      if (xterm) xterm.focus();
-    }, 100);
+    setTimeout(termOpen, 100);
   }
 }
-function goHome() { location.hash = ''; showScreen('home-screen'); }
+function goHome() { showScreen('home-screen'); }
 
 // Force refresh: unregister SW, clear all caches, reload
 async function forceRefresh() {

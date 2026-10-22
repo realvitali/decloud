@@ -45,7 +45,7 @@ function desktopNavigate(dx, dy) {
 }
 
 document.addEventListener("keydown", function(e) {
-  if (!isDesktop) return;
+  if (!isDesktop || e.defaultPrevented) return;      // a viewer / sheet already handled this key
   var tag = (e.target.tagName || "").toLowerCase();
   if (tag === "input" || tag === "textarea") return;
   var termActive = document.getElementById("terminal-screen") && document.getElementById("terminal-screen").classList.contains("active");

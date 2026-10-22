@@ -56,6 +56,15 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
+// jsArg(v): a JS string literal that is safe to drop inside an inline handler attribute, e.g. onclick="go(${jsArg(id)})".
+// (escapeHtml alone is NOT enough there: the browser decodes entities before running the script.)
+function jsArg(v) { return escapeHtml(JSON.stringify(String(v === null || v === undefined ? '' : v))); }
+// safeUrl(u): only http(s) and relative links survive, so a scraped "javascript:" or "data:" URL can never become a link.
+function safeUrl(u) {
+  u = String(u === null || u === undefined ? '' : u).trim();
+  return /^(https?:\/\/|\/(?!\/))/i.test(u) ? u : '#';
+}
+
 // ─── Crash Recovery (runs before anything else can break) ──
 window.addEventListener('error', function(e) {
   // Ignore errors from Safari's native share sheet / visibility changes
@@ -88,6 +97,7 @@ function showCrashRecovery(err) {
 // ─── SVG Icons (Lucide/Feather style) ─────────────────────
 const ICONS = {
   book: '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+  gallery: '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4.5"/><circle cx="9" cy="9.5" r="2"/><path d="M21 15.5l-4.8-4.8L7 20.5"/></svg>',
   lego: '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M7 8V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/><circle cx="8" cy="5" r="0.5" fill="currentColor"/><circle cx="12" cy="5" r="0.5" fill="currentColor"/><circle cx="16" cy="5" r="0.5" fill="currentColor"/></svg>',
   brick: '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="9" rx="1"/><rect x="7" y="7" width="4" height="3" rx="0.5"/><rect x="13" y="7" width="4" height="3" rx="0.5"/><line x1="12" y1="10" x2="12" y2="19"/></svg>',
   settings: '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
@@ -120,6 +130,7 @@ const ICONS = {
 const APPS = [
   { id: 'audiobooks', svg: ICONS.book,    label: 'Books',     color: '#6366f1', screen: 'book-screen' },
   { id: 'music',      svg: ICONS.music,   label: 'Music',     color: '#ec4899', screen: 'music-screen' },
+  { id: 'gallery',    svg: ICONS.gallery, label: 'Gallery',   color: '#14b8a6', screen: 'gallery-screen' },
   { id: 'files',      svg: ICONS.lego,    label: 'Files',     color: '#f59e0b', screen: 'lego-screen' },
   { id: 'journal',    svg: ICONS.universe, label: 'Journal',  color: '#a855f7', screen: 'journal-screen', experimental: true },
   { id: 'ai',         svg: ICONS.brain,   label: 'AI',        color: '#8b5cf6', screen: null, spread: true },
@@ -127,6 +138,7 @@ const APPS = [
   { id: 'projects',   svg: ICONS.layers,  label: 'Projects',  color: '#0ea5e9', screen: 'project-screen', experimental: true },
   { id: 'system',     svg: ICONS.activity,label: 'Lab',       color: '#4ade80', screen: 'system-screen' },
   { id: 'terminal',   svg: ICONS.terminal,label: 'Terminal',  color: '#fbbf24', screen: 'terminal-screen' },
+  { id: 'logs',       svg: ICONS.shield,  label: 'Logs',      color: '#38bdf8', screen: 'logs-screen' },
   { id: 'settings',   svg: ICONS.settings, label: 'Settings', color: '#6b7280', screen: 'settings-screen' },
 ];
 
@@ -147,7 +159,7 @@ function visibleApps(list) {
 
 // ─── Projects (data-driven; add your own in Settings) ─────────
 const PROJECTS = [
-  // Example template — copy and fill in:
+  // Example template - copy and fill in:
   // {
   //   id: 'my-project',
   //   name: 'My Project',

@@ -54,7 +54,7 @@ p{opacity:0.7;font-size:14px}</style></head><body>
     s.textContent += ' Redirecting...';
     setTimeout(function(){ window.location.href = '/'; }, 1500);
   } catch(e) {
-    s.textContent = 'Error: ' + e.message + ' — try force-closing the app and reopening.';
+    s.textContent = 'Error: ' + e.message + '. Try force-closing the app and reopening.';
   }
 })();
 </script></body></html>'''

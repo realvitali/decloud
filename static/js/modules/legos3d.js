@@ -83,7 +83,7 @@ function initLegos3D() {
   if (!canvas || !window.THREE) return;
   if (!window.CANNON) { setTimeout(initLegos3D, 200); return; }
 
-  // Scene — white, bright, minimal
+  // Scene - white, bright, minimal
   var scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf0f0f5);
   scene.fog = new THREE.Fog(0xf0f0f5, 16, 36);
@@ -95,7 +95,7 @@ function initLegos3D() {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-  // Lights — soft daylight
+  // Lights - soft daylight
   scene.add(new THREE.AmbientLight(0xffffff, 0.7));
   var keyLight = new THREE.DirectionalLight(0xffffff, 0.5);
   keyLight.position.set(6, 14, 6);
@@ -132,7 +132,7 @@ function initLegos3D() {
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // Baseplate studs — subtle dots
+  // Baseplate studs - subtle dots
   var studMat = new THREE.MeshStandardMaterial({ color: 0xd8d8e4, roughness: 0.4, metalness: 0.1 });
   var studGeo = new THREE.CylinderGeometry(studSize * 0.26, studSize * 0.26, studSize * 0.07, 12);
   var gridN = Math.floor(baseplateSize / studSize);

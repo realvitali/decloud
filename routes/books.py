@@ -68,7 +68,7 @@ def list_books():
             # None (unknown) so the UI can hide the number instead of lying.
             chapters_done = 0
             total_chapters = None
-            for i in range(200):  # generous cap — books can exceed 30 chapters
+            for i in range(200):  # generous cap. Books can exceed 30 chapters
                 if (AUDIO_DIR / f'{book_id}_chapter_{i}.mp3').exists():
                     chapters_done = i + 1
                 else:
@@ -171,7 +171,7 @@ def get_book_text():
         import fitz
 
         # Build chapter list from PDF's built-in Table of Contents
-        # Only level 1 (major sections) and level 2 (chapters) — skip sub-sections
+        # Only level 1 (major sections) and level 2 (chapters) - skip sub-sections
         if book_id and book_id not in _pdf_chapters_cache:
             doc = fitz.open(pdf_path)
             toc = doc.get_toc()
@@ -271,7 +271,7 @@ def book_position(book_id):
                 pass
         return jsonify({})
 
-    # POST — validate and merge, newest fields win
+    # POST - validate and merge, newest fields win
     data = request.get_json(silent=True) or {}
     current = {}
     if pos_file.exists():
@@ -536,7 +536,7 @@ def tts_stop(book_id):
         # Write -1 to signal error stop
         lock_file.write_text('-1')
     # Kill any running tts_worker processes for this book.
-    # pkill is POSIX-only — Windows relies on the lock file (the worker
+    # pkill is POSIX-only - Windows relies on the lock file (the worker
     # checks it between chapters), which is written just above.
     import platform as _platform
     if _platform.system() != 'Windows':

@@ -75,3 +75,11 @@ sessions.json.tmp
 
 # Lab pairing keys (cert, token)
 lab-state/
+music_index.json
+music_state.json
+music_session.json
+
+# Runtime secrets / logs
+totp.json
+audit.log
+audit.log.1

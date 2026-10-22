@@ -40,7 +40,7 @@ def ollama_chat():
     top_p = data.get('top_p', 0.9)
     max_tokens = data.get('max_tokens', 0)  # 0 = unlimited
 
-    # Input caps — this endpoint is exposed over the tunnel; without caps
+    # Input caps - this endpoint is exposed over the tunnel; without caps
     # a client could push unbounded payloads into a local LLM.
     if not isinstance(messages, list) or not messages:
         return jsonify({'error': 'messages must be a non-empty list'}), 400

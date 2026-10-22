@@ -6,7 +6,7 @@ from shared import _requests, COMFY_URL, COMFY_OUTPUT, COMFY_INPUT, BASE_DIR
 
 bp = Blueprint('comfy', __name__)
 
-# ─── ComfyUI lifecycle (start/stop from the UI — no SSH needed) ───
+# ─── ComfyUI lifecycle (start/stop from the UI - no SSH needed) ───
 COMFY_PID_FILE = BASE_DIR / 'comfy.pid'
 COMFY_LOG_FILE = BASE_DIR / 'comfy.log'
 
@@ -15,10 +15,10 @@ def _comfy_strategy() -> tuple:
     """How ComfyUI should be started on this machine.
 
     Returns (strategy, argv) where strategy is one of:
-      'systemd'  — a comfyui user unit exists; argv = systemctl args
-      'cmd'      — DECLOUD_COMFY_CMD from .env; argv = shell-split cmd
-      'main.py'  — found a ComfyUI checkout; argv = python main.py
-      None       — nothing found; the UI shows setup guidance
+      'systemd'  - a comfyui user unit exists; argv = systemctl args
+      'cmd'      - DECLOUD_COMFY_CMD from .env; argv = shell-split cmd
+      'main.py'  - found a ComfyUI checkout; argv = python main.py
+      None       - nothing found; the UI shows setup guidance
     """
     # 1. systemd user unit
     try:
@@ -107,7 +107,7 @@ def comfy_start():
     except OSError as e:
         return jsonify({'error': f'could not start ComfyUI: {e}'}), 500
 
-    return jsonify({'ok': True, 'message': f'Starting ComfyUI ({strategy}) — '
+    return jsonify({'ok': True, 'message': f'Starting ComfyUI ({strategy}), '
                                           'it usually takes 20-60s to come up',
                     'strategy': strategy})
 
@@ -136,7 +136,7 @@ def comfy_stop():
         except (OSError, ValueError) as e:
             return jsonify({'error': f'could not stop ComfyUI: {e}'}), 500
 
-    return jsonify({'error': 'ComfyUI was started outside DeCloud — stop it '
+    return jsonify({'error': 'ComfyUI was started outside DeCloud. Stop it '
                              'with systemctl or the terminal'}), 409
 
 

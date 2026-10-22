@@ -136,7 +136,7 @@ function generateOnboardingQRs() {
     if (img1) tailscaleContainer.appendChild(img1);
   }
 
-  // Phone PWA QR — current origin
+  // Phone PWA QR - current origin
   var phoneContainer = document.getElementById('qr-phone');
   if (phoneContainer && !phoneContainer.hasChildNodes()) {
     var img2 = generateQR(window.location.origin, 300);

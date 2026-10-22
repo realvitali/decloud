@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""DeCloud — your personal cloud, accessible from anywhere.
+"""DeCloud - your personal cloud, accessible from anywhere.
 
 SECURE ARCHITECTURE:
   - App binds to 127.0.0.1 by default (never exposed to the network)
-  - Runs plain HTTP on localhost — safe because it's not reachable externally
+  - Runs plain HTTP on localhost - safe because it's not reachable externally
   - A tunnel (Tailscale Funnel or cloudflared) provides trusted HTTPS
-  - The tunnel connects outbound — no inbound ports opened on the machine
+  - The tunnel connects outbound - no inbound ports opened on the machine
   - All API endpoints require passcode authentication
   - Rate limiting on all routes
 
@@ -35,7 +35,7 @@ except Exception as _boot_error:
         try:
             from routes.update import rollback_on_failed_boot
             if rollback_on_failed_boot():
-                print('[DeCloud] startup failed after a recent update — '
+                print('[DeCloud] startup failed after a recent update, '
                       'rolled back to the previous version. Restarting…',
                       flush=True)
         except Exception:
@@ -46,7 +46,7 @@ except Exception as _boot_error:
 if __name__ == '__main__':
     PORT = int(os.environ.get('DECLOUD_PORT', '8899'))
 
-    # Bind to localhost by default — never expose directly to the network.
+    # Bind to localhost by default - never expose directly to the network.
     # Remote access is provided exclusively by a tunnel (Tailscale Funnel
     # or cloudflared). This means:
     #   - Zero open ports on the machine
@@ -57,18 +57,20 @@ if __name__ == '__main__':
     print(f'[DeCloud] Running on http://localhost:{PORT}')
     if bind_host not in ('127.0.0.1', 'localhost', '::1'):
         print('*' * 70)
-        print(f'[DeCloud] WARNING: bound to {bind_host} — NOT localhost-only!')
+        print(f'[DeCloud] WARNING: bound to {bind_host}, NOT localhost-only!')
         print('[DeCloud] Anyone on the same network can reach this app. Only')
         print('[DeCloud] do this when a passcode is set AND you know what you')
         print('[DeCloud] are doing (e.g. Tailscale Serve on the tailnet IP).')
         print('*' * 70)
     else:
-        print('[DeCloud] Bound to localhost only — zero exposed ports.')
+        print('[DeCloud] Bound to localhost only. Zero exposed ports.')
     print('[DeCloud] For remote/phone access, start a tunnel:')
     print(f'[DeCloud]   tailscale funnel {PORT}')
     print(f'[DeCloud]   (or: cloudflared tunnel --url http://localhost:{PORT})')
     print('[DeCloud] The tunnel provides trusted HTTPS automatically.')
 
+    import audit
+    audit.log('server_start', 'DeCloud started on %s:%s' % (bind_host, PORT))
     from routes.lab import sync_server
     sync_server()  # opens the lab port only if "Let other devices add this computer" is on
 

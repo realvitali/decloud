@@ -5,8 +5,8 @@ Usage:
     python scripts/bump_version.py <patch|minor|major> -m "one-line summary" -c "change one;change two"
 
 Keeps in sync:
-  1. routes/version.py  — VERSION + CHANGELOG[0]
-  2. decloud            — VERSION="x.y.z"
+  1. routes/version.py , VERSION + CHANGELOG[0]
+  2. decloud           , VERSION="x.y.z"
 Adds a changelog entry dated today. `-c` is a semicolon-separated list of
 bullets; `-m` is always the first bullet.
 """

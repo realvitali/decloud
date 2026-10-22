@@ -144,14 +144,14 @@ async function sendOllamaMessage() {
     if (e.name === 'AbortError') {
       fullResponse += '\n\n*[stopped]*';
     } else {
-      aiContent.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+      aiContent.innerHTML = `<span style="color:var(--red)">Error: ${escapeHtml(e.message)}</span>`;
     }
   }
 
   if (fullResponse) {
     ollamaChatHistory.push({ role: 'assistant', content: fullResponse });
   } else if (aiContent.querySelector('.pixel-loader')) {
-    // Stream ended with no content and no explicit error — say so
+    // Stream ended with no content and no explicit error - say so
     aiContent.innerHTML = '<span style="color:var(--red)">Error: model returned no response (check if it\'s pulled: ollama pull ' + escapeHtml(ollamaCurrentModel) + ')</span>';
   }
 

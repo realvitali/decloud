@@ -1,7 +1,7 @@
 """AI model advisor + one-tap downloads.
 
 "My Machine, but for models": probe the hardware (CPU/RAM/GPU VRAM),
-analyze a curated catalog — or ANY pasted HuggingFace repo — against
+analyze a curated catalog - or ANY pasted HuggingFace repo - against
 real file sizes from the HF API, and mark each model with what level
 it runs at on this machine:
 
@@ -50,7 +50,7 @@ CHAT_OVERHEAD_GB = 1.5
 IMAGE_OVERHEAD_GB = 1.0
 CPU_RAM_HEADROOM_FACTOR = 0.5   # CPU-only: model may use up to half of RAM
 
-# ─── Curated catalog (starters — any HF repo works via /analyze) ──
+# ─── Curated catalog (starters - any HF repo works via /analyze) ──
 CATALOG = [
     {'repo': 'unsloth/DeepSeek-R1-GGUF', 'category': 'chat',
      'label': 'DeepSeek R1 (reasoning)', 'note': 'Pick the Q4_K_M file for most GPUs.'},
@@ -63,11 +63,11 @@ CATALOG = [
     {'repo': 'Comfy-Org/flux1-schnell', 'category': 'image',
      'label': 'FLUX.1 Schnell', 'note': 'Fast image generation (fp8).'},
     {'repo': 'stabilityai/stable-diffusion-xl-base-1.0', 'category': 'image',
-     'label': 'Stable Diffusion XL', 'note': 'The classic — works on 8GB VRAM.'},
+     'label': 'Stable Diffusion XL', 'note': 'The classic. Works on 8GB VRAM.'},
     {'repo': 'guillaume127/MiniMax-Music-3-Turbo-FP8', 'category': 'music',
      'label': 'MiniMax Music 3 (FP8)', 'note': 'Local music generation, ComfyUI-optimized.'},
     {'repo': 'Comfy-Org/Wan_2.1_ComfyUI_repackaged', 'category': 'video',
-     'label': 'Wan 2.1 (video)', 'note': 'Local video generation — heavy, 16GB+.'},
+     'label': 'Wan 2.1 (video)', 'note': 'Local video generation. Heavy, 16GB+.'},
 ]
 
 # Category → ComfyUI subfolder (chat goes to CHAT_DIR instead)
@@ -211,7 +211,7 @@ def analyze_repo(repo: str, category: str, specs: dict) -> dict:
         # GGUF: smallest quants first (what most people want)
         files.sort(key=lambda f: (f['size_gb'], f['file']))
     else:
-        # safetensors: the model itself is the biggest file — show it first,
+        # safetensors: the model itself is the biggest file - show it first,
         # drop tiny auxiliary files (loras/vaes) from the top view
         files.sort(key=lambda f: f['size_gb'], reverse=True)
         files = [f for f in files if f['size_gb'] >= 0.5][:8]

@@ -1,17 +1,17 @@
 // ===== Module: auth =====
-// Passcode login screen logic — checks auth on load, shows login if needed.
+// Passcode login screen logic - checks auth on load, shows login if needed.
 
 let _loginPin = '';
 let _loginBusy = false;
 const _LOGIN_PIN_MAX = 10;  // keypad supports 6–10 digits; longer passcodes via UI only
 
-// Check auth on page load — show login screen or main app
+// Check auth on page load - show login screen or main app
 (async function checkAuthOnLoad() {
   try {
     const r = await fetch('/api/auth/check');
     const d = await r.json();
     if (d.authenticated) {
-      // Already authenticated — stash the CSRF token for state-changing calls
+      // Already authenticated - stash the CSRF token for state-changing calls
       if (d.csrf) sessionStorage.setItem('decloud_csrf', d.csrf);
       hideLoginScreen();
     } else {
@@ -36,9 +36,10 @@ function showLoginScreen() {
 function hideLoginScreen() {
   const login = document.getElementById('login-screen');
   if (login) login.style.display = 'none';
-  // Show home screen
+  // Fall back to the home screen only if no screen is showing (a refresh restores
+  // the screen from the URL hash before this async check finishes)
   const home = document.getElementById('home-screen');
-  if (home) home.classList.add('active');
+  if (home && !document.querySelector('.screen.active')) home.classList.add('active');
 }
 
 function renderLoginDots() {
@@ -68,6 +69,16 @@ function loginGo() {
     loginFail('Passcode is at least 6 digits');
     return;
   }
+  submitLogin();
+}
+
+function loginText(e) {
+  e.preventDefault();
+  if (_loginBusy) return;
+  const input = document.getElementById('login-text');
+  if (!input || !input.value) return;
+  _loginPin = input.value;
+  input.value = '';
   submitLogin();
 }
 
@@ -101,14 +112,14 @@ async function submitLogin() {
       if (d.csrf) {
         sessionStorage.setItem('decloud_csrf', d.csrf);
       }
-      // Success — reload to get the main app with auth cookie set
+      // Success - reload to get the main app with auth cookie set
       window.location.reload();
       return;
     }
-    // Failed — show error and shake
+    // Failed - show error and shake
     loginFail(d.error || 'Invalid passcode');
   } catch (e) {
-    loginFail('Network error — try again');
+    loginFail('Network error. Try again');
   }
 }
 

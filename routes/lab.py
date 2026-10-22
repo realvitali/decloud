@@ -164,13 +164,13 @@ def _clean(r):
 
 def _fetch(dev):
     if not dev.get('fp'):
-        return {'error': 'Added with an old version — remove and add it again'}
+        return {'error': 'Added with an old version. Remove and add it again'}
     try:
         return _clean(lab_report.fetch_report(dev['url'], dev['token'], dev['fp']))
     except lab_report.PinError:
-        return {'error': 'Identity changed — remove and add it again if you reinstalled it'}
+        return {'error': 'Identity changed. Remove and add it again if you reinstalled it'}
     except PermissionError:
-        return {'error': 'Key was reset — remove and add it again'}
+        return {'error': 'Key was reset. Remove and add it again'}
     except (OSError, ValueError, TypeError, AttributeError):
         return {'error': 'Offline or unreachable'}
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DeCloud update CLI — the terminal twin of the in-app updater.
+"""DeCloud update CLI - the terminal twin of the in-app updater.
 
 Both paths call the SAME functions in routes/update.py, so behavior and
 safety guarantees (verify, test-boot, auto-rollback) are identical.
@@ -22,7 +22,7 @@ import routes.update as upd  # noqa: E402
 def _print_status(d):
     print(f"Current version : {d['current_version']}")
     if not d['is_git']:
-        print("Updates        : unavailable — this install is not a git checkout.")
+        print("Updates        : unavailable. This install is not a git checkout.")
         print("                 (reinstall via `git clone` to enable one-click updates)")
         return
     latest = d['latest'] or {}
@@ -40,11 +40,11 @@ def _print_status(d):
         print("Status          : no release information found on the remote")
     if not d['tree_clean']:
         print()
-        print("WARNING: local files are modified — updates are paused to")
+        print("WARNING: local files are modified. Updates are paused to")
         print("         protect your changes (run `git status` to review).")
     if d['can_rollback']:
         print()
-        print("A previous version is recorded — `decloud update rollback` reverts.")
+        print("A previous version is recorded, `decloud update rollback` reverts.")
 
 
 def main():
@@ -58,7 +58,7 @@ def main():
     if cmd in ('rollback', 'revert'):
         code, payload = upd.perform_rollback()
         if code == 200:
-            print("Rolled back — the app will restart in a moment.")
+            print("Rolled back. The app will restart in a moment.")
             return
         print("ERROR:", payload.get('error', 'rollback failed'))
         sys.exit(1)

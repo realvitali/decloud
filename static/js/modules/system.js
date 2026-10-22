@@ -1,4 +1,4 @@
-// ===== Module: system — Lab overview =====
+// ===== Module: system - Lab overview =====
 // This machine + paired devices as one phone-sized, screenshot-ready card
 // in three styles (neofetch / rack / constellation). Data: /api/lab/overview.
 
@@ -100,7 +100,7 @@ function labNeofetch(L) {
     : `<div class="lab-nf-node">${labLogo(n, 'lab-nf-os')}<div><b>${escapeHtml(n.name)}</b><span>${n.cores}t · ${labGB(n.ram_total)}${n.gpus.length ? ' · GPU' : ''}</span>
         <i class="lab-bar"><s style="width:${n.cpu_percent}%"></s></i><i class="lab-bar"><s style="width:${labPct(n.ram_used, n.ram_total)}%"></s></i></div></div>`).join('');
   return `
-    <pre class="lab-nf-banner" style="font-size:${Math.min(5.2, 88 / (cols * 0.6)).toFixed(2)}cqw">${banner}</pre>
+    <pre class="lab-nf-banner" style="font-size:${Math.min(5.2, 88 / (cols * 0.6)).toFixed(2)}cqw">${escapeHtml(banner)}</pre>
     <div class="lab-nf-who"><b>${escapeHtml(name.toLowerCase())}</b>@<b>lab</b></div>
     <div class="lab-nf-rule"></div>
     <dl class="lab-nf-kv">

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DeCloud lab report — one machine's specs + what's running, served to
+"""DeCloud lab report - one machine's specs + what's running, served to
 paired hubs over pinned HTTPS.
 
 Used two ways:
@@ -86,7 +86,7 @@ def cpu_name():
 
 
 def gpus():
-    """[{name, vram_gb, util, temp}] — NVIDIA via nvidia-smi (full detail),
+    """[{name, vram_gb, util, temp}] - NVIDIA via nvidia-smi (full detail),
     anything else by name only (lspci / system_profiler)."""
     out = []
     if shutil.which('nvidia-smi'):
@@ -500,7 +500,7 @@ def parse_pairing_code(code):
     try:
         d = json.loads(base64.urlsafe_b64decode(body + '=' * (-len(body) % 4)))
     except Exception:
-        raise ValueError('Pairing code is damaged — copy it again')
+        raise ValueError('Pairing code is damaged. Copy it again')
     if (not isinstance(d, dict) or not re.match(r'^https://[^\s/]+', str(d.get('u', ''))) or not d.get('t')
             or not re.fullmatch(r'[0-9a-f]{64}', str(d.get('f', '')))):
         raise ValueError('Pairing code is missing the address, key or fingerprint')

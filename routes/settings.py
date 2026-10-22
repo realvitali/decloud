@@ -103,7 +103,7 @@ def settings_paths():
             'music': str(shared.MUSIC_DIR),
         }
         return jsonify(paths)
-    # POST — persist to .env; takes effect after restart
+    # POST - persist to .env; takes effect after restart
     data = request.get_json(silent=True) or {}
     updates = {}
     for field, key in _ENV_PATH_KEYS.items():

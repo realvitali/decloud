@@ -51,7 +51,7 @@ async function loadBooks() {
 // ─── Book State ────────────────────────────────────────────
 let currentBook = null;
 
-// Reader state (from PDF text API — may have different/more chapters)
+// Reader state (from PDF text API - may have different/more chapters)
 let readerChapters = [];     // [{start, end, title}] from PDF TOC
 let readerChapterIdx = 0;
 let readerText = '';
@@ -74,7 +74,7 @@ function pushServerPosition(section) {
   }).catch(() => {});
 }
 
-// Audio state (from audio JSON — generated TTS chapters)
+// Audio state (from audio JSON - generated TTS chapters)
 let audioData = null;
 let player = null;
 let audioChapterIdx = 0;
@@ -219,7 +219,7 @@ async function loadChapterText(idx) {
     const res = await fetch(`/api/books/text?book=${encodeURIComponent(currentBook)}&chapter=${idx}`);
     const data = await res.json();
     if (data.error) {
-      document.getElementById('reader-text').innerHTML = `<span style="color:var(--text-dim)">${data.error}</span>`;
+      document.getElementById('reader-text').innerHTML = `<span style="color:var(--text-dim)">${escapeHtml(data.error)}</span>`;
       return;
     }
     readerText = data.text || '';
@@ -334,10 +334,10 @@ function setReaderMode(mode) {
   document.getElementById('chapter-nav').style.display = isReader ? 'flex' : 'none';
 
   if (!isReader && audioData?.has_audio) {
-    // Switching to audio mode — load current audio chapter
+    // Switching to audio mode - load current audio chapter
     selectAudioChapter(audioChapterIdx);
   } else if (isReader) {
-    // Switching to reader mode — update chapter label
+    // Switching to reader mode - update chapter label
     if (readerChapters.length > 0) {
       document.getElementById('chapter-label').textContent = readerChapters[readerChapterIdx]?.title || `Ch ${readerChapterIdx + 1}`;
     }
@@ -395,7 +395,7 @@ function renderBookmarkList() {
 
   container.innerHTML = nonResume.map((b, i) => `
     <div class="bookmark-row">
-      <span class="bookmark-word">"${b.word}"</span>
+      <span class="bookmark-word">"${escapeHtml(b.word)}"</span>
       <span class="bookmark-ch">Ch ${b.chapter + 1}</span>
       <button class="bookmark-goto" onclick="gotoBookmark(${i})">Go</button>
       <button class="bookmark-del" onclick="deleteBookmark(${i})">✕</button>
@@ -485,7 +485,7 @@ function buildChapterDropdown(activeIdx) {
     const title = c.title || `Chapter ${i + 1}`;
     const prefix = isDone ? '\u2713 ' : pending ? '... ' : '';
     const cls = isCurrent ? 'current' : isDone ? 'completed' : '';
-    return `<option value="${i}" class="${cls}" ${isCurrent ? 'selected' : ''}>${prefix}${num}. ${title}</option>`;
+    return `<option value="${i}" class="${cls}" ${isCurrent ? 'selected' : ''}>${prefix}${num}. ${escapeHtml(title)}</option>`;
   }).join('');
 
   // Resume hint
@@ -774,9 +774,9 @@ async function openSettingsForBook(bookId) {
   voiceGrid.innerHTML = voices.map(v => {
     const isActive = settings.voice === v.id;
     return `
-      <div class="voice-card ${isActive ? 'selected' : ''}" onclick="selectVoice('${v.id}')" id="voice-${v.id}">
+      <div class="voice-card ${isActive ? 'selected' : ''}" data-id="${escapeHtml(v.id)}" onclick="selectVoice(this.dataset.id)" id="voice-${escapeHtml(v.id)}">
         <div class="voice-icon">${v.gender === 'male' ? '♂' : '♀'}</div>
-        <div class="voice-name">${v.name}</div>
+        <div class="voice-name">${escapeHtml(v.name)}</div>
         ${isActive ? '<div class="voice-active-badge">Active</div>' : ''}
       </div>
     `;
@@ -806,7 +806,7 @@ async function openSettingsForBook(bookId) {
   if (status.status === 'converting') {
     genControls.innerHTML = `<button class="gen-btn stop" onclick="stopGeneration()">Stop Generation</button>`;
     genStatus.style.display = 'block';
-    genStatus.innerHTML = `Generating... ${status.progress || '0'}%`;
+    genStatus.innerHTML = `Generating... ${escapeHtml(status.progress || '0')}%`;
   } else if (status.status === 'ready' || doneCount > 0) {
     genStatus.style.display = 'block';
     genStatus.innerHTML = `${doneCount}/${chapters.length} chapters ready`;
@@ -945,7 +945,7 @@ async function openSummary() {
 
   const pos = getCurrentReadingPosition();
 
-  // Only fetch chapter summary on open — fast, single LLM call
+  // Only fetch chapter summary on open - fast, single LLM call
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 60000);
 
@@ -964,7 +964,7 @@ async function openSummary() {
     clearTimeout(timeoutId);
     summaryData = await r.json();
     if (summaryData.error) {
-      document.getElementById('summary-loading').innerHTML = `<p>${summaryData.error}</p>`;
+      document.getElementById('summary-loading').innerHTML = `<p>${escapeHtml(summaryData.error)}</p>`;
       return;
     }
     document.getElementById('summary-loading').style.display = 'none';
@@ -975,7 +975,7 @@ async function openSummary() {
   } catch (e) {
     clearTimeout(timeoutId);
     const msg = e.name === 'AbortError' ? 'Timed out.' : e.message;
-    document.getElementById('summary-loading').innerHTML = `<p>Failed: ${msg}</p>`;
+    document.getElementById('summary-loading').innerHTML = `<p>Failed: ${escapeHtml(msg)}</p>`;
   }
 }
 

@@ -11,9 +11,10 @@
   <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=107">
-  <link rel="stylesheet" href="/static/css/onboarding.css?v=107">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css">
+  <link rel="stylesheet" href="/static/css/app.css?v=165">
+  <link rel="stylesheet" href="/static/css/onboarding.css?v=165">
+  <link rel="stylesheet" href="/static/css/gallery.css?v=165">
+  <link rel="stylesheet" href="/static/vendor/xterm/xterm.min.css">
   <title>DeCloud</title>
 </head>
 <body>
@@ -35,31 +36,12 @@
       </svg>
     </div>
     <div class="login-title">DeCloud</div>
-    <div class="login-subtitle">Enter passcode to continue</div>
-    <div class="login-dots" id="login-dots"></div>
+    <div class="login-subtitle">Enter your password to continue</div>
     <div class="login-error" id="login-error"></div>
-    <div class="login-keypad" id="login-keypad">
-      <button class="login-key" data-key="1" onclick="loginPress('1')">1</button>
-      <button class="login-key" data-key="2" onclick="loginPress('2')">2<span class="login-key-sub">ABC</span></button>
-      <button class="login-key" data-key="3" onclick="loginPress('3')">3<span class="login-key-sub">DEF</span></button>
-      <button class="login-key" data-key="4" onclick="loginPress('4')">4<span class="login-key-sub">GHI</span></button>
-      <button class="login-key" data-key="5" onclick="loginPress('5')">5<span class="login-key-sub">JKL</span></button>
-      <button class="login-key" data-key="6" onclick="loginPress('6')">6<span class="login-key-sub">MNO</span></button>
-      <button class="login-key" data-key="7" onclick="loginPress('7')">7<span class="login-key-sub">PQRS</span></button>
-      <button class="login-key" data-key="8" onclick="loginPress('8')">8<span class="login-key-sub">TUV</span></button>
-      <button class="login-key" data-key="9" onclick="loginPress('9')">9<span class="login-key-sub">WXYZ</span></button>
-      <button class="login-key login-key-go" onclick="loginGo()">
-        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-      </button>
-      <button class="login-key" data-key="0" onclick="loginPress('0')">0</button>
-      <button class="login-key login-key-back" onclick="loginBack()">
-        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/>
-          <line x1="18" y1="9" x2="12" y2="15"/>
-          <line x1="12" y1="9" x2="18" y2="15"/>
-        </svg>
-      </button>
-    </div>
+    <form onsubmit="loginText(event)" style="display:flex;gap:8px;margin:0 0 14px;width:100%">
+      <input type="password" id="login-text" class="settings-input" style="flex:1" placeholder="Password" autofocus autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <button type="submit" class="settings-save-btn" style="margin:0">Go</button>
+    </form>
   </div>
 </div>
 
@@ -95,38 +77,119 @@
 
 <!-- ═══ MUSIC PLAYER ═══ -->
 <div id="music-screen" class="screen">
-  <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
-    <h2 class="screen-title">Music</h2>
-  </div>
-  <div class="music-content">
-    <div class="music-list" id="music-list"></div>
-    <div class="music-player" id="music-player" style="display:none">
-      <div class="music-player-info">
-        <img class="music-player-art" id="music-player-art" src="" alt="" style="display:none" />
-        <div class="music-player-text">
-          <div class="music-player-title" id="music-player-title"></div>
-          <div class="music-player-artist" id="music-player-artist"></div>
+  <div class="wm" data-mzt="glossy">
+    <div class="mac-lights" aria-label="Window controls">
+      <button class="ml-close" onclick="goHome()" aria-label="Close (back to DeCloud)" title="Back to DeCloud"><svg viewBox="0 0 12 12" width="8" height="8"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+      <button class="ml-min" onclick="mzToggleSidebar()" aria-label="Toggle sidebar" title="Show or hide the sidebar"><svg viewBox="0 0 12 12" width="8" height="8"><path d="M2 6h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+      <button class="ml-max" onclick="mzFullscreen()" aria-label="Full screen" title="Full screen"><svg viewBox="0 0 12 12" width="8" height="8"><path d="M3 9V5.2L6.8 9H3zM9 3v3.8L5.2 3H9z" fill="currentColor"/></svg></button>
+    </div>
+    <header class="wm-top">
+      <div class="wm-navbtns">
+        <button class="wm-orb" onclick="history.back()" aria-label="Back" title="Back"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 5 8 12 15 19"/></svg></button>
+        <button class="wm-orb" onclick="history.forward()" aria-label="Forward" title="Forward"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 5 16 12 9 19"/></svg></button>
+      </div>
+      <div class="wm-crumb" id="wm-crumb">Library</div>
+      <div class="wm-topc">
+        <button class="sp-homebtn" onclick="mzGo('home')" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12.5 3.247a1 1 0 0 0-1 0L4 7.577V20h4.5v-6a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v6H20V7.577l-7.5-4.33zm-2-1.732a3 3 0 0 1 3 0l7.5 4.33a2 2 0 0 1 1 1.732V21a1 1 0 0 1-1 1h-6.5a1 1 0 0 1-1-1v-6h-3v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7.577a2 2 0 0 1 1-1.732l7.5-4.33z"/></svg></button>
+        <div class="wm-search"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg><input type="search" id="wm-search-input" placeholder="Search" autocomplete="off" autocapitalize="off" spellcheck="false" oninput="mzSearch(this.value)" onfocus="mzSearchFocus()"></div>
+        <button class="wm-orb wm-home" onclick="goHome()" aria-label="Back to the DeCloud home screen" title="Back to the DeCloud home screen"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg><span class="lbl">DeCloud</span></button>
+      </div>
+      <button class="wm-orb wm-helpbtn" id="wm-helpbtn" onclick="mzToggleHelp(event)" aria-label="How to use this player" title="How to use this player" aria-haspopup="dialog"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.9"/><circle cx="12" cy="17.2" r=".6" fill="currentColor"/></svg><span class="lbl">Help</span></button>
+      <button class="wm-orb wm-themebtn" id="wm-themebtn" onclick="mzThemeMenu(event)" aria-label="Change theme" title="Change theme"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.9 1.5-1.9-.3-1 .3-2.1 1.4-2.1H17a4 4 0 0 0 4-4c0-5-4-10-9-10z"/><circle cx="7.5" cy="11" r="1" fill="currentColor"/><circle cx="10.5" cy="7" r="1" fill="currentColor"/><circle cx="15" cy="7.5" r="1" fill="currentColor"/></svg><span class="lbl">Theme</span></button>
+      <button class="sp-avatar" id="wm-avatar" onclick="mzThemeMenu(event)" aria-label="Account and theme" title="raj">R</button>
+    </header>
+    <div class="wm-main">
+      <nav class="wm-side" id="wm-side"></nav>
+      <section class="wm-view">
+        <div class="wm-bar" id="wm-bar"></div>
+        <div class="wm-content" id="wm-content"></div>
+      </section>
+      <div class="wm-split" id="wm-split" role="separator" aria-orientation="vertical" tabindex="0" title="Drag to resize · double-click to reset"></div>
+    </div>
+    <footer class="wm-transport">
+      <button class="sp-npclose" onclick="mzNPClose()" aria-label="Close player"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <div class="sp-minifill"><i id="sp-minifill"></i></div>
+      <div class="wm-now" id="wm-now" onclick="mzNowTap(event)">
+        <div class="wm-art wm-now-art" id="wm-now-art"></div>
+        <button class="sp-expand" id="sp-expand" onclick="event.stopPropagation();mzSp.coverToggle()" aria-label="Show the album art" aria-expanded="false" title="Show the album art"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M1.5 11.5 8 5l6.5 6.5-1.06 1.06L8 7.12l-5.44 5.44z"/></svg></button>
+        <div class="wm-now-text">
+          <div class="wm-now-title" id="wm-now-title">Nothing playing</div>
+          <div class="wm-now-artist" id="wm-now-artist"></div>
         </div>
-        <div class="music-player-time"><span id="music-current">0:00</span> / <span id="music-duration">0:00</span></div>
+        <button class="sp-heart" id="wm-now-heart" onclick="event.stopPropagation();mzToggleFav()" aria-label="Favorite"></button>
       </div>
-      <div class="music-progress-bar" id="music-progress-bar" onclick="seekMusic(event)">
-        <div class="music-progress-fill" id="music-progress-fill"></div>
+      <div class="wm-center">
+        <div class="wm-controls">
+          <button class="wm-ctl" onclick="mzStop()" aria-label="Stop" title="Stop"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>
+          <button class="wm-ctl" id="wm-shuffle" onclick="mzToggleShuffle()" aria-label="Shuffle" title="Shuffle"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></button>
+          <button class="wm-ctl wm-ctl-skip" onclick="prevSong()" aria-label="Previous" title="Previous"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="19 20 9 12 19 4"/><rect x="4" y="4" width="3" height="16" rx="1"/></svg></button>
+          <button class="wm-play" onclick="togglePlayMusic()" aria-label="Play/Pause" title="Play/Pause"><svg id="wm-play-icon" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"></svg></button>
+          <button class="wm-ctl wm-ctl-skip" onclick="nextSong()" aria-label="Next" title="Next"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="5 4 15 12 5 20"/><rect x="17" y="4" width="3" height="16" rx="1"/></svg></button>
+          <button class="wm-ctl" id="wm-repeat" onclick="mzToggleRepeat()" aria-label="Repeat" title="Repeat"></button>
+        </div>
+        <div class="wm-seekrow">
+          <span id="wm-cur">0:00</span>
+          <input type="range" id="wm-seek" min="0" max="1000" value="0" step="1" aria-label="Seek">
+          <span id="wm-dur">0:00</span>
+        </div>
       </div>
-      <div class="music-controls">
-        <button class="music-btn" onclick="prevSong()" aria-label="Previous">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
-        </button>
-        <button class="music-btn music-btn-play" id="music-play-btn" onclick="togglePlayMusic()" aria-label="Play/Pause">
-          <svg id="music-play-icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        </button>
-        <button class="music-btn" onclick="nextSong()" aria-label="Next">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-        </button>
+      <div class="wm-right">
+        <button class="wm-ctl" id="wm-mute" onclick="mzToggleMute()" aria-label="Mute" title="Mute"></button>
+        <input type="range" id="wm-vol" min="0" max="100" value="100" aria-label="Volume">
+        <button class="wm-ctl" id="wm-devbtn" onclick="mzDevicesMenu(event)" aria-label="Connect to a device" title="Connect to a device"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="10" rx="1.5"/><line x1="6" y1="18" x2="12" y2="18"/><line x1="9" y1="14" x2="9" y2="18"/><rect x="16" y="9" width="6" height="11" rx="1.5"/></svg></button>
+        <button class="wm-ctl wm-npbtn" id="wm-npbtn" onclick="mzGo('now')" aria-label="Now Playing" title="Now Playing"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></button>
+      </div>
+    </footer>
+    <nav class="sp-tabbar" id="sp-tabbar" aria-label="Spotify navigation">
+      <button data-act="sp-tab" data-v="home"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12.5 3.247a1 1 0 0 0-1 0L4 7.577V20h4.5v-6a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v6H20V7.577l-7.5-4.33zm-2-1.732a3 3 0 0 1 3 0l7.5 4.33a2 2 0 0 1 1 1.732V21a1 1 0 0 1-1 1h-6.5a1 1 0 0 1-1-1v-6h-3v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7.577a2 2 0 0 1 1-1.732l7.5-4.33z"/></svg><span>Home</span></button>
+      <button data-act="sp-tab" data-v="search"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M10.533 1.279c-5.18 0-9.407 4.14-9.407 9.279s4.226 9.279 9.407 9.279c2.234 0 4.29-.77 5.907-2.058l4.353 4.353a1 1 0 1 0 1.414-1.414l-4.344-4.344a9.157 9.157 0 0 0 2.077-5.816c0-5.14-4.226-9.28-9.407-9.28zm-7.407 9.279c0-4.006 3.302-7.28 7.407-7.28s7.407 3.274 7.407 7.28-3.302 7.279-7.407 7.279-7.407-3.273-7.407-7.28z"/></svg><span>Search</span></button>
+      <button data-act="sp-tab" data-v="library"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3 22a1 1 0 0 1-1-1V3a1 1 0 0 1 2 0v18a1 1 0 0 1-1 1zM15.5 2.134A1 1 0 0 0 14 3v18a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V6.464a1 1 0 0 0-.5-.866l-6-3.464zM9 2a1 1 0 0 0-1 1v18a1 1 0 1 0 2 0V3a1 1 0 0 0-1-1z"/></svg><span>Your Library</span></button>
+    </nav>
+    <div class="sp-np" id="sp-np" aria-hidden="true">
+      <div class="sp-np-grab"></div>
+      <div class="sp-np-head">
+        <button class="sp-np-btn" onclick="mzNPClose()" aria-label="Close player"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+        <div class="sp-np-from"><small>PLAYING FROM ALBUM</small><b id="sp-np-from"></b></div>
+        <button class="sp-np-btn" id="sp-np-more" aria-label="More"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+      </div>
+      <div class="sp-np-artwrap"><div class="sp-np-art" id="sp-np-art"></div></div>
+      <div class="sp-np-meta">
+        <div class="sp-np-text"><b id="sp-np-title"></b><span id="sp-np-artist"></span></div>
+        <button class="sp-np-heart" id="sp-np-heart" onclick="mzToggleFav()" aria-label="Favorite"></button>
+      </div>
+      <div class="sp-np-seek">
+        <input type="range" id="sp-np-seek" min="0" max="1000" value="0" step="1" aria-label="Seek">
+        <div class="sp-np-times"><span id="sp-np-cur">0:00</span><span id="sp-np-dur">0:00</span></div>
+      </div>
+      <div class="sp-np-ctl">
+        <button id="sp-np-shuffle" onclick="mzToggleShuffle()" aria-label="Shuffle"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></button>
+        <button onclick="prevSong()" aria-label="Previous"><svg viewBox="0 0 24 24" width="34" height="34" fill="currentColor"><polygon points="19 20 9 12 19 4"/><rect x="4" y="4" width="3" height="16" rx="1"/></svg></button>
+        <button class="play" id="sp-np-play" onclick="togglePlayMusic()" aria-label="Play/Pause"></button>
+        <button onclick="nextSong()" aria-label="Next"><svg viewBox="0 0 24 24" width="34" height="34" fill="currentColor"><polygon points="5 4 15 12 5 20"/><rect x="17" y="4" width="3" height="16" rx="1"/></svg></button>
+        <button id="sp-np-repeat" onclick="mzToggleRepeat()" aria-label="Repeat"></button>
+      </div>
+      <div class="sp-np-foot">
+        <button onclick="mzDevicesMenu(event)" id="sp-np-dev" aria-label="Connect to a device"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="10" rx="1.5"/><line x1="6" y1="18" x2="12" y2="18"/><line x1="9" y1="14" x2="9" y2="18"/><rect x="16" y="9" width="6" height="11" rx="1.5"/></svg></button>
+        <span id="sp-np-remote"></span>
+        <button onclick="mzSp.npQueue()" aria-label="Queue"><svg viewBox="0 0 16 16" width="22" height="22" fill="currentColor"><path d="M15 15H1v-1.5h14V15zm0-4.5H1V9h14v1.5zm-14-7A2.5 2.5 0 0 1 3.5 1h9a2.5 2.5 0 0 1 0 5h-9A2.5 2.5 0 0 1 1 3.5zm2.5-1a1 1 0 0 0 0 2h9a1 1 0 1 0 0-2h-9z"/></svg></button>
       </div>
     </div>
-    <audio id="music-audio" preload="metadata"></audio>
+    <div class="wm-help" id="wm-help" role="dialog" aria-label="How to use this player" aria-hidden="true" style="display:none">
+      <div class="wm-help-head"><b>How to use this player</b><button onclick="mzToggleHelp(event)" aria-label="Close help">✕</button></div>
+      <ul>
+        <li><b>Play a song</b><span>Double-click it, or hover its number and press the play button. On a touch screen, just tap it.</span></li>
+        <li><b>More options</b><span>Press the "⋯" button on a song, or right-click it: play next, add to queue, favorite, go to the artist or album.</span></li>
+        <li><b>Find music</b><span>Pick a category in the left sidebar, or use the search box (press <kbd>/</kbd>).</span></li>
+        <li><b>Keyboard</b><span><kbd>Space</kbd> play or pause · <kbd>←</kbd> <kbd>→</kbd> skip 10 seconds · <kbd>N</kbd> next · <kbd>P</kbd> previous · <kbd>Esc</kbd> close menus</span></li>
+        <li><b>Another device is playing?</b><span>The bottom bar says "Listening on…" and its buttons control that device. Use the devices button to move playback here.</span></li>
+        <li><b>Shuffle and repeat in your desktop media widget (KDE, GNOME)</b><span>Browsers can only give your desktop play, pause, next, previous and seek. For a real "DeCloud" player with working shuffle, repeat, volume and cover art, run this once on that computer: <code id="wm-help-cmd">curl -fsSL /static/tools/decloud-mpris.py -o ~/decloud-mpris.py &amp;&amp; python3 ~/decloud-mpris.py</code> Then add <code>--install-service</code> to start it at login.</span></li>
+        <li><b>The coloured dots</b><span>Red goes back to the DeCloud home screen, yellow hides the sidebar, green goes full screen. Drag the sidebar's edge to resize it.</span></li>
+      </ul>
+    </div>
+    <div class="wm-remote" id="wm-remote" style="display:none"></div>
+    <div class="wm-menu" id="wm-menu" style="display:none"></div>
   </div>
+  <audio id="music-audio" preload="metadata"></audio>
 </div>
 
 <!-- ═══ AUDIOBOOK PLAYER ═══ -->
@@ -216,21 +279,35 @@
   </div>
 </div>
 
-<!-- ═══ LEGO FILE BROWSER ═══ -->
-<div id="lego-screen" class="screen">
-  <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
-    <h2 id="screen-title-lego" class="screen-title"><span class="screen-title-icon"></span> Files</h2>
+<!-- ═══ FILES (Finder / Nautilus style) ═══ -->
+<div id="lego-screen" class="screen fm-screen">
+  <div class="fm-bar">
+    <button class="fm-ib fm-home" onclick="goHome()" aria-label="Home" title="Home"><i data-i="home"></i></button>
+    <div class="fm-nav">
+      <button class="fm-ib" id="fm-back" onclick="fmBack()" aria-label="Back" title="Back"><i data-i="back"></i></button>
+      <button class="fm-ib" id="fm-fwd" onclick="history.forward()" aria-label="Forward" title="Forward"><i data-i="fwd"></i></button>
+      <button class="fm-ib" id="fm-up" onclick="fmUp()" aria-label="Enclosing folder" title="Enclosing folder"><i data-i="up"></i></button>
+    </div>
+    <div class="fm-path" id="lego-breadcrumbs"></div>
+    <div class="fm-tools">
+      <label class="fm-search"><i data-i="search"></i><input id="fm-q" type="search" placeholder="Search" autocomplete="off" spellcheck="false" oninput="fmSearch(this.value)"></label>
+      <div class="fm-seg" role="group" aria-label="View">
+        <button id="fm-v-list" onclick="fmSetView('list')" aria-label="List view" title="List"><i data-i="list"></i></button>
+        <button id="fm-v-grid" onclick="fmSetView('grid')" aria-label="Icon view" title="Icons"><i data-i="grid"></i></button>
+      </div>
+      <button class="fm-ib" id="fm-sort" onclick="fmSortMenu(event)" aria-label="Sort" title="Sort"><i data-i="sort"></i></button>
+      <button class="fm-ib" id="fm-more" onclick="fmMoreMenu(event)" aria-label="More" title="More"><i data-i="more"></i></button>
+    </div>
   </div>
-  <div class="lego-breadcrumbs" id="lego-breadcrumbs"></div>
-  <div class="lego-list" id="lego-list"><span class="text-dim" style="padding:20px;display:block">Loading...</span></div>
-  <div class="lego-image-viewer" id="lego-image-viewer" style="display:none">
-    <button class="lego-image-close" onclick="closeLegoImage()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <button class="lego-image-action lego-image-shred" onclick="shredLegoImage()" title="Shred file" aria-label="Shred"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
-    <button class="lego-image-action lego-image-poof" onclick="poofLegoImage()" title="Poof!" aria-label="Poof"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2M9.6 4.6A2 2 0 1 1 11 8H2M12.6 19.4A2 2 0 1 0 14 16H2"/></svg></button>
-    <button class="lego-image-action lego-image-save" onclick="saveLegoFile(legoCurrentImage)" title="Save" aria-label="Save"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
-    <img id="lego-image-full" src="" alt="" />
+  <div class="fm-body">
+    <aside class="fm-side" id="fm-side" aria-label="Places"></aside>
+    <main class="fm-main">
+      <div class="fm-head" id="fm-head"></div>
+      <div class="fm-list" id="lego-list" tabindex="0"></div>
+      <div class="fm-status" id="fm-status"></div>
+    </main>
   </div>
+  <div class="fm-menu" id="fm-menu" hidden></div>
   <!-- Swipe mode -->
   <div class="lego-swipe" id="lego-swipe" style="display:none">
     <div class="lego-swipe-header">
@@ -255,6 +332,66 @@
       <button class="lego-swipe-btn lego-swipe-btn-poof" onclick="swipeRight()" aria-label="Poof"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2M9.6 4.6A2 2 0 1 1 11 8H2M12.6 19.4A2 2 0 1 0 14 16H2"/></svg></button>
     </div>
   </div>
+</div>
+
+<!-- ═══ GALLERY ═══ -->
+<div id="gallery-screen" class="screen gl-screen">
+  <header class="gl-head">
+    <button class="gl-back" onclick="goHome()" aria-label="Home"><i data-i="back"></i><span>Home</span></button>
+    <div class="gl-heads"><h2 id="gl-title" class="gl-title">Library</h2><div class="gl-sub" id="gl-sub"></div></div>
+    <div class="gl-acts">
+      <button class="gl-ib gl-zoom" onclick="glZoom(-1)" aria-label="Smaller photos"><i data-i="minus"></i></button>
+      <button class="gl-ib gl-zoom" onclick="glZoom(1)" aria-label="Larger photos"><i data-i="plus"></i></button>
+      <button class="gl-pill" id="gl-select-btn" onclick="glToggleSelect()">Select</button>
+    </div>
+  </header>
+  <nav class="gl-tabs" id="gl-tabs" role="tablist" aria-label="Gallery">
+      <button data-tab="library" role="tab" onclick="glSetTab('library')"><i data-i="photos"></i><span>Library</span></button>
+      <button data-tab="videos" role="tab" onclick="glSetTab('videos')"><i data-i="video"></i><span>Videos</span></button>
+      <button data-tab="screenshots" role="tab" onclick="glSetTab('screenshots')"><i data-i="screenshot"></i><span>Screenshots</span></button>
+    </nav>
+  <div class="gl-scroll" id="gl-scroll"><div id="gl-grid"></div><div class="gl-empty" id="gl-empty" style="display:none"></div><div class="gl-pad"></div></div>
+  <div class="gl-rail" id="gl-rail"><div class="gl-marks" id="gl-marks"></div><div class="gl-handle" id="gl-handle"><span id="gl-bubble"></span></div></div>
+  <div class="gl-selbar" id="gl-selbar">
+    <button data-act="dl" onclick="glDownloadSelected()"><i data-i="download"></i><span>Download</span></button>
+    <button data-act="rm" class="danger" onclick="glDeleteSelected()"><i data-i="trash"></i><span>Delete</span></button>
+  </div>
+</div>
+
+<!-- Full-screen photo/video viewer (shared by Gallery and Files) -->
+<div id="glb" class="glb" hidden tabindex="-1" role="dialog" aria-label="Viewer">
+  <div class="glb-bg"></div>
+  <div class="glb-stage" id="glb-stage"><div class="glb-track" id="glb-track"><div class="glb-slide"></div><div class="glb-slide"></div><div class="glb-slide"></div></div></div>
+  <div class="glb-top glb-ui">
+    <button class="glb-ib" onclick="glbClose()" aria-label="Close"><i data-i="back"></i></button>
+    <div class="glb-title"><b id="glb-date"></b><span id="glb-time"></span></div>
+    <div class="glb-count" id="glb-count"></div>
+  </div>
+  <button class="glb-nav prev glb-ui" onclick="glbGo(-1)" aria-label="Previous"><i data-i="back"></i></button>
+  <button class="glb-nav next glb-ui" onclick="glbGo(1)" aria-label="Next"><i data-i="fwd"></i></button>
+  <div class="glb-bottom glb-ui">
+    <button class="glb-ib" onclick="glbDownload()" aria-label="Download"><i data-i="download"></i></button>
+    <button class="glb-ib" onclick="glbInfo(!glb.infoOpen)" aria-label="Info"><i data-i="info"></i></button>
+    <button class="glb-ib danger" onclick="glbDelete()" aria-label="Move to Trash"><i data-i="trash"></i></button>
+  </div>
+  <div class="glb-sheet glb-ui"><div class="glb-grab"></div><div class="glb-sheet-h">Details<button class="glb-ib" onclick="glbInfo(false)" aria-label="Close details"><i data-i="close"></i></button></div><div id="glb-info-body"></div></div>
+</div>
+
+<!-- ═══ LOGS ═══ -->
+<div id="logs-screen" class="screen lg-screen">
+  <div class="app-header">
+    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <h2 class="screen-title"><span class="screen-title-icon"></span> Logs</h2>
+    <button class="lg-refresh" onclick="loadLogs()" aria-label="Refresh"><i data-i="refresh"></i></button>
+  </div>
+  <div class="lg-chips" id="lg-chips" role="tablist">
+    <button data-g="" class="on" onclick="logsGroup(this.dataset.g)">All</button>
+    <button data-g="auth" onclick="logsGroup(this.dataset.g)">Sign-ins</button>
+    <button data-g="terminal" onclick="logsGroup(this.dataset.g)">Terminal</button>
+    <button data-g="files" onclick="logsGroup(this.dataset.g)">Files</button>
+    <button data-g="alerts" onclick="logsGroup(this.dataset.g)">Alerts</button>
+  </div>
+  <div class="lg-list" id="lg-list"></div>
 </div>
 
 <!-- ═══ AGENT MANAGER ═══ -->
@@ -314,6 +451,16 @@
     </div>
   </div>
   <div class="terminal-content">
+    <div id="term-lock" class="term-lock" hidden>
+      <form class="term-lock-card" onsubmit="termUnlock(event)" autocomplete="off">
+        <div class="term-lock-ico"><i data-i="lock"></i></div>
+        <h3>Terminal is locked</h3>
+        <p id="term-lock-msg">Enter the 6-digit code from your authenticator app.</p>
+        <input id="term-lock-code" class="term-lock-input" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" placeholder="000000" autocomplete="one-time-code" aria-label="Authenticator code">
+        <button class="ui-btn ui-btn-main" id="term-lock-btn" type="submit">Unlock</button>
+        <div id="term-lock-err" class="term-lock-err" role="alert"></div>
+      </form>
+    </div>
     <!-- Interactive xterm.js terminal -->
     <div id="xterm-container" class="xterm-container" style="display:block"></div>
     <!-- Mobile key bar -->
@@ -480,9 +627,9 @@
         <div class="settings-row">
           <span>What the agent can do</span>
           <select id="voicecfg-access" class="settings-input" onchange="voiceAccessChanged()">
-            <option value="talk">Talk — chat &amp; view only</option>
-            <option value="basic">Basic — create files (non-destructive)</option>
-            <option value="full">Full — unrestricted access</option>
+            <option value="talk">Talk: chat &amp; view only</option>
+            <option value="basic">Basic: create files (non-destructive)</option>
+            <option value="full">Full: unrestricted access</option>
           </select>
         </div>
         <div class="settings-note" id="voice-access-note">Talk mode can read system info but never changes anything. Basic can create and move files. Full can run any command.</div>
@@ -505,7 +652,7 @@
           <input type="text" id="voicecfg-hermes-home" class="settings-input" placeholder="~/.hermes">
         </div>
         <button class="settings-save-btn" onclick="saveHermesHome()">Save Hermes path</button>
-        <div class="settings-note">The agent uses Hermes (smart, agentic) if it's installed — otherwise it falls back to the LLM below.</div>
+        <div class="settings-note">The agent uses Hermes (smart, agentic) if it's installed. Otherwise it falls back to the LLM below.</div>
       </div>
 
       <div class="settings-group">
@@ -529,7 +676,7 @@
               <button class="settings-save-btn" style="margin:0" onclick="pullOllamaModel()">Download model</button>
             </span>
           </div>
-          <div class="settings-note" id="voice-ollama-note">Local models run on this machine — private, no API costs.</div>
+          <div class="settings-note" id="voice-ollama-note">Local models run on this machine. Private, no API costs.</div>
         </div>
         <div id="voicecfg-cloud-block">
           <div class="settings-row">
@@ -830,7 +977,7 @@
           placeholder="e.g. Lo-fi hip hop beat with warm piano and vinyl crackle, chill and nostalgic"></textarea>
       </div>
       <div class="musicgen-field">
-        <label>Lyrics (optional — leave empty for instrumental)</label>
+        <label>Lyrics (optional. Leave empty for instrumental)</label>
         <textarea id="musicgen-lyrics" class="comfy-prompt" rows="3"
           placeholder="Verse 1&#10;..."></textarea>
       </div>
@@ -999,7 +1146,7 @@
         Enable microphone
       </button>
 
-      <!-- Transcript (user speech, transient — clears each turn) -->
+      <!-- Transcript (user speech, transient - clears each turn) -->
       <div id="voice-transcript" class="voice-transcript"></div>
 
       <!-- Response (AI text, fades after turn done; tap for history) -->
@@ -1082,48 +1229,47 @@
     <p style="color:var(--red);font-weight:700">This could permanently break your setup or expose your data.</p>
     <div class="full-access-buttons">
       <button class="voice-btn voice-btn-no" onclick="fullAccessConfirm(false)">Cancel</button>
-      <button class="voice-btn voice-btn-yes" style="background:rgba(239,68,68,0.25);border-color:rgba(239,68,68,0.5);color:#f87171" onclick="fullAccessConfirm(true)">I understand — enable Full access</button>
+      <button class="voice-btn voice-btn-yes" style="background:rgba(239,68,68,0.25);border-color:rgba(239,68,68,0.5);color:#f87171" onclick="fullAccessConfirm(true)">I understand. Enable Full access</button>
     </div>
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-<script type="importmap">
-{ "imports": { "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js" } }
-</script>
-<script type="module">
-import * as CANNON from 'cannon-es';
-window.CANNON = CANNON;
-</script>
+<script src="/static/vendor/xterm/xterm.min.js"></script>
+<script src="/static/vendor/xterm/addon-fit.min.js"></script>
+<script src="/static/vendor/three/three.min.js"></script>
+<script src="/static/vendor/qrcode/qrcode.js"></script>
+<script type="module" src="/static/js/cannon-init.js"></script>
 <script src="/static/js/thinking-orbs.js"></script>
-<script src="/static/js/modules/auth.js?v=107"></script>
-<script src="/static/js/modules/onboarding.js?v=107"></script>
-<script src="/static/js/modules/core.js?v=107"></script>
-<script src="/static/js/modules/media-session.js?v=107"></script>
-<script src="/static/js/modules/home.js?v=107"></script>
- <script src="/static/js/modules/liquid.js?v=107"></script>
- <script src="/static/js/modules/musicgen.js?v=107"></script>
- <script src="/static/js/modules/models.js?v=107"></script>
-<script src="/static/js/modules/projects.js?v=107"></script>
-<script src="/static/js/modules/audiobooks.js?v=107"></script>
-<script src="/static/js/modules/lego.js?v=107"></script>
-<script src="/static/js/modules/terminal.js?v=107"></script>
-<script src="/static/js/modules/osint.js?v=107"></script>
-<script src="/static/js/modules/universe.js?v=107"></script>
-<script src="/static/js/modules/system.js?v=107"></script>
-<script src="/static/js/modules/ollama.js?v=107"></script>
-<script src="/static/js/modules/comfy.js?v=107"></script>
-<script src="/static/js/modules/lego3d.js?v=107"></script>
-<script src="/static/js/modules/voice.js?v=107"></script>
-<script src="/static/js/modules/journal.js?v=107"></script>
-<script src="/static/js/modules/legos3d.js?v=107"></script>
-<script src="/static/js/modules/settings.js?v=107"></script>
-<script src="/static/js/modules/telemetry.js?v=107"></script>
-<script src="/static/js/modules/desktop.js?v=107"></script>
-<script src="/static/js/modules/music.js?v=107"></script>
+<script src="/static/js/modules/auth.js?v=165"></script>
+<script src="/static/js/modules/onboarding.js?v=165"></script>
+<script src="/static/js/modules/core.js?v=165"></script>
+<script src="/static/js/modules/nav.js?v=165"></script>
+<script src="/static/js/modules/media-session.js?v=165"></script>
+<script src="/static/js/modules/home.js?v=165"></script>
+ <script src="/static/js/modules/liquid.js?v=165"></script>
+ <script src="/static/js/modules/musicgen.js?v=165"></script>
+ <script src="/static/js/modules/models.js?v=165"></script>
+<script src="/static/js/modules/projects.js?v=165"></script>
+<script src="/static/js/modules/audiobooks.js?v=165"></script>
+<script src="/static/js/modules/ui-kit.js?v=165"></script>
+<script src="/static/js/modules/gallery.js?v=165"></script>
+<script src="/static/js/modules/lego.js?v=165"></script>
+<script src="/static/js/modules/logs.js?v=165"></script>
+<script src="/static/js/modules/terminal.js?v=165"></script>
+<script src="/static/js/modules/osint.js?v=165"></script>
+<script src="/static/js/modules/universe.js?v=165"></script>
+<script src="/static/js/modules/system.js?v=165"></script>
+<script src="/static/js/modules/ollama.js?v=165"></script>
+<script src="/static/js/modules/comfy.js?v=165"></script>
+<script src="/static/js/modules/lego3d.js?v=165"></script>
+<script src="/static/js/modules/voice.js?v=165"></script>
+<script src="/static/js/modules/journal.js?v=165"></script>
+<script src="/static/js/modules/legos3d.js?v=165"></script>
+<script src="/static/js/modules/settings.js?v=165"></script>
+<script src="/static/js/modules/telemetry.js?v=165"></script>
+<script src="/static/js/modules/desktop.js?v=165"></script>
+<script src="/static/js/modules/music.js?v=165"></script>
+<script src="/static/js/modules/music-spotify.js?v=165"></script>
 
 <!-- ═══ ONBOARDING OVERLAY ═══ -->
 <div id="onboarding-overlay" class="onboarding-overlay" style="display:none">
@@ -1133,7 +1279,7 @@ window.CANNON = CANNON;
     <!-- Step 0: Welcome -->
     <div class="onboarding-step active" data-step="0">
       <h1>Welcome to DeCloud</h1>
-      <p>DeCloud is your personal cloud — a self-hosted dashboard for audiobooks, AI chat, files, music, and more. No accounts, no tracking, no cloud fees. Just your machine, your data, your control.</p>
+      <p>DeCloud is your personal cloud. A self-hosted dashboard for audiobooks, AI chat, files, music, and more. No accounts, no tracking, no cloud fees. Just your machine, your data, your control.</p>
       <div class="onboarding-name">
         <label for="agent-name-input">Name your AI companion</label>
         <input type="text" id="agent-name-input" placeholder="DeCloud" maxlength="40" autocomplete="off" autocapitalize="words">
@@ -1144,19 +1290,19 @@ window.CANNON = CANNON;
     <!-- Step 1: What's inside -->
     <div class="onboarding-step" data-step="1">
       <h1>What's Inside</h1>
-      <p>📚 <strong>Audiobooks</strong> — Read and listen with real-time word highlighting</p>
-      <p>🤖 <strong>AI Chat</strong> — Local LLM via Ollama, or cloud models</p>
-      <p>📁 <strong>Files</strong> — Browse your filesystem from your phone</p>
-      <p>🎨 <strong>Generate</strong> — AI image generation via ComfyUI</p>
-      <p>🎵 <strong>Music</strong> — Your local music library, anywhere</p>
-      <p>📊 <strong>System Monitor</strong> — CPU, RAM, GPU in real time</p>
-      <p style="font-size:0.85em;opacity:0.6">All features are optional — the app works with zero configuration.</p>
+      <p>📚 <strong>Audiobooks</strong>: Read and listen with real-time word highlighting</p>
+      <p>🤖 <strong>AI Chat</strong>: Local LLM via Ollama, or cloud models</p>
+      <p>📁 <strong>Files</strong>: Browse your filesystem from your phone</p>
+      <p>🎨 <strong>Generate</strong>: AI image generation via ComfyUI</p>
+      <p>🎵 <strong>Music</strong>: Your local music library, anywhere</p>
+      <p>📊 <strong>System Monitor</strong>: CPU, RAM, GPU in real time</p>
+      <p style="font-size:0.85em;opacity:0.6">All features are optional. The app works with zero configuration.</p>
     </div>
 
     <!-- Step 2: Secure by default -->
     <div class="onboarding-step" data-step="2">
       <h1>Secure by Default</h1>
-      <p>DeCloud binds to <strong>localhost only</strong> — zero exposed ports. Remote access is through a tunnel (Tailscale Funnel, localhost.run, or Cloudflare), so your machine is never directly reachable.</p>
+      <p>DeCloud binds to <strong>localhost only</strong>: zero exposed ports. Remote access is through a tunnel (Tailscale Funnel, localhost.run, or Cloudflare), so your machine is never directly reachable.</p>
       <p>All API endpoints require a <strong>PIN</strong>. No accounts, no passwords to leak.</p>
     </div>
 

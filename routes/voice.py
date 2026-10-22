@@ -206,17 +206,17 @@ def voice_intent():
         access_hint = {
             'talk': "You may read/view things and read system state, but you cannot change the system. Only use run_command for read-only commands like 'df -h', 'free -h', 'ps', 'ls', 'cat', 'nvidia-smi'.",
             'basic': "You may create files and make non-destructive changes (touch, mkdir, cp, mv, git, pip install, etc.), but never destructive commands (rm, dd, mkfs, shutdown, etc.).",
-            'full': "You have full, unrestricted shell access — you may run any command, but every command must still set requires_confirmation=true.",
+            'full': "You have full, unrestricted shell access, you may run any command, but every command must still set requires_confirmation=true.",
         }[access]
 
         # Conversational system prompt. The agent talks naturally but returns
         # a JSON object ONLY when it needs to control DeCloud. Built with a
         # plain string + replace because the JSON examples contain braces.
-        system_prompt = """You are {agent_name}, the voice assistant for DeCloud — a self-hosted personal cloud app (music, audiobooks, files, AI chat, a terminal, and a system monitor).
+        system_prompt = """You are {agent_name}, the voice assistant for DeCloud, a self-hosted personal cloud app (music, audiobooks, files, AI chat, a terminal, and a system monitor).
 
-You are speaking out loud, so be natural and conversational. Prefer short answers, but give real detail and substance when it helps — don't be terse or one-word. No markdown, no lists, no emojis, no follow-up questions. Just talk like a warm, capable person.
+You are speaking out loud, so be natural and conversational. Prefer short answers, but give real detail and substance when it helps, don't be terse or one-word. No markdown, no lists, no emojis, no follow-up questions. Just talk like a warm, capable person.
 
-You can also control DeCloud. If the user asks you to DO something (play a song, open a book, navigate to a screen, run a command, search files), respond with a SINGLE JSON object describing the action — nothing else. Otherwise, just reply in plain conversational text.
+You can also control DeCloud. If the user asks you to DO something (play a song, open a book, navigate to a screen, run a command, search files), respond with a SINGLE JSON object describing the action, nothing else. Otherwise, just reply in plain conversational text.
 
 Your current access level is "{access}": {access_hint}
 
@@ -308,13 +308,13 @@ def voice_run_command():
     """Execute a shell command and return output. Used after user confirmation.
 
     Command access is tiered by the voice_access setting:
-      - 'talk'  — read-only commands only (view system state, never change it)
-      - 'basic' — non-destructive commands (create files, move/copy, git, etc.)
-      - 'full'  — unrestricted (still confirmed per-command in the UI)
+      - 'talk'  - read-only commands only (view system state, never change it)
+      - 'basic' - non-destructive commands (create files, move/copy, git, etc.)
+      - 'full'  - unrestricted (still confirmed per-command in the UI)
     """
     # Read-only commands: can inspect but never modify the system.
     # Note: commands like systemctl/tailscale/ip have mutating subcommands, so
-    # they are NOT in the read-only set — they'd let 'talk' mode change state.
+    # they are NOT in the read-only set - they'd let 'talk' mode change state.
     READ_ONLY_COMMANDS = {
         'ls', 'pwd', 'cat', 'head', 'tail', 'wc', 'find', 'grep', 'which',
         'date', 'cal', 'uptime', 'whoami', 'hostname', 'uname',
@@ -322,7 +322,7 @@ def voice_run_command():
         'ss', 'ping', 'journalctl',
     }
     # Non-destructive commands: create/change things but reversible.
-    # These are best-effort guardrails, NOT a hard security boundary — the
+    # These are best-effort guardrails, NOT a hard security boundary - the
     # Terminal app already gives the owner full shell access. They exist so a
     # voice-initiated command can't trivially destroy data without the user
     # switching to Full access.
@@ -377,7 +377,7 @@ def voice_run_command():
                 if re.search(pat, command):
                     return jsonify({'error': 'Blocked: command matches a dangerous pattern'}), 403
 
-        # Run with timeout — no shell=True, use list form
+        # Run with timeout - no shell=True, use list form
         import shlex
         cmd_list = shlex.split(command)
         proc = subprocess.run(
@@ -440,7 +440,7 @@ def _save_hermes_session(sid):
 
 VOICE_HERMES_SYSTEM = (
     "You're speaking out loud, so be natural and conversational. Prefer short "
-    "answers, but give real detail and substance when it helps — don't be terse "
+    "answers, but give real detail and substance when it helps, don't be terse "
     "or one-word. No markdown, no lists, no emojis, no follow-up questions. "
     "Just talk like a warm, capable person.\n\n"
 )
@@ -516,7 +516,7 @@ def voice_chat():
 
 
 SIMPLE_SYSTEM = (
-    "You are {name}, the voice assistant for DeCloud — a self-hosted personal "
+    "You are {name}, the voice assistant for DeCloud, a self-hosted personal "
     "cloud app. You're speaking out loud, so be natural and conversational. "
     "Prefer short answers, but give real detail and substance when it helps. "
     "No markdown, no lists, no emojis, no follow-up questions. Just talk like "
@@ -715,7 +715,7 @@ def _run_ollama_install(job_id):
     try:
         script_path = os.path.join(tempfile.gettempdir(), 'decloud_ollama_install.sh')
         # Best-effort one-click install: downloads the official installer over
-        # HTTPS (TLS provides transport integrity). There is no pinned hash —
+        # HTTPS (TLS provides transport integrity). There is no pinned hash -
         # this is the same trust model as the official `curl | sh` docs and is
         # only ever run when the user explicitly clicks "Install Ollama".
         with _requests.get('https://ollama.com/install.sh', stream=True, timeout=60) as r:
@@ -726,7 +726,7 @@ def _run_ollama_install(job_id):
         # Sanity check: the download must look like a shell script before we run it.
         head = open(script_path, 'rb').read(256).decode('utf-8', errors='replace')
         if '#!/' not in head:
-            _set_job(job_id, 'error', 'Installer download did not look like a script — aborted.')
+            _set_job(job_id, 'error', 'Installer download did not look like a script, aborted.')
             return
         proc = subprocess.run(['sh', script_path], capture_output=True, text=True, timeout=600)
         tail = (proc.stdout + proc.stderr)[-2000:]

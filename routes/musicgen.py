@@ -177,7 +177,7 @@ def musicgen_generate():
     duration = data.get('duration')
 
     if not prompt and not lyrics:
-        return jsonify({'error': 'Describe the song (prompt), or provide lyrics — or both'}), 400
+        return jsonify({'error': 'Describe the song (prompt), or provide lyrics. Or both'}), 400
 
     workflow = _load_workflow()
     if not workflow:
@@ -244,7 +244,7 @@ def musicgen_progress(prompt_id):
                 new_files.append(Path(f))
 
         if not new_files:
-            # Done but no audio found — report honestly
+            # Done but no audio found - report honestly
             _INFLIGHT.pop(prompt_id, None)
             return jsonify({'done': True, 'error':
                             'Generation finished but no audio file appeared in '
