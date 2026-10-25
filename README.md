@@ -61,7 +61,7 @@ The first time you open DeCloud, enter your passcode to unlock (tap ✓ after ty
 > updates). Funnel URLs are public, so the passcode is all that stands
 > between the internet and your computer. **Don't share it** — DeCloud is a
 > single-owner app. If only your own devices need access, prefer
-> tailnet-only Tailscale Serve; see [PERMANENT_TUNNEL.md](PERMANENT_TUNNEL.md).
+> tailnet-only Tailscale Serve; see [docs/PERMANENT_TUNNEL.md](docs/PERMANENT_TUNNEL.md).
 
 ## Configuration
 
@@ -235,7 +235,7 @@ never break your machine:
 - **Local-only usage stats** — the Usage screen logs activity to a local
   JSON file; nothing is tracked externally, nothing leaves your machine.
 
-See [SECURITY_AUDIT.md](SECURITY_AUDIT.md) for the full audit and its
+See [docs/security/SECURITY_AUDIT.md](docs/security/SECURITY_AUDIT.md) for the full audit and its
 accepted limitations.
 
 Found a vulnerability? Report it privately — see [SECURITY.md](SECURITY.md).

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-DOCS = ['README.md', 'PERMANENT_TUNNEL.md']
+DOCS = ['README.md', 'docs/PERMANENT_TUNNEL.md']
 
 
 @pytest.mark.parametrize('name', DOCS)

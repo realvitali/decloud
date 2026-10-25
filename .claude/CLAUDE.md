@@ -1,6 +1,6 @@
 # CLAUDE.md — DeCloud quick reference for agents
 
-Read `AGENTS.md` in full before making changes. This file is the short version
+Read `docs/AGENTS.md` in full before making changes. This file is the short version
 for agents that only read CLAUDE.md.
 
 ## Hard rules

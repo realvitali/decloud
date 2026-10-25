@@ -35,7 +35,7 @@ document.addEventListener('contextmenu', e => {
 // Instead offer a reload (or do it silently if the tab is hidden).
 if ('serviceWorker' in navigator) {
   const hadController = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.register('/sw.js?v=111').catch(() => {});
+  navigator.serviceWorker.register('/sw.js?v=112').catch(() => {});
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadController) return;  // first install, nothing stale
     if (document.hidden) { location.reload(); return; }

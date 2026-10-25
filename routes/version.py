@@ -7,9 +7,19 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.5.2"
+VERSION = "0.5.3"
 
 CHANGELOG = [
+    {
+        "version": "0.5.3",
+        "date": "2026-10-25",
+        "changes": [
+            "Tidy repo root: internal docs moved to docs/",
+            "Moved audits and fix reports to docs/security/",
+            "Moved AGENTS.md, PERMANENT_TUNNEL.md, UPGRADE.md to docs/",
+            "CLAUDE.md moved to .claude/",
+        ]
+    },
     {
         "version": "0.5.2",
         "date": "2026-10-20",

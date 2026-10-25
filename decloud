@@ -12,7 +12,7 @@ TUNNEL_PID_FILE="$APP_DIR/tunnel.pid"
 APP_PID_FILE="$APP_DIR/app.pid"
 
 # ─── Version ──────────────────────────────────────────────────────
-VERSION="0.5.2"
+VERSION="0.5.3"
 
 # ─── Helpers ────────────────────────────────────────────────────
 
@@ -188,7 +188,7 @@ show_qr() {
     echo "🔒 The URL is public (https://….ts.net) — anyone who opens it"
     echo "   still needs the passcode to unlock anything."
     echo "⚠  The passcode unlocks a shell on this machine. Don't share it."
-    echo "   For private (tailnet-only) access, see: PERMANENT_TUNNEL.md"
+    echo "   For private (tailnet-only) access, see: docs/PERMANENT_TUNNEL.md"
     echo ""
 }
 
