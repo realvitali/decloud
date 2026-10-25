@@ -7,13 +7,14 @@ async function loadBooks() {
     ).join('');
     const r = await fetch('/api/books');
     const books = await r.json();
+    if (!r.ok || !Array.isArray(books)) throw new Error((books && books.error) || 'Something went wrong — try again');
     if (!books || books.length === 0) {
       document.getElementById('book-list').innerHTML = `
         <div class="empty-state">
           <div class="empty-icon">📚</div>
           <h3>No books yet</h3>
-          <p>Add PDF or EPUB files to your books folder to get started.</p>
-          <p class="empty-hint">Settings → Books folder to change the path</p>
+          <p>Put PDF or plain-text (.txt) files in your books folder to get started.</p>
+          <p class="empty-hint">To choose a different folder, go to Settings → Paths.</p>
         </div>`;
       return;
     }
@@ -25,25 +26,25 @@ async function loadBooks() {
                          b.status === 'generating' ? (total ? `${done}/${total} chapters` : `${done} chapters done`) :
                          total ? `${done}/${total} chapters` : 'Not generated';
       return `
-        <div class="book-item" onclick="openBook('${b.id}', '${b.title.replace(/'/g,"\\'")}')">
+        <div class="book-item" data-id="${escapeHtml(b.id)}" data-title="${escapeHtml(b.title)}" onclick="openBook(this.dataset.id, this.dataset.title)">
           <div class="book-item-info">
-            <div class="book-item-name">${b.title}</div>
-            <div class="book-item-meta">${b.size_mb} MB &nbsp;•&nbsp; ${b.voice || 'no voice'}</div>
+            <div class="book-item-name">${escapeHtml(b.title)}</div>
+            <div class="book-item-meta">${escapeHtml(b.size_mb)} MB &nbsp;•&nbsp; ${escapeHtml(b.voice || 'no voice')}</div>
           </div>
           <div class="book-item-right">
             <div class="book-status ${statusClass}">${statusText}</div>
-            <button class="settings-btn" onclick="event.stopPropagation(); openSettingsForBook('${b.id}')" title="Settings">&#9881;</button>
+            <button class="settings-btn" data-id="${escapeHtml(b.id)}" onclick="event.stopPropagation(); openSettingsForBook(this.dataset.id)" title="Settings">&#9881;</button>
           </div>
         </div>
       `;
     }).join('');
-  } catch {
+  } catch (e) {
     document.getElementById('book-list').innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">📚</div>
-        <h3>No books yet</h3>
-        <p>Add PDF or EPUB files to your books folder to get started.</p>
-        <p class="empty-hint">Settings → Books folder to change the path</p>
+        <h3>Couldn't load your books</h3>
+        <p>${escapeHtml(friendlyError(e))}</p>
+        <button class="settings-btn" onclick="loadBooks()">Retry</button>
       </div>`;
   }
 }
@@ -80,6 +81,7 @@ let player = null;
 let audioChapterIdx = 0;
 let transcriptWords = [];
 let pollInterval = null;
+let isGenerating = false;
 
 // ─── Open Book ────────────────────────────────────────────
 async function openBook(bookId, title) {
@@ -218,7 +220,7 @@ async function loadChapterText(idx) {
     const res = await fetch(`/api/books/text?book=${encodeURIComponent(currentBook)}&chapter=${idx}`);
     const data = await res.json();
     if (data.error) {
-      document.getElementById('reader-text').innerHTML = `<span style="color:var(--text-dim)">${data.error}</span>`;
+      document.getElementById('reader-text').innerHTML = `<span style="color:var(--text-dim)">${escapeHtml(data.error)}</span>`;
       return;
     }
     readerText = data.text || '';
@@ -238,7 +240,7 @@ function renderReaderText() {
   const words = readerText.split(/(\s+)/);
   el.innerHTML = words.map((w, i) => {
     if (/^\s+$/.test(w)) return w;
-    return `<span class="reader-word" data-idx="${i}" onclick="handleWordTap(this, ${i})">${w}</span>`;
+    return `<span class="reader-word" data-idx="${i}" onclick="handleWordTap(this, ${i})">${escapeHtml(w)}</span>`;
   }).join('');
 
   el.style.fontSize = fs + 'px';
@@ -394,7 +396,7 @@ function renderBookmarkList() {
 
   container.innerHTML = nonResume.map((b, i) => `
     <div class="bookmark-row">
-      <span class="bookmark-word">"${b.word}"</span>
+      <span class="bookmark-word">"${escapeHtml(b.word)}"</span>
       <span class="bookmark-ch">Ch ${b.chapter + 1}</span>
       <button class="bookmark-goto" onclick="gotoBookmark(${i})">Go</button>
       <button class="bookmark-del" onclick="deleteBookmark(${i})">✕</button>
@@ -484,7 +486,7 @@ function buildChapterDropdown(activeIdx) {
     const title = c.title || `Chapter ${i + 1}`;
     const prefix = isDone ? '\u2713 ' : pending ? '... ' : '';
     const cls = isCurrent ? 'current' : isDone ? 'completed' : '';
-    return `<option value="${i}" class="${cls}" ${isCurrent ? 'selected' : ''}>${prefix}${num}. ${title}</option>`;
+    return `<option value="${i}" class="${cls}" ${isCurrent ? 'selected' : ''}>${prefix}${num}. ${escapeHtml(title)}</option>`;
   }).join('');
 
   // Resume hint
@@ -549,7 +551,7 @@ function buildTranscript(chapter) {
     const end = (elapsed / totalWeight) * duration;
     words.push({ idx: i, start, end });
     wordIdx++;
-    return `<span class="tw" id="tw-${i}">${t}</span>`;
+    return `<span class="tw" id="tw-${i}">${escapeHtml(t)}</span>`;
   }).join('');
 
   transcriptWords = words;
@@ -667,6 +669,13 @@ function formatTime(sec) {
 }
 
 // ─── Generation Banner ───────────────────────────────────
+function setupPlayer() {
+  player = document.getElementById('audio-player');
+  player.removeEventListener('timeupdate', onTimeUpdate);
+  player.addEventListener('timeupdate', onTimeUpdate);
+  document.getElementById('audio-mode-btn').disabled = false;
+}
+
 function showGenBanner(progress) {
   const banner = document.getElementById('gen-banner');
   banner.style.display = 'block';
@@ -686,8 +695,11 @@ async function startPolling(bookId) {
   isGenerating = true;
 
   pollInterval = setInterval(async () => {
-    const r = await fetch(`/api/tts/status/${bookId}`);
-    const d = await r.json();
+    let d;
+    try {
+      const r = await fetch(`/api/tts/status/${encodeURIComponent(bookId)}`);
+      d = await r.json();
+    } catch (e) { return; }  // transient — try again next tick
 
     if (d.status === 'ready') {
       clearInterval(pollInterval);
@@ -733,6 +745,10 @@ async function startPolling(bookId) {
       isGenerating = false;
       pollInterval = null;
       hideGenBanner();
+      if (d.status === 'error') {
+        showToast("Audio generation stopped: " + (d.error || 'something went wrong — try again'));
+        loadBooks();
+      }
     }
   }, 4000);
 }
@@ -766,9 +782,9 @@ async function openSettingsForBook(bookId) {
   voiceGrid.innerHTML = voices.map(v => {
     const isActive = settings.voice === v.id;
     return `
-      <div class="voice-card ${isActive ? 'selected' : ''}" onclick="selectVoice('${v.id}')" id="voice-${v.id}">
+      <div class="voice-card ${isActive ? 'selected' : ''}" data-id="${escapeHtml(v.id)}" onclick="selectVoice(this.dataset.id)" id="voice-${escapeHtml(v.id)}">
         <div class="voice-icon">${v.gender === 'male' ? '♂' : '♀'}</div>
-        <div class="voice-name">${v.name}</div>
+        <div class="voice-name">${escapeHtml(v.name)}</div>
         ${isActive ? '<div class="voice-active-badge">Active</div>' : ''}
       </div>
     `;
@@ -784,7 +800,7 @@ async function openSettingsForBook(bookId) {
       return `
         <div class="chapter-row done">
           <span class="chapter-row-num">${c.index + 1}</span>
-          <span class="chapter-row-name">${getChapterName(c.index) || ''}</span>
+          <span class="chapter-row-name">${escapeHtml(getChapterName(c.index))}</span>
           <span class="chapter-row-size">${c.size_kb ? Math.round(c.size_kb/1024)+'MB' : ''}</span>
         </div>
       `;
@@ -844,8 +860,12 @@ function closeSettings() {
 
 async function startGeneration() {
   if (!settingsBookId) return;
-  const r = await fetch(`/api/tts/start/${settingsBookId}`, { method: 'POST' });
-  const d = await r.json();
+  let r, d;
+  try {
+    r = await fetch(`/api/tts/start/${encodeURIComponent(settingsBookId)}`, { method: 'POST' });
+    d = await r.json();
+  } catch (e) { showToast(friendlyError(e)); return; }
+  if (!r.ok || d.error) { showToast(d.error || 'Could not start audio generation'); return; }
   if (d.status === 'started') {
     document.getElementById('gen-controls').innerHTML =
       `<button class="gen-btn stop" onclick="stopGeneration()">Stop Generation</button>`;
@@ -956,7 +976,7 @@ async function openSummary() {
     clearTimeout(timeoutId);
     summaryData = await r.json();
     if (summaryData.error) {
-      document.getElementById('summary-loading').innerHTML = `<p>${summaryData.error}</p>`;
+      document.getElementById('summary-loading').innerHTML = `<p>${escapeHtml(summaryData.error)}</p>`;
       return;
     }
     document.getElementById('summary-loading').style.display = 'none';
@@ -966,8 +986,8 @@ async function openSummary() {
     switchSummaryTab('chapter');
   } catch (e) {
     clearTimeout(timeoutId);
-    const msg = e.name === 'AbortError' ? 'Timed out.' : e.message;
-    document.getElementById('summary-loading').innerHTML = `<p>Failed: ${msg}</p>`;
+    const msg = e.name === 'AbortError' ? 'Timed out.' : friendlyError(e);
+    document.getElementById('summary-loading').innerHTML = `<p>Failed: ${escapeHtml(msg)}</p>`;
   }
 }
 
@@ -1013,7 +1033,7 @@ async function askSummaryQuestion() {
   input.value = '';
 
   const chat = document.getElementById('summary-chat');
-  chat.innerHTML += `<div class="summary-msg user">${question}</div>`;
+  chat.innerHTML += `<div class="summary-msg user">${escapeHtml(question)}</div>`;
   chat.innerHTML += `<div class="summary-msg ai loading"><div class="pixel-loader"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>`;
   chat.scrollTop = chat.scrollHeight;
 
@@ -1039,7 +1059,7 @@ async function askSummaryQuestion() {
     const last = msgs[msgs.length - 1];
     if (last) {
       last.classList.remove('loading');
-      last.textContent = data.answer || 'No answer.';
+      last.textContent = data.answer || data.error || 'No answer.';
     }
     chat.scrollTop = chat.scrollHeight;
   } catch (e) {
@@ -1047,7 +1067,7 @@ async function askSummaryQuestion() {
     const last = msgs[msgs.length - 1];
     if (last) {
       last.classList.remove('loading');
-      last.textContent = e.message;
+      last.textContent = friendlyError(e);
     }
   }
 }

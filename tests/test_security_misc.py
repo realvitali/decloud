@@ -113,7 +113,6 @@ class TestBookCounts:
         books_dir.mkdir()
         chapters = [{'title': f'C{i}', 'text': 'w ' * 50} for i in range(12)]
         (books_dir / 'Twelve.json').write_text(_json.dumps(chapters))
-        monkeypatch.setattr(books_module, 'BOOKS_DIR', books_dir)
         monkeypatch.setattr(shared, 'BOOKS_DIR', books_dir)
         monkeypatch.setattr(books_module, 'AUDIO_DIR', tmp_path / 'audio')
         (tmp_path / 'audio').mkdir()

@@ -1,40 +1,62 @@
 // ===== Module: home =====
 
+function agentAvatarStyle(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return `background:linear-gradient(135deg,hsl(${h},60%,45%),hsl(${(h + 40) % 360},70%,60%))`;
+}
+
 async function loadAgents() {
+  const listEl = document.getElementById('agents-list');
+  if (!listEl) return;
   try {
     const r = await fetch('/api/agents');
-    if (!r.ok) {
-      throw new Error(`HTTP ${r.status}`);
-    }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
+    const agents = data.agents || [];
 
-    // Update status dots
-    for (const a of data.agents || []) {
-      const el = document.getElementById(`status-${a.id}`);
-      if (el) {
-        el.className = `agent-status ${a.status}`;
-        el.textContent = '●';
+    if (!agents.length) {
+      listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🤖</div><h3>No agents found</h3><p>To manage agents, set the Hermes path in Settings → Voice.</p></div>';
+      return;
+    }
+
+    listEl.innerHTML = agents.map(a => {
+      const name = a.name || a.id || '?';
+      const tag = a.platform && a.platform !== 'this machine' ? `<span class="agent-tag">${escapeHtml(a.platform)}</span>` : '';
+      const platformLine = [a.profile && a.profile !== 'local' ? 'Hermes · ' + a.profile : '', a.model].filter(Boolean).map(escapeHtml).join(' · ') || 'this machine';
+      const hasJobs = a.jobs && a.jobs.length;
+      const note = a.profile === 'local' ? 'This workstation — always on' : 'No cron jobs configured';
+      return `
+      <div class="agent-card" role="button" tabindex="0" data-id="${escapeHtml(a.id)}" onclick="toggleAgentDetail(this.dataset.id)">
+        <div class="agent-header">
+          <div class="agent-avatar" style="${agentAvatarStyle(name)}">${escapeHtml(name.charAt(0).toUpperCase())}</div>
+          <div class="agent-info">
+            <div class="agent-name">${escapeHtml(name)} ${tag}</div>
+            <div class="agent-platform">${platformLine}</div>
+          </div>
+          <div class="agent-status ${escapeHtml(a.status || 'unknown')}">●</div>
+          <div class="agent-expand" id="expand-${escapeHtml(a.id)}">▼</div>
+        </div>
+        <div class="agent-detail" id="agent-${escapeHtml(a.id)}">
+          ${hasJobs ? `<div class="agent-jobs" id="jobs-${escapeHtml(a.id)}"></div>` : `<div class="agent-note">${note}</div>`}
+        </div>
+      </div>`;
+    }).join('');
+
+    for (const a of agents) {
+      if (a.jobs && a.jobs.length) {
+        const jobsEl = document.getElementById(`jobs-${a.id}`);
+        if (jobsEl) renderJobs(jobsEl, a.jobs, a.profile || 'default');
       }
     }
 
-    // Render jobs (generic — works with any agent config)
-    if (data.default?.jobs) {
-      const jobsEl = document.getElementById('jobs-default') || document.getElementById('jobs-nika');
-      if (jobsEl) renderJobs(jobsEl, data.default.jobs, 'default');
-    }
-
-    // Restore open state
     for (const [id, open] of Object.entries(agentDetailsOpen)) {
       const detail = document.getElementById(`agent-${id}`);
       if (detail) detail.classList.toggle('open', open);
     }
   } catch(e) {
     console.error('loadAgents failed', e);
-    // Show empty state instead of hanging
-    const container = document.getElementById('jobs-default') || document.getElementById('jobs-nika');
-    if (container) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">🤖</div><h3>Agents not configured</h3><p>Set DECLOUD_HERMES_HOME in .env to enable agent management.</p></div>';
-    }
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🤖</div><h3>Agents not set up</h3><p>To manage agents, set the Hermes path in Settings → Voice.</p></div>';
   }
 }
 
@@ -42,20 +64,20 @@ function renderJobs(container, jobs, profile) {
   container.innerHTML = jobs.map(j => {
     const dot = j.last_status === 'ok' ? 'ok' : j.last_status === 'error' ? 'error' : 'paused';
     const rowClass = j.last_status === 'error' ? 'error' : '';
-    const last = j.last_run ? `Last: ${relTime(j.last_run)}` : '';
-    const next = j.next_run ? `Next: ${relTime(j.next_run)}` : '';
-    const err = j.last_error ? `<div class="job-error">${j.last_error}</div>` : '';
+    const last = j.last_run ? `Last: ${escapeHtml(relTime(j.last_run))}` : '';
+    const next = j.next_run ? `Next: ${escapeHtml(relTime(j.next_run))}` : '';
+    const err = j.last_error ? `<div class="job-error">${escapeHtml(j.last_error)}</div>` : '';
     return `
       <div class="job-row ${rowClass}">
         <div class="job-dot ${dot}"></div>
         <div class="job-info">
-          <div class="job-name">${j.name}</div>
-          <div class="job-schedule">${j.schedule_display}</div>
+          <div class="job-name">${escapeHtml(j.name)}</div>
+          <div class="job-schedule">${escapeHtml(j.schedule_display)}</div>
           ${last ? `<div class="job-last">${last}</div>` : ''}
           ${next ? `<div class="job-next">${next}</div>` : ''}
           ${err}
         </div>
-        <label class="job-toggle" onclick="event.stopPropagation(); toggleJob('${j.id}', !this.previousElementSibling.checked, '${profile}')">
+        <label class="job-toggle" data-id="${escapeHtml(j.id)}" data-profile="${escapeHtml(profile)}" onclick="event.stopPropagation(); toggleJob(this.dataset.id, !this.previousElementSibling.checked, this.dataset.profile)">
           <input type="checkbox" ${j.enabled ? 'checked' : ''}>
           <span class="job-toggle-slider"></span>
         </label>
@@ -67,7 +89,7 @@ function renderJobs(container, jobs, profile) {
 async function toggleJob(jobId, enabled, profile) {
   const action = enabled ? 'resume' : 'pause';
   try {
-    const r = await fetch(`/api/agents/jobs/${jobId}/${action}?profile=${profile}`, { method: 'POST' });
+    const r = await fetch(`/api/agents/jobs/${encodeURIComponent(jobId)}/${action}?profile=${encodeURIComponent(profile)}`, { method: 'POST' });
     const d = await r.json();
     if (!d.ok) {
       console.error('toggle failed:', d.error);
@@ -84,15 +106,16 @@ async function loadActivity() {
     const r = await fetch('/api/agents/logs?n=15');
     const d = await r.json();
     const el = document.getElementById('activity-list');
-    if (!el || !d.events?.length) return;
+    if (!el) return;
+    if (!d.events?.length) { el.innerHTML = '<span class="text-dim">No activity yet.</span>'; return; }
     el.innerHTML = d.events.map(ev => {
       const t = ev.ts ? relTime(ev.ts) : '';
       const label = ev.dir === 'in' ? 'IN' : 'OUT';
       return `
-        <div class="activity-item ${ev.dir}">
-          <span class="activity-dir ${ev.dir}">${label}</span>
-          <span class="activity-time">${t}</span>
-          <span class="activity-text">${ev.text || ''}</span>
+        <div class="activity-item ${ev.dir === 'in' ? 'in' : 'out'}">
+          <span class="activity-dir ${ev.dir === 'in' ? 'in' : 'out'}">${label}</span>
+          <span class="activity-time">${escapeHtml(t)}</span>
+          <span class="activity-text">${escapeHtml(ev.text || '')}</span>
         </div>
       `;
     }).join('');
@@ -129,7 +152,7 @@ function updateClock() {
   document.getElementById('clock').textContent =
     now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
 }
-setInterval(updateClock, 1000);
+setInterval(() => { if (!document.hidden) updateClock(); }, 1000);
 updateClock();
 
 // ─── Status Chips (Kali-style) + Sparklines ────────────────
@@ -193,7 +216,7 @@ function buildStatusChips() {
     { key: 'net',  label: 'NET' },
   ];
   container.innerHTML = chips.map(function(c) {
-    return '<div class="stat-chip" id="chip-' + c.key + '" onclick="toggleChipGraph(\'' + c.key + '\')">' +
+    return '<div class="stat-chip" role="button" tabindex="0" id="chip-' + c.key + '" data-key="' + c.key + '" onclick="toggleChipGraph(this.dataset.key)">' +
       '<div class="chip-percent">' +
       '<div class="stat-chip-label">' + c.label + '</div>' +
       '<div class="stat-chip-value" id="chip-val-' + c.key + '">--</div>' +
@@ -240,6 +263,9 @@ async function loadQuickStats() {
     setChipValue('cpu', cpu);
     setChipValue('ram', ram);
     setChipValue('gpu', gpuPct);
+    // GPU chip only when the server reports one (NVIDIA)
+    var gpuChip = document.getElementById('chip-gpu');
+    if (gpuChip) gpuChip.style.display = d.gpu ? '' : 'none';
     setChipValue('disk', disk);
 
     var netEl = document.getElementById('chip-val-net');
@@ -325,8 +351,8 @@ function renderNotifications() {
     return '<div class="notif-item">' +
       '<div class="notif-item-icon ' + n.type + '">' + iconSvg + '</div>' +
       '<div class="notif-item-body">' +
-      '<div class="notif-item-text">' + n.text + '</div>' +
-      '<div class="notif-item-time">' + n.time + '</div>' +
+      '<div class="notif-item-text">' + escapeHtml(n.text) + '</div>' +
+      '<div class="notif-item-time">' + escapeHtml(n.time) + '</div>' +
       '</div></div>';
   }).join('');
 }
@@ -362,16 +388,20 @@ function buildAppGrid() {
   `).join('');
 }
 
+function applyExperimentalApps() {
+  buildAppGrid();
+}
+
 function openApp(id) {
-  const app = APPS.find(a => a.id === id);
+  const app = APPS.find(a => a.id === id) || AI_SUBAPPS.find(a => a.id === id);
   if (!app) return;
   // AI spread menu
   if (app.spread) {
-    toggleAISpread(event);
+    toggleAISpread(window.event);
     return;
   }
   if (!app.screen) return;
-  closeAISpread();
+  if (typeof closeAISpread === 'function') closeAISpread();
   showScreen(app.screen);
   if (id === 'audiobooks') { location.hash = '#audiobooks'; loadBooks(); }
   if (id === 'music') { location.hash = '#music'; loadMusic(); }
@@ -565,19 +595,21 @@ async function startVoiceJournal() {
   try {
     vjStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     vjChunks = [];
-    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
-    vjRecorder = new MediaRecorder(vjStream, { mimeType: mime });
+    // Safari records mp4, not webm
+    const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+    vjRecorder = new MediaRecorder(vjStream, mime ? { mimeType: mime } : {});
 
     vjRecorder.ondataavailable = (e) => { if (e.data.size > 0) vjChunks.push(e.data); };
     vjRecorder.onstop = async () => {
-      const blob = new Blob(vjChunks, { type: mime });
+      const type = vjRecorder.mimeType || mime || 'audio/webm';
+      const blob = new Blob(vjChunks, { type });
       vjStream.getTracks().forEach(t => t.stop());
       vjStream = null;
       vjRecording = false;
       updateJournalRecordBtn(false);
 
       const fd = new FormData();
-      fd.append('audio', blob, 'journal.webm');
+      fd.append('audio', blob, type.includes('mp4') ? 'journal.m4a' : 'journal.webm');
       const statusEl = document.getElementById('journal-voice-status');
       if (statusEl) statusEl.textContent = 'Transcribing...';
 
@@ -591,7 +623,7 @@ async function startVoiceJournal() {
           if (statusEl) statusEl.textContent = 'Error: ' + (data.error || 'failed');
         }
       } catch (e) {
-        if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+        if (statusEl) statusEl.textContent = friendlyError(e);
       }
     };
 
@@ -599,7 +631,11 @@ async function startVoiceJournal() {
     vjRecording = true;
     updateJournalRecordBtn(true);
   } catch (e) {
-    showToast('Mic access denied');
+    if (vjStream) { vjStream.getTracks().forEach(t => t.stop()); vjStream = null; }
+    if (!navigator.mediaDevices || typeof MediaRecorder === 'undefined') showToast("This browser can't record audio");
+    else if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) showToast('Microphone access was blocked — allow it in your browser settings');
+    else if (e && e.name === 'NotFoundError') showToast('No microphone found');
+    else showToast("Couldn't start recording: " + friendlyError(e));
   }
 }
 

@@ -9,7 +9,7 @@ async function loadOsintProfiles() {
       return;
     }
     container.innerHTML = profiles.map(p => `
-      <div class="osint-profile-card" data-id="${p.id}" onclick="toggleOsintCard('${p.id}')">
+      <div class="osint-profile-card" data-id="${escapeHtml(p.id)}" onclick="toggleOsintCard(this.dataset.id)">
         <div class="osint-profile-header">
           <div class="osint-profile-name">${escapeHtml(p.name)}</div>
           <div class="osint-profile-chevron">&#9662;</div>
@@ -19,14 +19,14 @@ async function loadOsintProfiles() {
           ${p.data.phone ? `<span>${escapeHtml(p.data.phone)}</span>` : ''}
           ${p.data.usernames?.length ? `<span>${escapeHtml(p.data.usernames.join(', '))}</span>` : ''}
         </div>
-        <div class="osint-profile-expanded" id="expand-${p.id}" style="display:none">
+        <div class="osint-profile-expanded" id="expand-${escapeHtml(p.id)}" style="display:none">
           <div class="osint-profile-actions">
-            <button onclick="event.stopPropagation();osintRunScan('${p.id}')" class="osint-scan-btn">Scan</button>
-            <button onclick="event.stopPropagation();osintRunScan('${p.id}', true)" class="osint-scan-btn deep">Deep Scan</button>
-            <button onclick="event.stopPropagation();osintLoadScans('${p.id}')" class="osint-scan-btn">History</button>
-            <button onclick="event.stopPropagation();osintDeleteProfile('${p.id}')" class="osint-scan-btn delete">Delete</button>
+            <button data-id="${escapeHtml(p.id)}" onclick="event.stopPropagation();osintRunScan(this.dataset.id)" class="osint-scan-btn">Scan</button>
+            <button data-id="${escapeHtml(p.id)}" onclick="event.stopPropagation();osintRunScan(this.dataset.id, true)" class="osint-scan-btn deep">Deep Scan</button>
+            <button data-id="${escapeHtml(p.id)}" onclick="event.stopPropagation();osintLoadScans(this.dataset.id)" class="osint-scan-btn">History</button>
+            <button data-id="${escapeHtml(p.id)}" onclick="event.stopPropagation();osintDeleteProfile(this.dataset.id)" class="osint-scan-btn delete">Delete</button>
           </div>
-          <div class="osint-profile-scans" id="scans-${p.id}"></div>
+          <div class="osint-profile-scans" id="scans-${escapeHtml(p.id)}"></div>
         </div>
       </div>
     `).join('');
@@ -73,12 +73,13 @@ function toggleOsintCard(id) {
 }
 
 async function osintDeleteProfile(id) {
-  if (!confirm('Delete this profile?')) return;
+  if (!await appConfirm('Delete this profile?', { danger: true, ok: 'Delete' })) return;
   try {
-    await fetch(`/api/osint/profiles/${id}`, { method: 'DELETE' });
+    const r = await fetch(`/api/osint/profiles/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Something went wrong — try again');
     loadOsintProfiles();
   } catch (e) {
-    alert('Delete failed: ' + e.message);
+    showToast('Delete failed: ' + friendlyError(e));
   }
 }
 
@@ -118,7 +119,7 @@ function updateScanModal() {
       statusText = `Done — ${scan.exposures || 0} exposures`;
       progressBar = `<div class="osint-progress-bar"><div class="osint-progress-fill" style="width:100%;background:#22c55e"></div></div>`;
     } else if (scan.status === 'error') {
-      statusText = `Error: ${scan.error || 'failed'}`;
+      statusText = `Error: ${escapeHtml(scan.error || 'failed')}`;
       progressBar = `<div class="osint-progress-bar"><div class="osint-progress-fill" style="width:100%;background:#ef4444"></div></div>`;
     } else if (scan.status === 'scanning') {
       const elapsedShow = formatEta(elapsed);
@@ -129,7 +130,7 @@ function updateScanModal() {
       statusText = `Scanning... ${elapsedShow} elapsed, ~${formatEta(remaining)} remaining`;
       progressBar = `<div class="osint-progress-bar"><div class="osint-progress-fill" style="width:${pct}%"></div></div>`;
     } else {
-      statusText = scan.status || 'Starting...';
+      statusText = escapeHtml(scan.status || 'Starting...');
       progressBar = `<div class="osint-progress-bar"><div class="osint-progress-fill" style="width:5%"></div></div>`;
     }
 
@@ -140,7 +141,7 @@ function updateScanModal() {
           <span class="osint-scan-task-status">${statusText}</span>
         </div>
         ${progressBar}
-        ${scan.status === 'done' ? `<button class="osint-scan-view-btn" onclick="osintViewResults('${pid}')">View Results</button>` : ''}
+        ${scan.status === 'done' ? `<button class="osint-scan-view-btn" data-id="${escapeHtml(pid)}" onclick="osintViewResults(this.dataset.id)">View Results</button>` : ''}
       </div>
     `;
   }
@@ -166,7 +167,7 @@ async function osintRunScan(profileId, deep = false) {
   const profile = osintActiveScans[profileId];
   let profileName = profileId;
   try {
-    const r = await fetch(`/api/osint/profiles/${profileId}`);
+    const r = await fetch(`/api/osint/profiles/${encodeURIComponent(profileId)}`);
     const p = await r.json();
     profileName = p.name || profileId;
   } catch (e) {}
@@ -206,9 +207,14 @@ async function osintRunScan(profileId, deep = false) {
     if (allDone) stopScanPolling();
   } catch (e) {
     osintActiveScans[profileId].status = 'error';
-    osintActiveScans[profileId].error = e.message;
+    osintActiveScans[profileId].error = friendlyError(e);
     updateScanModal();
   }
+}
+
+// Only link out to real web pages (scraped URLs are untrusted).
+function osintSafeUrl(u) {
+  return /^https?:\/\//i.test(String(u || '')) ? escapeHtml(u) : '#';
 }
 
 function osintViewResults(profileId) {
@@ -235,12 +241,12 @@ function osintViewResults(profileId) {
       const confBg = f.confidence >= 70 ? 'rgba(239,68,68,0.15)' : f.confidence >= 40 ? 'rgba(251,191,36,0.15)' : 'rgba(107,114,128,0.15)';
       html += `<div class="osint-finding-row">
         <div class="osint-finding-header">
-          <span class="osint-confidence-badge" style="background:${confBg};color:${confColor}">${f.confidence_label} ${f.confidence}</span>
+          <span class="osint-confidence-badge" style="background:${confBg};color:${confColor}">${escapeHtml(f.confidence_label)} ${escapeHtml(f.confidence)}</span>
           <span class="osint-finding-source">${escapeHtml(f.source)}</span>
         </div>
-        <a href="${escapeHtml(f.url)}" target="_blank" class="osint-finding-link">${escapeHtml(f.title || f.url)}</a>
+        <a href="${osintSafeUrl(f.url)}" target="_blank" rel="noopener noreferrer" class="osint-finding-link">${escapeHtml(f.title || f.url)}</a>
         ${f.snippet ? `<div class="osint-finding-snippet">${escapeHtml(f.snippet)}</div>` : ''}
-        ${f.opt_out && f.confidence >= 40 ? `<a href="${escapeHtml(f.opt_out)}" target="_blank" class="osint-optout">Opt Out</a>` : ''}
+        ${f.opt_out && f.confidence >= 40 ? `<a href="${osintSafeUrl(f.opt_out)}" target="_blank" rel="noopener noreferrer" class="osint-optout">Opt Out</a>` : ''}
       </div>`;
     });
     html += '</div>';
@@ -253,7 +259,7 @@ function osintViewResults(profileId) {
       html += `<div class="osint-broker-row">
         <span class="osint-broker-name">${escapeHtml(m.name)}</span>
         <span class="osint-badge" style="background:rgba(251,191,36,0.15);color:#fbbf24">${escapeHtml(m.difficulty)}</span>
-        <a href="${escapeHtml(m.url)}" target="_blank" class="osint-optout">Opt Out</a>
+        <a href="${osintSafeUrl(m.url)}" target="_blank" rel="noopener noreferrer" class="osint-optout">Opt Out</a>
       </div>`;
     });
     html += '</div>';
@@ -264,7 +270,7 @@ function osintViewResults(profileId) {
 
 async function osintLoadScans(profileId) {
   try {
-    const r = await fetch(`/api/osint/scans?profile_id=${profileId}`);
+    const r = await fetch(`/api/osint/scans?profile_id=${encodeURIComponent(profileId)}`);
     const scans = await r.json();
     const results = document.getElementById('osint-results');
     if (!scans.length) {
@@ -272,10 +278,10 @@ async function osintLoadScans(profileId) {
       return;
     }
     results.innerHTML = scans.map(s => `
-      <div class="osint-scan-row" onclick="osintLoadScan('${s.scan_id}')">
-        <span>${s.timestamp}</span>
+      <div class="osint-scan-row" data-id="${escapeHtml(s.scan_id)}" onclick="osintLoadScan(this.dataset.id)">
+        <span>${escapeHtml(s.timestamp)}</span>
         <span>${s.deep ? 'DEEP' : 'standard'}</span>
-        <span class="osint-badge ${s.total_exposures > 0 ? 'found' : 'safe'}">${s.total_exposures} exposures</span>
+        <span class="osint-badge ${s.total_exposures > 0 ? 'found' : 'safe'}">${escapeHtml(s.total_exposures)} exposures</span>
       </div>
     `).join('');
   } catch (e) {
@@ -285,17 +291,17 @@ async function osintLoadScans(profileId) {
 
 async function osintLoadScan(scanId) {
   try {
-    const r = await fetch(`/api/osint/scans/${scanId}`);
+    const r = await fetch(`/api/osint/scans/${encodeURIComponent(scanId)}`);
     const data = await r.json();
     const s = data.results.summary;
     document.getElementById('osint-scan-summary').innerHTML = `
       <div class="osint-summary-grid">
-        <div class="osint-stat"><span class="osint-stat-num">${s.total_exposures}</span><span class="osint-stat-label">Total Exposures</span></div>
-        <div class="osint-stat"><span class="osint-stat-num">${s.sites_found_on}</span><span class="osint-stat-label">Sites Found On</span></div>
-        <div class="osint-stat"><span class="osint-stat-num">${s.opt_out_needed}</span><span class="osint-stat-label">Opt-Outs Needed</span></div>
+        <div class="osint-stat"><span class="osint-stat-num">${escapeHtml(s.total_exposures)}</span><span class="osint-stat-label">Total Exposures</span></div>
+        <div class="osint-stat"><span class="osint-stat-num">${escapeHtml(s.sites_found_on)}</span><span class="osint-stat-label">Sites Found On</span></div>
+        <div class="osint-stat"><span class="osint-stat-num">${escapeHtml(s.opt_out_needed)}</span><span class="osint-stat-label">Opt-Outs Needed</span></div>
       </div>
     `;
-    document.getElementById('osint-results').innerHTML = '<div class="osint-empty">Loaded scan from ' + data.timestamp + '</div>';
+    document.getElementById('osint-results').innerHTML = '<div class="osint-empty">Loaded scan from ' + escapeHtml(data.timestamp) + '</div>';
   } catch (e) {
     console.error('Load scan error:', e);
   }

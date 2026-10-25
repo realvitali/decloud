@@ -1,15 +1,29 @@
 """Books library, audio, TTS, summarize, and Q&A routes."""
 from flask import Blueprint, jsonify, request, send_file
-import json, subprocess
+import json, re, subprocess
 from shared import (
-    app, BASE_DIR, BOOKS_DIR, AUDIO_DIR, VOICES,
-    _pdf_text_cache, _pdf_chapters_cache,
-    LLM_MODEL, LLM_TIMEOUT, llm_chat,
+    app, BASE_DIR, AUDIO_DIR, VOICES, llm_chat,
     get_book_chapter_text, get_text_up_to_position,
-    format_size,
 )
 
+import shared
+
 bp = Blueprint('books', __name__)
+
+
+@bp.before_request
+def _reject_unsafe_book_id():
+    """Every <book_id> URL param is joined into AUDIO_DIR / BOOKS_DIR paths
+    and glob patterns, so reject traversal (incl. Windows '%5C..%5C')."""
+    book_id = (request.view_args or {}).get('book_id')
+    if book_id is not None and not shared.is_safe_book_ref(book_id):
+        return jsonify({'error': 'invalid book'}), 400
+
+
+def _llm_failed(msg):
+    """Log the raw LLM error server-side; give the client a friendly one."""
+    app.logger.error(f'[BOOKS] {msg}')
+    return jsonify({'error': 'The AI model is unavailable right now. Check Settings → AI and try again.'}), 503
 
 @bp.route('/api/voices')
 def list_voices():
@@ -19,15 +33,15 @@ def list_voices():
 @bp.route('/api/books')
 def list_books():
     books = []
-    if BOOKS_DIR.exists():
+    if shared.BOOKS_DIR.exists():
         # Collect both PDF and JSON source files
         # JSON sources first (preferred), then PDFs
         source_files = []
-        for f in sorted(BOOKS_DIR.rglob('*.json')):
+        for f in sorted(shared.BOOKS_DIR.rglob('*.json')):
             source_files.append((f, 'json'))
-        for f in sorted(BOOKS_DIR.rglob('*.pdf')):
+        for f in sorted(shared.BOOKS_DIR.rglob('*.pdf')):
             source_files.append((f, 'pdf'))
-        for f in sorted(BOOKS_DIR.rglob('*.txt')):
+        for f in sorted(shared.BOOKS_DIR.rglob('*.txt')):
             # Skip non-book txt files
             if f.stat().st_size > 3000:
                 source_files.append((f, 'txt'))
@@ -118,15 +132,21 @@ def get_book_text():
     chapter_idx = request.args.get('chapter') # e.g. '0'
     chapter_file = request.args.get('file')  # fallback: direct file name
 
+    # Reject path traversal in book/file references (they feed glob patterns).
+    if book_id and not shared.is_safe_book_ref(book_id):
+        return jsonify({'error': 'invalid book'}), 400
+    if chapter_file and not shared.is_safe_book_ref(chapter_file):
+        return jsonify({'error': 'invalid file'}), 400
+
     if chapter_file:
         # Search subfolders for the file
-        matches = list(BOOKS_DIR.rglob(chapter_file))
-        pdf_path = matches[0] if matches else (BOOKS_DIR / chapter_file)
+        matches = list(shared.BOOKS_DIR.rglob(chapter_file))
+        pdf_path = matches[0] if matches else (shared.BOOKS_DIR / chapter_file)
     elif book_id:
         # Check for JSON source first, then PDF (search subfolders)
-        json_matches = list(BOOKS_DIR.rglob(f'{book_id}.json'))
-        json_source = json_matches[0] if json_matches else (BOOKS_DIR / f'{book_id}.json')
-        pdf_matches = list(BOOKS_DIR.rglob(f'{book_id}.pdf'))
+        json_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.json'))
+        json_source = json_matches[0] if json_matches else (shared.BOOKS_DIR / f'{book_id}.json')
+        pdf_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.pdf'))
         if json_source.exists():
             # Serve from JSON source
             with open(json_source) as jf:
@@ -160,61 +180,22 @@ def get_book_text():
         return jsonify({'error': 'not found'}), 404
 
     try:
-        import fitz
-
-        # Build chapter list from PDF's built-in Table of Contents
-        # Only level 1 (major sections) and level 2 (chapters) — skip sub-sections
-        if book_id and book_id not in _pdf_chapters_cache:
-            doc = fitz.open(pdf_path)
-            toc = doc.get_toc()
-            sections = []
-            for entry in toc:
-                level, title, page = entry[0], entry[1].strip(), entry[2]
-                page_idx = page - 1
-                if level <= 2 and title and page_idx >= 0:
-                    sections.append({
-                        'start': page_idx,
-                        'title': title,
-                        'level': level
-                    })
-            _pdf_chapters_cache[book_id] = sections
-            _pdf_text_cache[book_id] = {}
-            doc.close()
-
-        sections = _pdf_chapters_cache.get(book_id, [])
+        # Chapters come from the PDF's built-in TOC (levels 1-2), cached per book
+        key = book_id or pdf_path.stem
+        sections = shared.pdf_sections(key, pdf_path)
         if not sections:
             return jsonify({'error': 'no chapters found'}), 500
-
-        # Attach end page (start of next chapter) to each section
-        for i, sec in enumerate(sections):
-            if i + 1 < len(sections):
-                sec['end'] = sections[i + 1]['start'] - 1
-            else:
-                doc = fitz.open(pdf_path)
-                sec['end'] = len(doc) - 1
-                doc.close()
 
         if chapter_idx is not None:
             try:
                 idx = int(chapter_idx)
                 if idx < 0 or idx >= len(sections):
                     return jsonify({'error': 'chapter out of range'}), 404
-
-                # Serve from cache or extract fresh
-                if book_id and idx in _pdf_text_cache.get(book_id, {}):
-                    text = _pdf_text_cache[book_id][idx]
-                else:
-                    doc = fitz.open(pdf_path)
-                    ch = sections[idx]
-                    text = '\n'.join([doc[p].get_text() for p in range(ch['start'], ch['end'] + 1)])
-                    doc.close()
-                    if book_id:
-                        _pdf_text_cache.setdefault(book_id, {})[idx] = text
-
+                text, title = shared.pdf_chapter_text(key, pdf_path, idx)
                 return jsonify({
                     'text': text,
                     'chapter': idx,
-                    'title': sections[idx]['title'],
+                    'title': title,
                     'total_chapters': len(sections)
                 })
             except ValueError:
@@ -222,8 +203,9 @@ def get_book_text():
 
         return jsonify({'chapters': sections, 'total_pages': sum(s['end'] - s['start'] + 1 for s in sections)})
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        app.logger.exception('[BOOKS] could not read PDF %s', pdf_path)
+        return jsonify({'error': 'Could not read this PDF'}), 500
 
 # ─── API: Book Settings ───────────────────────────────────────
 @bp.route('/api/book/<book_id>/settings', methods=['GET', 'POST'])
@@ -309,8 +291,9 @@ def book_position(book_id):
         current['updated'] = now
         try:
             pos_file.write_text(json.dumps(current, indent=2))
-        except OSError as e:
-            return jsonify({'error': f'could not save position: {e}'}), 500
+        except OSError:
+            app.logger.exception('[BOOKS] could not save position for %s', book_id)
+            return jsonify({'error': 'could not save position'}), 500
     return jsonify(current)
 
 # ─── API: Book Chapter Status ────────────────────────────────
@@ -360,15 +343,12 @@ def _ensure_book_cover(book_id):
     if cover_file.exists():
         return
     # Try extracting first page from PDF
-    pdf_matches = list(BOOKS_DIR.rglob(f'{book_id}.pdf'))
+    pdf_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.pdf'))
     if pdf_matches:
         try:
             import fitz
-            doc = fitz.open(str(pdf_matches[0]))
-            page = doc[0]
-            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-            pix.save(str(cover_file))
-            doc.close()
+            with fitz.open(str(pdf_matches[0])) as doc:
+                doc[0].get_pixmap(matrix=fitz.Matrix(2, 2)).save(str(cover_file))
             return
         except Exception:
             pass
@@ -440,6 +420,8 @@ def tts_status(book_id):
     json_file = AUDIO_DIR / f'{book_id}.json'
     if lock_file.exists():
         progress_str = lock_file.read_text().strip()
+        if progress_str == '-1':  # worker crashed or was stopped
+            return jsonify({'status': 'error', 'error': 'Audio generation failed or was stopped'})
         progress = int(progress_str) if progress_str.isdigit() else 0
         # Count completed chapters from metadata
         done_chapters = 0
@@ -453,7 +435,7 @@ def tts_status(book_id):
                 # If total_chapters equals done_chapters, the worker hasn't set the real total yet
                 # Use the source JSON to get the real total
                 if total_chapters <= done_chapters:
-                    source_json_matches = list(BOOKS_DIR.rglob(f'{book_id}.json'))
+                    source_json_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.json'))
                     source_json = source_json_matches[0] if source_json_matches else None
                     if source_json and source_json.exists():
                         src = json.loads(source_json.read_text())
@@ -463,8 +445,6 @@ def tts_status(book_id):
         # Estimate ETA from lock file mtime + progress
         import time
         if progress > 0 and done_chapters > 0:
-            elapsed = time.time() - lock_file.stat().st_mtime + (done_chapters * 60)  # rough
-            # Better: use file age
             lock_age = time.time() - lock_file.stat().st_ctime
             if lock_age > 5 and done_chapters > 0:
                 per_chapter = lock_age / done_chapters
@@ -488,10 +468,10 @@ def tts_status(book_id):
 def tts_start(book_id):
     """Start TTS generation with the book's configured voice."""
     # Check for JSON source first (search subfolders)
-    json_matches = list(BOOKS_DIR.rglob(f'{book_id}.json'))
-    pdf_matches = list(BOOKS_DIR.rglob(f'{book_id}.pdf'))
-    json_source = json_matches[0] if json_matches else (BOOKS_DIR / f'{book_id}.json')
-    pdf_path = pdf_matches[0] if pdf_matches else (BOOKS_DIR / f'{book_id}.pdf')
+    json_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.json'))
+    pdf_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.pdf'))
+    json_source = json_matches[0] if json_matches else (shared.BOOKS_DIR / f'{book_id}.json')
+    pdf_path = pdf_matches[0] if pdf_matches else (shared.BOOKS_DIR / f'{book_id}.pdf')
 
     if json_source.exists():
         source_path = json_source
@@ -511,6 +491,10 @@ def tts_start(book_id):
     # Launch TTS conversion in background. sys.executable works on
     # Linux, macOS, and Windows alike (python3 does not exist on Windows).
     lock_file = AUDIO_DIR / f'{book_id}.tts_lock'
+    # A lock without '-1' means a worker is still running (crashes and Stop
+    # both leave '-1'), so don't start a second one on the same files.
+    if lock_file.exists() and lock_file.read_text().strip() != '-1':
+        return jsonify({'error': 'Audio is already being generated for this book'}), 409
     lock_file.write_text('0')
     import sys as _sys
     subprocess.Popen(
@@ -532,7 +516,9 @@ def tts_stop(book_id):
     # checks it between chapters), which is written just above.
     import platform as _platform
     if _platform.system() != 'Windows':
-        subprocess.run(['pkill', '-f', f'tts_worker.*{book_id}'], capture_output=True)
+        # Escape the book id so it can't act as a regex that matches other
+        # processes (e.g. a book id containing '.' or '*').
+        subprocess.run(['pkill', '-f', 'tts_worker.*' + re.escape(book_id)], capture_output=True, timeout=10)
     return jsonify({'status': 'stopped'})
 
 # ─── API: Summarize & Q&A (uses local LLM) ────────────────────
@@ -544,7 +530,10 @@ def summarize():
     """
     data = request.json or {}
     book_id = data.get('book_id', '')
-    chapter_idx = int(data.get('chapter_idx', 0))
+    try:
+        chapter_idx = int(data.get('chapter_idx', 0) or 0)
+    except (TypeError, ValueError):
+        chapter_idx = 0
     word_index = data.get('word_index')  # position in current chapter
     mode = data.get('mode', 'both')  # 'chapter', 'sofar', or 'both'
 
@@ -568,7 +557,7 @@ def summarize():
                 {'role': 'user', 'content': f'"{current_title}"\n\n{chapter_portion[:4000]}'}
             ], timeout=30)
             if msg.startswith('[LLM error'):
-                return jsonify({'error': msg}), 503
+                return _llm_failed(msg)
             result['chapter_summary'] = msg
         else:
             result['chapter_summary'] = 'Not enough text read yet. Keep reading!'
@@ -576,8 +565,12 @@ def summarize():
     # So-far summary: summarize across all chapters read
     if mode in ('sofar', 'both'):
         # Gather text from all previous chapters + current portion
+        # chapter_idx is in range here (current_text loaded); stop once the
+        # 6000-char prompt budget below is full instead of reading every chapter.
         all_text_parts = []
         for i in range(chapter_idx):
+            if sum(len(p) for p in all_text_parts) >= 6000:
+                break
             ch_text, ch_title = get_book_chapter_text(book_id, i)
             if ch_text:
                 all_text_parts.append(f'[{ch_title}]: {ch_text[:2000]}')
@@ -590,7 +583,7 @@ def summarize():
                 {'role': 'user', 'content': f'Book: "{book_id.replace("_", " ")}"\n\n{combined[:6000]}'}
             ], timeout=60)
             if msg.startswith('[LLM error'):
-                return jsonify({'error': msg}), 503
+                return _llm_failed(msg)
             result['sofar_summary'] = msg
         else:
             result['sofar_summary'] = 'Not enough text read yet. Keep reading!'
@@ -606,7 +599,10 @@ def ask_question():
     """
     data = request.json or {}
     book_id = data.get('book_id', '')
-    chapter_idx = int(data.get('chapter_idx', 0))
+    try:
+        chapter_idx = int(data.get('chapter_idx', 0) or 0)
+    except (TypeError, ValueError):
+        chapter_idx = 0
     word_index = data.get('word_index')
     question = data.get('question', '')
     context_summaries = data.get('context_summaries', {})
@@ -634,7 +630,7 @@ def ask_question():
         {'role': 'user', 'content': f'Context:\n{full_context}\n\nQuestion: {question}'}
     ])
     if answer.startswith('[LLM error'):
-        return jsonify({'error': answer}), 503
+        return _llm_failed(answer)
 
     return jsonify({'answer': answer})
 

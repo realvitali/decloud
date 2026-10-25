@@ -17,7 +17,8 @@ os.environ.setdefault('DECLOUD_FILES_DIR', str(_TMP / 'files'))
 os.environ.setdefault('DECLOUD_MUSIC_DIR', str(_TMP / 'music'))
 os.environ.setdefault('DECLOUD_PIPER_DIR', str(_TMP / 'piper'))
 os.environ.setdefault('DECLOUD_HOST', '127.0.0.1')
-for _d in ('books', 'files', 'music', 'piper'):
+os.environ.setdefault('DECLOUD_MUSICGEN_DIR', str(_TMP / 'musicgen'))
+for _d in ('books', 'files', 'music', 'piper', 'musicgen'):
     (_TMP / _d).mkdir(parents=True, exist_ok=True)
 
 TEST_PASSCODE = os.environ['DECLOUD_PIN']
@@ -38,9 +39,11 @@ def client():
 def _reset_limiter():
     """flask-limiter keys by IP (127.0.0.1 for the test client) — reset
     the counter after every test so login rate limits don't leak."""
-    from shared import limiter
+    import shared
     yield
-    limiter.reset()
+    shared.limiter.reset()
+    shared._LOGIN_GLOBAL_FAILS.clear()
+    shared._LOGIN_ATTEMPTS.clear()
 
 
 @pytest.fixture
@@ -49,7 +52,10 @@ def login(client):
     (contains session + csrf tokens)."""
     resp = client.post('/api/auth/login', json={'pin': TEST_PASSCODE})
     assert resp.status_code == 200, resp.get_data(as_text=True)
-    return resp.get_json()
+    data = resp.get_json()
+    # The token is only in the HttpOnly cookie now; expose it for tests.
+    data['session'] = client.get_cookie('decloud_session').value
+    return data
 
 
 @pytest.fixture

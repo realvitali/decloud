@@ -11,6 +11,10 @@ A self-hosted PWA dashboard for audiobooks, AI chat, file browsing, system monit
 - **📁 Files** — Fast file browser with thumbnail previews, image gallery
 - **🎨 Generate** — AI image generation via ComfyUI (FLUX, SDXL, etc)
 - **📊 System Monitor** — CPU, RAM, GPU, network stats in real time
+- **🧠 AI Model Advisor** — reads your hardware, scores chat/image/video/music
+  models from HuggingFace (real file sizes, not guesses), and downloads them
+  into the right app folders — split GGUF archives merge automatically and
+  chat models import straight into Ollama. No terminal needed.
 - **🖥️ Terminal** — Full interactive web terminal (WebSocket-based)
 - **🎵 Music** — Browse and play your local music library
 - **🔐 Privacy Scanner** — Optional OSINT tool to find and remove your data from broker sites
@@ -29,7 +33,7 @@ All features are optional — the app works with zero configuration. Features th
 ### Install
 
 ```bash
-git clone <repo-url> ~/decloud
+git clone https://github.com/realvitali/decloud.git ~/decloud
 cd ~/decloud
 ./install.sh
 ```
@@ -40,7 +44,8 @@ The installer:
 3. Creates a `.env` config file with a random secret key
 4. Sets up a systemd service (auto-starts on boot, auto-restarts on crash)
 5. Starts a secure tunnel via Tailscale Serve (tailnet-only)
-6. Prints the URL + QR code for your phone
+
+5. Starts a **public** tunnel via Tailscale Funnel (only when a passcode is set)6. Prints the URL + QR code for your phone
 
 ### Access from anywhere
 
@@ -51,7 +56,14 @@ DeCloud uses **Tailscale Serve** for secure remote access:
 - **End-to-end encrypted** — WireGuard + TLS 1.3
 - **Tailnet-only** — only devices on your own Tailscale network can reach it
 
+- **Public** — anyone with the link reaches the login screen
 The first time you open DeCloud, enter your passcode to unlock (tap ✓ after typing).
+
+> ⚠️ **The passcode unlocks a shell on your machine** (terminal, files,
+> updates). Funnel URLs are public, so the passcode is all that stands
+> between the internet and your computer. **Don't share it** — DeCloud is a
+> single-owner app. If only your own devices need access, prefer
+> tailnet-only Tailscale Serve; see [PERMANENT_TUNNEL.md](PERMANENT_TUNNEL.md).
 
 ## Configuration
 
@@ -60,10 +72,10 @@ All configuration is via environment variables in `.env` (see `.env.example`):
 | Variable | Default | Description |
 |---|---|---|
 | `DECLOUD_PORT` | `8899` | Port to run on |
-| `DECLOUD_PIN` | *(random)* | Passcode to unlock the app (8+ chars recommended) |
+| `DECLOUD_PIN` | *(random)* | Passcode to unlock the app (8+ chars recommended). Unlocks a shell — never share it |
 | `DECLOUD_BOOKS_DIR` | `~/Books` | Where your books live |
-| `DECLOUD_FILES_DIR` | `~/Files` | Directory for the Files browser |
-| `DECLOUD_MUSIC_DIR` | `~/Music/decloud-music` | Music library path |
+| `DECLOUD_FILES_DIR` | `~` (home) | Directory for the Files browser |
+| `DECLOUD_MUSIC_DIR` | `~/Music` | Music library path |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama LLM endpoint |
 | `DECLOUD_LLM_MODEL` | `llama3.2` | Default LLM model |
 | `COMFY_URL` | `http://localhost:8188` | ComfyUI endpoint |
@@ -137,6 +149,22 @@ No changes to `app.py` needed.
 ollama pull llama3.2
 ```
 
+### AI Model Advisor (HuggingFace downloads)
+
+In the System screen, DeCloud shows which models actually fit your machine
+(based on real file sizes from HuggingFace) with **Get** buttons that
+download into the right place:
+
+- **Chat** → `~/Models/chat` and auto-imported into Ollama (they appear in
+  AI Chat right away; split GGUF archives are merged for you)
+- **Image / Video / Music** → your ComfyUI models folders
+- Paste any `huggingface.co/...` link to analyze any repo
+
+```env
+DECLOUD_MODELS_DIR=~/Models            # where chat models download
+DECLOUD_COMFY_MODELS_DIR=~/ComfyUI/models   # image/video/music target
+```
+
 ### ComfyUI (Image Generation)
 ```bash
 # Install: https://github.com/comfyanonymous/ComfyUI
@@ -192,14 +220,21 @@ never break your machine:
 
 ## Security
 
-- **Passcode authentication** — the app is locked behind `DECLOUD_PIN`
+- **Passcode authentication** — the app is locked behind `DECLOUD_PIN`.
+  The passcode grants full control of the machine (terminal, files,
+  updater), so keep it to yourself. Without a passcode the app refuses
+  every API call (open mode needs `DECLOUD_INSECURE_OPEN=1` and is
+  localhost-only, never behind Funnel)
   (8 digits generated at install; passphrases up to 64 chars). The
   passcode is only used at login; after that the app uses an opaque
   session token (never the passcode) with a 30-day expiry.
 - **CSRF protection** — state-changing requests require a per-session
   CSRF token.
 - **Rate limiting + lockout** — 5 login attempts per minute per IP, with
-  exponential backoff after repeated failures.
+  exponential backoff after repeated failures, plus a global cap of 20
+  failed logins per minute across all clients.
+- **Origin / Host checks** — cross-site requests and DNS-rebinding hosts
+  are refused, including on the terminal WebSocket.
 - **Localhost by default** — the app binds to 127.0.0.1 unless you
   explicitly set `DECLOUD_HOST`; binding wider prints a loud warning.
 - **Tailscale Serve only** — tailnet-only, no third-party relay fallbacks. End-to-end
@@ -216,11 +251,14 @@ never break your machine:
 See [SECURITY_AUDIT.md](SECURITY_AUDIT.md) for the full audit and its
 accepted limitations.
 
+Found a vulnerability? Report it privately — see [SECURITY.md](SECURITY.md).
+Please don't open a public issue.
+
 ## Testing
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest tests/        # 74 security + smoke tests
+python -m pytest tests/        # 99 security + smoke tests
 ```
 
 CI runs the suite on Ubuntu, macOS, and Windows.

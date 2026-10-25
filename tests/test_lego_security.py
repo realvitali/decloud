@@ -92,7 +92,6 @@ class TestAuthRequired:
             ('post', '/api/lego/trash', {'path': 'note.txt'}),
             ('post', '/api/lego/poof', {'path': 'note.txt'}),
             ('post', '/api/lego/shred', {'path': 'note.txt'}),
-            ('post', '/api/lego/mark_done', {'path': 'sub'}),
             ('get', '/api/lego/browse', None),
             ('get', '/api/lego/download?path=note.txt', None),
         ]:

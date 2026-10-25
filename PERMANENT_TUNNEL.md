@@ -2,7 +2,9 @@
 
 DeCloud uses **Tailscale Serve** for secure, permanent remote access. This gives you a URL like `https://your-machine.tail1234.ts.net` that never changes — and it's **tailnet-only** (private to your own devices) by default.
 
-## Quick Setup (Recommended)
+> ⚠️ **Funnel makes DeCloud public.** Anyone on the internet can open the URL, and the only thing between them and your machine is the passcode. **The passcode unlocks a shell on this machine** (terminal, files, updates). Never share it. If only your own devices need access, use [Private-Only Mode](#private-only-mode-no-public-url) (Tailscale Serve) instead.
+
+## Quick Setup
 
 1. **Install Tailscale** (if not already):
    ```bash
@@ -15,7 +17,8 @@ DeCloud uses **Tailscale Serve** for secure, permanent remote access. This gives
    ```
 
 3. **Start DeCloud** — it auto-detects Tailscale and uses Serve (tailnet-only):
-   ```bash
+
+3. **Start DeCloud** — it auto-detects Tailscale and starts a **public** Funnel   ```bash
    ./decloud start
    ```
 
@@ -26,8 +29,7 @@ Your URL: `https://your-machine-name.tail1234.ts.net` (reachable only from devic
 - **Private by default** — only devices on your tailnet can reach it. No public internet exposure.
 - **Permanent URL** — never changes, bookmark it
 - **End-to-end encrypted** — WireGuard + TLS 1.3
-- **No account needed** — uses your existing Tailscale
-- **Free** — 100 devices on free tier
+- **Free Tailscale account required** — the free tier is enough
 - **Works on any network** — no port forwarding
 
 DeCloud is **tailnet-only by design** — there is no public Funnel mode. If you want public access, use a Cloudflare Named Tunnel (below) and put your own auth in front of it.
@@ -54,15 +56,27 @@ If you prefer your own domain (`decloud.yourdomain.com`):
        service: http://localhost:8899
      - service: http_status:404
    ```
-6. Start: `cloudflared tunnel run`
+6. Allow the hostname (DeCloud refuses unknown Host headers), in `.env`:
+   ```bash
+   DECLOUD_ALLOWED_HOSTS=decloud.yourdomain.com
+   ```
+7. Start: `cloudflared tunnel run`
+
+The same warning applies: this is public, and the passcode is a shell.
 
 ## Private-Only Mode (No Tunnel At All)
 
 If you don't want any tunnel:
 
-1. Don't run `./decloud start` (skip tunnel)
-2. Access via Tailscale directly: `http://your-machine:8899`
-3. Friends/family need Tailscale app + your approval to join tailnet
+1. Don't run `./decloud start` (it starts the public Funnel); the service
+   installed by `install.sh` runs the app. If a Funnel is on, turn it off:
+   `sudo tailscale funnel --https=443 off`
+2. Serve it to your tailnet:
+   ```bash
+   sudo tailscale serve --bg http://localhost:8899
+   ```
+3. Open `https://your-machine.tail1234.ts.net` from any device signed in to
+   your tailnet.
 
 ## Troubleshooting
 

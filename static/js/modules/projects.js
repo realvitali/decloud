@@ -96,11 +96,6 @@ function updateProjectCard(id, gh, vercel) {
   }
 }
 
-function escapeHtml(s) {
-  if (!s) return '';
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
 function openProject(id) {
   const p = PROJECTS.find(x => x.id === id);
   if (!p) return;
@@ -203,7 +198,7 @@ async function loadProjectDetail(p) {
                 <div class="commit-meta">
                   <span class="commit-author">${escapeHtml(c.author || '')}</span>
                   <span>${c.date ? relTime(c.date) : ''}</span>
-                  ${c.sha ? `<span style="color:var(--text-faint);font-family:monospace">${c.sha.substring(0,7)}</span>` : ''}
+                  ${c.sha ? `<span style="color:var(--text-faint);font-family:monospace">${escapeHtml(String(c.sha).substring(0,7))}</span>` : ''}
                 </div>
               </div>
             </div>

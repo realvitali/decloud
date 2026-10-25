@@ -60,7 +60,7 @@ async function loadLego(path = '', page = 1) {
     });
     const data = await r.json();
     if (data.error) {
-      list.innerHTML = `<span style="color:var(--red);padding:20px;display:block">${data.error}</span>`;
+      list.innerHTML = `<span style="color:var(--red);padding:20px;display:block">${escapeHtml(data.error)}</span>`;
       return;
     }
 
@@ -69,8 +69,8 @@ async function loadLego(path = '', page = 1) {
       const bc = document.getElementById('lego-breadcrumbs');
       bc.innerHTML = data.breadcrumbs.map((b, i) => {
         const isLast = i === data.breadcrumbs.length - 1;
-        return `<span class="lego-crumb ${isLast ? 'active' : ''}" onclick="loadLego('${b.path}')">${b.name}</span>${!isLast ? '<span class="lego-crumb-sep">/</span>' : ''}`;
-      }).join('') + `<button class="lego-view-toggle" onclick="toggleLegoView()">${legoViewMode === 'grid' ? ICONS.layers : ICONS.terminal}</button><button class="lego-view-toggle" onclick="toggleLegoSort()" style="margin-left:6px" title="Sort: ${legoSortMode}">${legoSortIcon()}</button><button class="lego-view-toggle" onclick="openSwipeMode('${path}')" style="margin-left:6px" title="Swipe mode">${ICONS.image}</button>`;
+        return `<span class="lego-crumb ${isLast ? 'active' : ''}" data-path="${escapeHtml(b.path)}" onclick="loadLego(this.dataset.path)">${escapeHtml(b.name)}</span>${!isLast ? '<span class="lego-crumb-sep">/</span>' : ''}`;
+      }).join('') + `<button class="lego-view-toggle" onclick="toggleLegoView()" aria-label="${legoViewMode === 'grid' ? 'Show as list' : 'Show as grid'}" title="${legoViewMode === 'grid' ? 'Show as list' : 'Show as grid'}">${legoViewMode === 'grid' ? ICONS.layers : ICONS.terminal}</button><button class="lego-view-toggle" onclick="toggleLegoSort()" style="margin-left:6px" aria-label="Sort" title="Sort: ${legoSortMode}">${legoSortIcon()}</button><button class="lego-view-toggle" onclick="openSwipeMode(legoCurrentPath)" style="margin-left:6px" aria-label="Sort photos by swiping" title="Sort photos by swiping">${ICONS.image}</button>`;
     }
 
     legoHasMore = data.has_more;
@@ -119,25 +119,22 @@ async function loadLego(path = '', page = 1) {
         const thumb = item.has_images
           ? `<img class="lego-thumb" data-src="/api/lego/thumbnail?path=${encodeURIComponent(item.path)}" alt="" loading="lazy" />`
           : `<div class="lego-thumb-placeholder"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>`;
-        return `<div class="lego-card${dimClass}" data-path="${item.path.replace(/"/g, '&quot;')}" onclick="if(!legoLoading)loadLego('${item.path.replace(/'/g, "\\'")}')">
+        return `<div class="lego-card${dimClass}" data-path="${escapeHtml(item.path)}" onclick="if(!legoLoading)loadLego(this.dataset.path)">
           <div class="lego-thumb-wrap">${thumb}${item.has_images ? '<div class="lego-thumb-badge"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>' : ''}${visitedDot}</div>
           <div class="lego-card-info">
-            <div class="lego-card-name">${item.name}</div>
-            <div class="lego-card-meta" id="meta-${CSS.escape(item.path)}">${visited ? `Done ${visitTime} · ` : ''}${countLabel}</div>
+            <div class="lego-card-name">${escapeHtml(item.name)}</div>
+            <div class="lego-card-meta" id="meta-${encodeURIComponent(item.path)}">${visited ? `Opened ${visitTime} · ` : ''}${countLabel}</div>
           </div>
         </div>`;
       } else {
-        const clickAction = isImage
-          ? `openLegoImage('${item.path}')`
-          : `downloadLegoFile('${item.path}')`;
         const thumb = isImage
-          ? `<img class="lego-thumb" data-src="/api/lego/thumbnail?path=${encodeURIComponent(item.path)}" alt="" loading="lazy" data-save-path="${item.path}" />`
+          ? `<img class="lego-thumb" data-src="/api/lego/thumbnail?path=${encodeURIComponent(item.path)}" alt="" loading="lazy" data-save-path="${escapeHtml(item.path)}" />`
           : `<div class="lego-thumb-placeholder">${getLegoIcon(item.ext)}</div>`;
-        return `<div class="lego-card" data-path="${item.path.replace(/"/g, '&quot;')}" onclick="${clickAction}">
+        return `<div class="lego-card" data-path="${escapeHtml(item.path)}" data-type="${isImage ? 'image' : 'file'}" onclick="if(!legoLoading)legoItemClick(this)">
           <div class="lego-thumb-wrap">${thumb}</div>
           <div class="lego-card-info">
-            <div class="lego-card-name">${item.name}</div>
-            <div class="lego-card-meta">${item.size_human || ''}</div>
+            <div class="lego-card-name">${escapeHtml(item.name)}</div>
+            <div class="lego-card-meta">${escapeHtml(item.size_human || '')}</div>
           </div>
         </div>`;
       }
@@ -164,18 +161,6 @@ async function loadLego(path = '', page = 1) {
       list.appendChild(loader);
     }
 
-    // Add "Mark as Done" button (only on first page, only inside a folder)
-    const existingDoneBtn = document.getElementById('lego-mark-done');
-    if (existingDoneBtn) existingDoneBtn.remove();
-    if (page === 1 && legoCurrentPath && !legoCurrentPath.startsWith('manually done')) {
-      const doneBtn = document.createElement('div');
-      doneBtn.id = 'lego-mark-done';
-      doneBtn.className = 'lego-mark-done';
-      doneBtn.innerHTML = 'Mark folder as done';
-      doneBtn.onclick = markFolderDone;
-      list.appendChild(doneBtn);
-    }
-
     // Lazy load visible thumbnails
     legoLazyLoad();
     setupLegoLazyLoad();
@@ -185,7 +170,7 @@ async function loadLego(path = '', page = 1) {
       fetch(`/api/lego/folder_info?path=${encodeURIComponent(dir.path)}`)
         .then(r => r.json())
         .then(info => {
-          const metaEl = document.getElementById(`meta-${CSS.escape(dir.path)}`);
+          const metaEl = document.getElementById(`meta-${encodeURIComponent(dir.path)}`);
           if (metaEl) {
             metaEl.textContent = info.child_count > 0 ? `${info.child_count} items` : 'Empty';
           }
@@ -211,7 +196,7 @@ async function loadLego(path = '', page = 1) {
     });
   } catch (e) {
     if (e.name === 'AbortError') return;  // user navigated away, ignore
-    list.innerHTML = `<span style="color:var(--red);padding:20px;display:block">Error: ${e.message}</span>`;
+    list.innerHTML = `<span style="color:var(--red);padding:20px;display:block">${escapeHtml(friendlyError(e))}</span>`;
   } finally {
     legoLoading = false;
     legoAbortController = null;
@@ -316,6 +301,12 @@ function getLegoIcon(ext) {
   return i;
 }
 
+function legoItemClick(el) {
+  const path = el.dataset.path;
+  if (el.dataset.type === 'image') openLegoImage(path);
+  else downloadLegoFile(path);
+}
+
 function downloadLegoFile(path) {
   const link = document.createElement('a');
   link.href = `/api/lego/download?path=${encodeURIComponent(path)}`;
@@ -367,7 +358,7 @@ function advanceLegoImage(direction) {
 
 async function shredLegoImage() {
   if (!legoCurrentImage) return;
-  if (!confirm('Permanently shred this file?\nThis cannot be undone.')) return;
+  if (!await appConfirm('Delete this file forever?\nIt is securely erased and cannot be recovered.', { danger: true, ok: 'Delete forever' })) return;
   try {
     const r = await fetch('/api/lego/shred', {
       method: 'POST',
@@ -375,11 +366,11 @@ async function shredLegoImage() {
       body: JSON.stringify({ path: legoCurrentImage }),
     });
     const d = await r.json();
-    if (d.error) { alert(d.error); return; }
+    if (d.error) { showToast(d.error); return; }
     removeLegoCard(legoCurrentImage);
     advanceLegoImage('next');
   } catch (e) {
-    alert('Shred failed: ' + e.message);
+    showToast("Couldn't delete: " + friendlyError(e));
   }
 }
 
@@ -392,11 +383,12 @@ async function poofLegoImage() {
       body: JSON.stringify({ path: legoCurrentImage }),
     });
     const d = await r.json();
-    if (d.error) { alert(d.error); return; }
+    if (d.error) { showToast(d.error); return; }
     removeLegoCard(legoCurrentImage);
     advanceLegoImage('next');
+    showToast('Set aside — moved to the poof folder');
   } catch (e) {
-    alert('Poof failed: ' + e.message);
+    showToast("Couldn't set aside: " + friendlyError(e));
   }
 }
 
@@ -405,34 +397,13 @@ function removeLegoCard(path) {
   const cards = document.querySelectorAll('.lego-card');
   for (const card of cards) {
     const cardPath = card.getAttribute('data-path') || '';
-    if (cardPath === path || card.getAttribute('onclick')?.includes(path)) {
+    if (cardPath === path) {
       card.style.transition = 'opacity 0.2s, transform 0.2s';
       card.style.opacity = '0';
       card.style.transform = 'scale(0.8)';
       setTimeout(() => card.remove(), 200);
       return;
     }
-  }
-}
-
-async function markFolderDone() {
-  if (!legoCurrentPath) return;
-  const folderName = legoCurrentPath.split('/').pop();
-  if (!confirm(`Mark "${folderName}" as done?\n\nIt will be renamed to "${folderName} (MANUALLY DONE)" and moved into /manually done/`)) return;
-
-  try {
-    const r = await fetch('/api/lego/mark_done', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: legoCurrentPath }),
-    });
-    const d = await r.json();
-    if (d.error) { alert(d.error); return; }
-    // Navigate to parent folder so user sees it's gone
-    const parent = legoCurrentPath.split('/').slice(0, -1).join('/');
-    loadLego(parent);
-  } catch (e) {
-    alert('Mark done failed: ' + e.message);
   }
 }
 
@@ -503,7 +474,7 @@ async function loadNextSwipeImage() {
     document.getElementById('lego-swipe-empty').style.display = 'none';
     preloadNextSwipeImage();
   } catch (e) {
-    info.textContent = 'Error: ' + e.message;
+    info.textContent = friendlyError(e);
   }
 }
 
@@ -521,47 +492,36 @@ async function preloadNextSwipeImage() {
   } catch (e) {}
 }
 
-async function swipeLeft() {
+// Run a swipe action; on failure snap the card back and say why.
+async function swipeAction(url, flyClass) {
   if (!swipeCurrentPath) return;
   const card = document.getElementById('lego-swipe-card');
-  card.className = 'lego-swipe-card fly-left';
+  const path = swipeCurrentPath;
+  card.className = 'lego-swipe-card ' + flyClass;
   try {
-    await fetch('/api/lego/trash', {
+    const r = await fetch(url, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: swipeCurrentPath }),
+      body: JSON.stringify({ path }),
     });
-  } catch (e) {}
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.error) throw new Error(d.error || 'Something went wrong — try again');
+  } catch (e) {
+    card.className = 'lego-swipe-card';
+    card.style.transform = '';
+    showToast(friendlyError(e));
+    return;
+  }
   swipeCurrentPath = '';
   setTimeout(loadNextSwipeImage, 350);
 }
 
-async function swipeRight() {
-  if (!swipeCurrentPath) return;
-  const card = document.getElementById('lego-swipe-card');
-  card.className = 'lego-swipe-card fly-right';
-  try {
-    await fetch('/api/lego/poof', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: swipeCurrentPath }),
-    });
-  } catch (e) {}
-  swipeCurrentPath = '';
-  setTimeout(loadNextSwipeImage, 350);
-}
+function swipeLeft() { return swipeAction('/api/lego/trash', 'fly-left'); }
+function swipeRight() { return swipeAction('/api/lego/poof', 'fly-right'); }
 
 async function swipeShred() {
   if (!swipeCurrentPath) return;
-  if (!confirm('Permanently shred this file?\nThis cannot be undone.')) return;
-  const card = document.getElementById('lego-swipe-card');
-  card.className = 'lego-swipe-card fly-up';
-  try {
-    await fetch('/api/lego/shred', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: swipeCurrentPath }),
-    });
-  } catch (e) {}
-  swipeCurrentPath = '';
-  setTimeout(loadNextSwipeImage, 350);
+  if (!await appConfirm('Delete this file forever?\nIt is securely erased and cannot be recovered.', { danger: true, ok: 'Delete forever' })) return;
+  return swipeAction('/api/lego/shred', 'fly-up');
 }
 
 // Touch/drag gestures on the card

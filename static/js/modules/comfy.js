@@ -7,11 +7,14 @@ async function loadComfyStatus() {
     const d = await r.json();
     const bar = document.getElementById('comfy-status-bar');
     if (!d.online) {
-      bar.innerHTML = 'ComfyUI offline';
+      bar.innerHTML = 'ComfyUI offline ' +
+        '<button class="models-get-btn" style="margin-left:10px" onclick="comfyStart()">Start ComfyUI</button>' +
+        '<button class="models-get-btn" style="margin-left:6px;background:var(--glass);color:var(--text);border:1px solid var(--glass-border)" onclick="loadComfyStatus()">Check again</button>';
       bar.className = 'comfy-status-bar offline';
       document.getElementById('comfy-generate-btn').disabled = true;
       const hint = document.getElementById('comfy-offline-hint');
-      if (hint) hint.style.display = '';
+      if (hint) hint.style.display = 'none';
+      comfyShowLog();
       return;
     }
     const hint = document.getElementById('comfy-offline-hint');
@@ -21,7 +24,7 @@ async function loadComfyStatus() {
     const vramTotal = (d.vram_total / 1e9).toFixed(1);
     const queueText = d.queue_running > 0 ? ` · ${d.queue_running} running` : '';
     const pendingText = d.queue_pending > 0 ? ` · ${d.queue_pending} queued` : '';
-    bar.innerHTML = `${d.gpu} · VRAM ${vramUsed}/${vramTotal}GB${queueText}${pendingText}`;
+    bar.innerHTML = `${escapeHtml(d.gpu)} · VRAM ${vramUsed}/${vramTotal}GB${queueText}${pendingText}`;
     document.getElementById('comfy-generate-btn').disabled = false;
   } catch {
     document.getElementById('comfy-status-bar').innerHTML = 'Failed to check status';
@@ -47,7 +50,7 @@ async function loadComfyGallery() {
     }
     const gallery = document.getElementById('comfy-gallery');
     gallery.innerHTML = d.images.slice(0, 20).map(img => 
-      `<div class="comfy-gallery-item" onclick="openComfyImage('${img.url}')"><img src="${img.url}&preview=1" loading="lazy" alt="" /></div>`
+      `<div class="comfy-gallery-item" data-url="${escapeHtml(img.url)}" onclick="openComfyImage(this.dataset.url)"><img src="${escapeHtml(img.url)}&amp;preview=1" loading="lazy" alt="" /></div>`
     ).join('');
   } catch {}
 }
@@ -88,7 +91,7 @@ async function comfyGenerate() {
     });
     const d = await r.json();
     if (d.error) {
-      progressText.innerHTML = `<span style="color:var(--red)">Error: ${d.error}</span>`;
+      progressText.innerHTML = `<span style="color:var(--red)">Error: ${escapeHtml(d.error)}</span>`;
       btn.disabled = false;
       btn.textContent = 'Generate';
       return;
@@ -100,9 +103,16 @@ async function comfyGenerate() {
     comfyPollTimer = setInterval(async () => {
       elapsed += 1;
       try {
-        const pr = await fetch(`/api/comfy/progress/${promptId}`);
-        const pd = await pr.json();
-        if (pd.done) {
+        const pr = await fetch(`/api/comfy/progress/${encodeURIComponent(promptId)}`);
+        if (pr.status === 503) return;  // ComfyUI hiccup — keep polling
+        const pd = await pr.json().catch(() => ({}));
+        if (pd.error || !pr.ok) {
+          clearInterval(comfyPollTimer);
+          comfyPollTimer = null;
+          progressText.innerHTML = `<span style="color:var(--red)">Error: ${escapeHtml(pd.error || `HTTP ${pr.status}`)}</span>`;
+          btn.disabled = false;
+          btn.textContent = 'Generate';
+        } else if (pd.done) {
           clearInterval(comfyPollTimer);
           comfyPollTimer = null;
           progressFill.style.width = '100%';
@@ -110,7 +120,7 @@ async function comfyGenerate() {
           if (pd.images && pd.images.length > 0) {
             result.style.display = 'block';
             result.innerHTML = pd.images.map(img => 
-              `<img src="${img.url}" alt="" onclick="openComfyImage('${img.url}')" style="width:100%;border-radius:12px;cursor:pointer" />`
+              `<img src="${escapeHtml(img.url)}" alt="" data-url="${escapeHtml(img.url)}" onclick="openComfyImage(this.dataset.url)" style="width:100%;border-radius:12px;cursor:pointer" />`
             ).join('');
           }
           btn.disabled = false;
@@ -125,7 +135,7 @@ async function comfyGenerate() {
       } catch {}
     }, 1000);
   } catch (e) {
-    progressText.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+    progressText.innerHTML = `<span style="color:var(--red)">${escapeHtml(friendlyError(e))}</span>`;
     btn.disabled = false;
     btn.textContent = 'Generate';
   }
@@ -133,9 +143,69 @@ async function comfyGenerate() {
 
 // Refresh ComfyUI status periodically when on that screen
 setInterval(() => {
-  if (document.getElementById('comfy-screen')?.classList.contains('active')) {
+  if (!document.hidden && document.getElementById('comfy-screen')?.classList.contains('active')) {
     loadComfyStatus();
   }
 }, 5000);
 
 // ─── Long-press to save ─────────────────────────────────
+
+// ─── ComfyUI lifecycle (start/stop/log from the UI) ─────────
+async function comfyStart() {
+  const bar = document.getElementById('comfy-status-bar');
+  bar.innerHTML = 'Starting ComfyUI… (usually 20-60s)';
+  try {
+    const r = await fetch('/api/comfy/start', { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) {
+      bar.innerHTML = escapeHtml(d.error || 'Could not start ComfyUI');
+      return;
+    }
+    comfyPollUntilOnline(0);
+  } catch (e) {
+    bar.innerHTML = 'Could not reach the server: ' + escapeHtml(e.message || 'network');
+  }
+}
+
+async function comfyPollUntilOnline(attempt) {
+  if (attempt > 30) {
+    loadComfyStatus();
+    comfyShowLog();
+    return;
+  }
+  try {
+    const r = await fetch('/api/comfy/status');
+    const d = await r.json();
+    if (d.online) { loadComfyStatus(); return; }
+  } catch (e) {}
+  setTimeout(() => comfyPollUntilOnline(attempt + 1), 2000);
+}
+
+async function comfyStop() {
+  if (!await appConfirm('Stop the image generator? Image and song making will pause until you start it again.', { ok: 'Stop' })) return;
+  try {
+    const r = await fetch('/api/comfy/stop', { method: 'POST' });
+    const d = await r.json();
+    showToast(d.message || d.error || 'Stopped');
+    loadComfyStatus();
+  } catch (e) { showToast(friendlyError(e)); }
+}
+
+async function comfyShowLog() {
+  try {
+    const r = await fetch('/api/comfy/log');
+    const d = await r.json();
+    const hint = document.getElementById('comfy-offline-hint');
+    if (!hint || !d.log || !d.log.length) return;
+    hint.style.display = '';
+    hint.innerHTML = '<div class="empty-icon">🖥️</div>' +
+      '<h3>ComfyUI is starting (or failed to start)</h3>' +
+      '<p class="empty-hint">Last lines from its log:</p>' +
+      '<pre class="musicgen-song-lyrics" style="text-align:left;max-height:140px;overflow:auto">' +
+      escapeHtml(d.log.slice(-12).join('\n')) + '</pre>' +
+      (d.online ? '<p class="empty-hint">It is online now.</p>' : '');
+  } catch (e) {}
+}
+
+window.comfyStart = comfyStart;
+window.comfyStop = comfyStop;

@@ -5,6 +5,9 @@ def register_blueprints(app, sock):
     from .auth import bp as auth_bp
     app.register_blueprint(auth_bp)
 
+    from .netloc import bp as netloc_bp
+    app.register_blueprint(netloc_bp)
+
     from .pwa import bp as pwa_bp
     app.register_blueprint(pwa_bp)
 
@@ -65,10 +68,16 @@ def register_blueprints(app, sock):
     from .update import bp as update_bp
     app.register_blueprint(update_bp)
 
+    from .musicgen import bp as musicgen_bp
+    app.register_blueprint(musicgen_bp)
+
+    from .models import bp as models_bp
+    app.register_blueprint(models_bp)
+
+    from .lab import bp as lab_bp
+    app.register_blueprint(lab_bp)
+
     # WebSocket routes (need sock instance)
     if sock is not None:
         from .terminal import register as register_terminal
         register_terminal(sock)
-
-        from .voice import register as register_voice
-        register_voice(sock)

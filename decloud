@@ -12,7 +12,7 @@ TUNNEL_PID_FILE="$APP_DIR/tunnel.pid"
 APP_PID_FILE="$APP_DIR/app.pid"
 
 # ─── Version ──────────────────────────────────────────────────────
-VERSION="0.0.2"
+VERSION="0.5.2"
 
 # ─── Helpers ────────────────────────────────────────────────────
 
@@ -23,10 +23,12 @@ get_tunnel_url() {
         return 0
     fi
 
-    # Tailscale Serve (tailnet-only) is the default. We deliberately do
+    # Tailscale Funnel is the only supported tunnel. We deliberately do
     # NOT fall back to third-party relays (localhost.run etc.): those
     # terminate TLS on someone else's box and forward plaintext HTTP,
     # which contradicts DeCloud's privacy story.
+    # Tailnet-only Serve is the DEFAULT (intentional architecture, Vitali's privacy stance).
+    # Public Funnel is an explicit opt-in: ./decloud share
     if command -v tailscale &>/dev/null && tailscale status &>/dev/null; then
         URL=$(tailscale serve status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
         if [ -n "$URL" ]; then
@@ -45,10 +47,24 @@ start_app() {
         echo "App already running (PID: $(cat $APP_PID_FILE))"
         return 0
     fi
+    # Already served by systemd/launchd/WSL nohup? Don't start a second copy
+    # (it would crash-loop on the busy port forever).
+    if curl -s http://localhost:$PORT/ > /dev/null 2>&1; then
+        echo "✓ App already running at http://localhost:$PORT"
+        return 0
+    fi
     echo "Starting DeCloud app on port $PORT..."
-    source .venv/bin/activate 2>/dev/null || true
-    # Use setsid to fully detach from this shell
-    setsid nohup python app.py > app.log 2>&1 < /dev/null &
+    # Supervise the app: if it exits (crash or a self-update restart), bring
+    # it right back on the new code — one-click updates work even when
+    # systemd/launchd/scheduled-task aren't the thing managing it.
+    setsid env DECLOUD_DIR="$APP_DIR" nohup sh -c '
+        cd "$DECLOUD_DIR" || exit 1
+        . ./.venv/bin/activate 2>/dev/null || true
+        while true; do
+            python app.py
+            sleep 2
+        done
+    ' > app.log 2>&1 < /dev/null &
     echo $! > "$APP_PID_FILE"
     disown
     sleep 2
@@ -62,7 +78,9 @@ start_app() {
 
 stop_app() {
     if [ -f "$APP_PID_FILE" ]; then
-        kill $(cat "$APP_PID_FILE") 2>/dev/null || true
+        PID=$(cat "$APP_PID_FILE")
+        # Kill the whole supervisor process group (shell loop + the app).
+        kill -TERM -- -"$PID" 2>/dev/null || kill -TERM "$PID" 2>/dev/null || true
         rm -f "$APP_PID_FILE"
         echo "App stopped"
     fi
@@ -79,8 +97,6 @@ start_tunnel() {
         echo "  Install it: curl -fsSL https://tailscale.com/install.sh | sh"
         echo "  Then run:   sudo tailscale up  (login to your account)"
         echo "  Then:       ./decloud start"
-        echo "  (Alternative: run your own tunnel, e.g."
-        echo "   cloudflared tunnel --url http://localhost:$PORT)"
         return 1
     fi
 
@@ -92,11 +108,10 @@ start_tunnel() {
         return 1
     fi
 
-    # Start serve (tailnet-only) in background
-    setsid nohup tailscale serve --bg --https=443 http://localhost:$PORT \
-        > "$TUNNEL_LOG" 2>&1 < /dev/null &
-    echo $! > "$TUNNEL_PID_FILE"
-    disown
+    # Tailnet-only Serve (private by default; ./decloud share promotes to public Funnel)
+    tailscale serve --bg --https=443 http://localhost:$PORT \
+        > "$TUNNEL_LOG" 2>&1 < /dev/null
+    echo $! > "$TUNNEL_PID_FILE" 2>/dev/null || true
 
     echo "Waiting for serve..."
     sleep 3
@@ -109,24 +124,35 @@ start_tunnel() {
         return 0
     fi
 
-    # Fallback: try to get from tailscale status
-    HOSTNAME=$(tailscale status --json 2>/dev/null | grep -oP '"HostName":\s*"[^"]+"' | head -1 | cut -d'"' -f4)
-    TAILNET=$(tailscale status --json 2>/dev/null | grep -oP '"MagicDNSSuffix":\s*"[^"]+"' | cut -d'"' -f4)
-    if [ -n "$HOSTNAME" ] && [ -n "$TAILNET" ]; then
-        URL="https://${HOSTNAME}.${TAILNET}"
-        echo "$URL" > "$TUNNEL_URL_FILE"
-        echo "✓ Serve active (tailnet-only): $URL"
-        return 0
-    fi
-
     echo "⚠ Serve failed — check tunnel.log"
     return 1
 }
 
+share_tunnel() {
+    # Explicit opt-in to PUBLIC access via Funnel (internet-reachable)
+    if command -v tailscale &>/dev/null && tailscale status &>/dev/null; then
+        tailscale funnel --bg --https=443 http://localhost:$PORT \
+            > "$TUNNEL_LOG" 2>&1 < /dev/null
+        sleep 3
+        URL=$(tailscale funnel status 2>/dev/null | grep -oE 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
+        if [ -n "$URL" ]; then
+            echo "$URL" > "$TUNNEL_URL_FILE"
+            echo "✓ PUBLIC Funnel active: $URL"
+            echo "⚠ This URL is internet-reachable — passcode is your only door."
+            return 0
+        fi
+        echo "⚠ Funnel failed — check tunnel.log"
+        return 1
+    fi
+    echo "⚠ tailscale not available"
+    return 1
+}
+
 stop_tunnel() {
-    # Stop Tailscale serve if running
+    # Stop BOTH serve and funnel if running
     if command -v tailscale &>/dev/null; then
         tailscale serve --https=443 off 2>/dev/null || true
+        tailscale funnel --https=443 off 2>/dev/null || true
     fi
 
     if [ -f "$TUNNEL_PID_FILE" ]; then
@@ -155,7 +181,7 @@ show_qr() {
         return 1
     fi
     
-    PASSCODE=$(grep DECLOUD_PIN .env 2>/dev/null | cut -d= -f2 || echo "not set")
+    PASSCODE=$(grep '^DECLOUD_PIN=' .env 2>/dev/null | tail -1 | cut -d= -f2- || echo "not set")
 
     echo ""
     echo "📱 DeCloud Tunnel"
@@ -172,8 +198,10 @@ show_qr() {
     fi
 
     echo ""
-    echo "🔒 This URL is tailnet-only (https://….ts.net) — reachable only"
-    echo "   from devices on your own Tailscale network."
+    echo "🔒 The URL is public (https://….ts.net) — anyone who opens it"
+    echo "   still needs the passcode to unlock anything."
+    echo "⚠  The passcode unlocks a shell on this machine. Don't share it."
+    echo "   For private (tailnet-only) access, see: PERMANENT_TUNNEL.md"
     echo ""
 }
 
@@ -213,13 +241,25 @@ case "${1:-}" in
         ;;
     start)
         start_app && start_tunnel
+        echo "Forgot your passcode? Run: ./decloud pin"
         ;;
     stop)
         stop_app
         stop_tunnel
         echo "All stopped"
         ;;
+    share)
+        share_tunnel
+        ;;
     restart)
+        # Installed as a service? Let the service manager restart it.
+        if systemctl --user is-active --quiet decloud 2>/dev/null; then
+            systemctl --user restart decloud && echo "✓ DeCloud restarted"
+            exit $?
+        elif [ "$(uname)" = "Darwin" ] && launchctl list com.decloud.app &>/dev/null; then
+            launchctl kickstart -k "gui/$(id -u)/com.decloud.app" && echo "✓ DeCloud restarted"
+            exit $?
+        fi
         stop_app
         stop_tunnel
         sleep 1
@@ -231,15 +271,30 @@ case "${1:-}" in
     status)
         status
         ;;
+    update|upgrade)
+        shift
+        exec "$APP_DIR/.venv/bin/python" "$APP_DIR/scripts/decloud_update.py" "$@"
+        ;;
+    pin|passcode)
+        shift
+        exec "$APP_DIR/.venv/bin/python" "$APP_DIR/scripts/decloud_pin.py" "$@"
+        ;;
+    tui|dashboard)
+        exec "$APP_DIR/.venv/bin/python" "$APP_DIR/scripts/decloud_tui.py"
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|qr|status|version}"
+        echo "Usage: $0 {start|stop|restart|qr|status|pin|version|update|tui}"
         echo ""
-        echo "  start   — Start app + tunnel (tailnet-only)"
+        echo "  start   — Start app + tunnel"
         echo "  stop    — Stop everything"
         echo "  restart — Restart app + tunnel"
         echo "  qr      — Show current tunnel URL + QR code"
         echo "  status  — Show what's running"
+        echo "  pin     — Show your passcode  (pin reset — get a new one, even if you forgot it)"
         echo "  version — Show DeCloud version"
+        echo "  update  — Check/apply updates from the terminal"
+        echo "            (update check | update | update rollback | update <version>)"
+        echo "  tui     — Open the terminal dashboard"
         exit 1
         ;;
 esac

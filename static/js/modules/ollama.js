@@ -57,10 +57,9 @@ async function loadOllamaModels() {
       document.getElementById('ollama-messages').innerHTML = `
         <div class="empty-state">
           <div class="empty-icon">🤖</div>
-          <h3>AI is offline</h3>
-          <p>Install Ollama to chat with AI locally:</p>
-          <p class="empty-hint">curl -fsSL https://ollama.com/install.sh | sh</p>
-          <p class="empty-hint">Then: ollama pull qwen2.5:14b-instruct</p>
+          <h3>AI chat isn't set up yet</h3>
+          <p>AI chat needs Ollama, a free app that runs AI on your computer.</p>
+          <p class="empty-hint">Go to Settings → Voice and tap "Install Ollama".</p>
         </div>`;
       return;
     }
@@ -72,7 +71,7 @@ async function loadOllamaModels() {
     const model = d.models.find(m => m.name === ollamaCurrentModel);
     if (model) document.getElementById('ollama-model-info').textContent = model.family;
   } catch (e) {
-    document.getElementById('ollama-model-select').innerHTML = '<option>Failed to load</option>';
+    document.getElementById('ollama-model-select').innerHTML = "<option>Couldn't load models</option>";
   }
 }
 

@@ -7,6 +7,27 @@ on:
     branches: [main]
 
 jobs:
+  version-check:
+    name: version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check version + changelog are in sync
+        run: python scripts/check_version.py
+
+      - name: JS syntax check
+        run: git ls-files 'static/js/*.js' static/sw.js | xargs -n1 node --check
+
+      - name: pyflakes (undefined names only)
+        run: |
+          pip install pyflakes==3.4.0
+          # ponytail: only undefined names fail the build; style warnings are advisory
+          bad=$(git ls-files '*.py' | xargs python -m pyflakes | grep "undefined name" || true)
+          if [ -n "$bad" ]; then echo "$bad"; exit 1; fi
+
   test:
     name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -22,14 +43,16 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      # piper-tts / faster-whisper are optional + lazily imported; tests don't need them
       - name: Install dependencies
+        shell: bash
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
+          grep -v -E '^(piper-tts|faster-whisper)' requirements.txt > req-ci.txt
+          pip install -r req-ci.txt -r requirements-dev.txt
 
       - name: Run tests
         run: python -m pytest tests/ -v
 
       - name: Python compile check (all modules)
-        run: python -m py_compile app.py shared.py routes/*.py tts_worker.py tts_worker_json.py
+        run: python -m compileall -q app.py shared.py lab_report.py routes tts_worker.py tts_worker_json.py scripts

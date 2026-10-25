@@ -31,8 +31,22 @@ document.addEventListener('contextmenu', e => {
 });
 
 // ─── Service Worker ──────────────────────────────────────
+// A new SW takes over in the background; we never force-reload the page.
+// Instead offer a reload (or do it silently if the tab is hidden).
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js?v=91').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('/sw.js?v=111').catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return;  // first install, nothing stale
+    if (document.hidden) { location.reload(); return; }
+    showToast('Update ready — tap to reload');
+    const t = document.getElementById('vj-toast');
+    if (t) {
+      t.classList.add('actionable');
+      t.onclick = () => location.reload();
+      setTimeout(() => { t.classList.remove('actionable'); t.onclick = null; }, 3000);
+    }
+  });
 }
 
 // ─── Init (wrapped in try-catch so one failure doesn't brick everything) ─
@@ -55,11 +69,15 @@ function decloudInit() {
   loadAgents();
   loadActivity();
   refreshProjectCards();
-  setInterval(loadQuickStats, 2000);
-  setInterval(loadAgents, 60000);
-  setInterval(loadActivity, 30000);
-  setInterval(refreshProjectCards, 120000);
-  setInterval(refreshNotifications, 60000);
+  // Poll only while the tab is visible and the home screen is showing.
+  const onHome = (fn) => () => {
+    if (!document.hidden && document.getElementById('home-screen')?.classList.contains('active')) fn();
+  };
+  setInterval(onHome(loadQuickStats), 5000);
+  setInterval(onHome(loadAgents), 60000);
+  setInterval(onHome(loadActivity), 30000);
+  setInterval(onHome(refreshProjectCards), 120000);
+  setInterval(() => { if (!document.hidden) refreshNotifications(); }, 60000);
 }
 try { decloudInit(); } catch(e) { console.error('DeCloud init error:', e); showCrashRecovery(e); }
 
@@ -73,17 +91,13 @@ function restoreFromHash() {
   } else if (hash.startsWith('project/')) {
     const pid = decodeURIComponent(hash.slice(8));
     openProject(pid);
-  } else if (hash === 'audiobooks') {
-    openApp('audiobooks');
-  } else if (hash === 'system') {
-    openApp('system');
-  } else if (hash === 'agents') {
-    openApp('agents');
-  } else if (hash === 'projects') {
-    openProjectList();
+  } else if (hash && APPS.concat(AI_SUBAPPS).some(a => a.id === hash && a.screen)) {
+    openApp(hash);
   }
   // default: stay on home screen
 }
-restoreFromHash();
+// Wait for every module (music.js, settings.js, … load after this file).
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', restoreFromHash);
+else restoreFromHash();
 
 // ─── VOICE SYSTEM ───────────────────────────────────────

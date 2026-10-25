@@ -1,11 +1,14 @@
 # ─── Core (required) ──────────────────────────────
 flask==3.1.3
 flask-sock==0.7.0
-flask-limiter==3.1.0
+flask-limiter==4.1.1
 psutil==7.2.2
 requests==2.34.2
 websocket-client==1.9.0
-cryptography==46.0.1
+cryptography==50.0.0
+
+# ─── Config parsing (Hermes agents) ──────────────
+pyyaml==6.0.3
 
 # ─── Books (PDF parsing, metadata) ────────────────
 pymupdf==1.28.0
@@ -13,7 +16,7 @@ mutagen==1.48.1
 
 # ─── Images (file browser thumbnails) ─────────────
 Pillow==12.3.0
-pillow-heif==1.5.0
+pillow-heif==1.8.1
 
 # ─── TTS / Voice (optional — app works without these) ───
 # Piper inference only needs onnxruntime, NOT torch/triton

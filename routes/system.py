@@ -1,16 +1,97 @@
 """System info and network stats routes."""
-from flask import Blueprint, jsonify, request
-import platform, psutil, time, subprocess
+from flask import Blueprint, jsonify, current_app
+from functools import lru_cache
+import platform, psutil, time, subprocess, shutil, re
 from pathlib import Path
 from shared import _network_last, detect_os
 
 bp = Blueprint('system', __name__)
 
+@lru_cache(maxsize=1)
+def _hardware_names():
+    """(cpu_name, gpu_name) — static, so lscpu/lspci run once per process."""
+    cpu_name = ''
+    try:
+        if platform.system() == 'Linux':
+            # ARM: try lscpu (has Model name), then /proc/cpuinfo 'model name'/'model'
+            if shutil.which('lscpu'):
+                res = subprocess.run(['lscpu'], capture_output=True, text=True, timeout=3)
+                for line in res.stdout.splitlines():
+                    if line.lower().startswith('model name:'):
+                        cpu_name = line.split(':', 1)[1].strip()
+                        break
+            if not cpu_name:
+                for line in Path('/proc/cpuinfo').read_text(errors='replace').splitlines():
+                    if line.lower().startswith(('model name', 'model')):
+                        cpu_name = line.split(':', 1)[1].strip()
+                        break
+        elif platform.system() == 'Darwin':
+            res = subprocess.run(['sysctl', '-n', 'machdep.cpu.brand_string'],
+                                 capture_output=True, text=True, timeout=2)
+            cpu_name = res.stdout.strip()
+    except Exception:
+        pass
+    cpu_name = cpu_name or platform.processor() or platform.machine()
+
+    gpu_name = ''
+    try:
+        if platform.system() == 'Linux' and shutil.which('lspci'):
+            res = subprocess.run(['lspci'], capture_output=True, text=True, timeout=4)
+            for line in res.stdout.splitlines():
+                if re.search(r'VGA|3D controller|Display', line):
+                    # format: "01:00.0 Class: Vendor Name Device 1234 (rev a1)"
+                    m = re.search(r'VGA compatible controller: (.+?)(?:\s*\(rev|$)', line)
+                    if not m:
+                        m = re.search(r'3D controller: (.+?)(?:\s*\(rev|$)', line)
+                    if not m:
+                        m = re.search(r'Display controller: (.+?)(?:\s*\(rev|$)', line)
+                    gpu_name = re.sub(r'\s+Device\s+[0-9a-fA-F]{4}$', '', (m.group(1) if m else '')).strip()
+                    if gpu_name.endswith('NVIDIA Corporation'):
+                        # lspci db too old to resolve the model — try nvidia-smi for a proper name
+                        try:
+                            ns = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'],
+                                                capture_output=True, text=True, timeout=4)
+                            if ns.returncode == 0 and ns.stdout.strip():
+                                gpu_name = ns.stdout.strip().splitlines()[0]
+                        except Exception:
+                            pass
+                    break
+        elif platform.system() == 'Darwin' and shutil.which('system_profiler'):
+            res = subprocess.run(['system_profiler', 'SPDisplaysDataType'],
+                                 capture_output=True, text=True, timeout=6)
+            m = re.search(r'Chipset Model:\s*(.+)', res.stdout)
+            if m:
+                gpu_name = m.group(1).strip()
+    except Exception:
+        pass
+
+    return cpu_name, gpu_name
+
+
+@lru_cache(maxsize=1)
+def _nvidia_smi():
+    return shutil.which('nvidia-smi')
+
+
+def _nvidia_gpu():
+    """{'gpu_percent', 'name'} for the first NVIDIA GPU, or None."""
+    if not _nvidia_smi():
+        return None
+    try:
+        res = subprocess.run([_nvidia_smi(), '--query-gpu=utilization.gpu,name',
+                              '--format=csv,noheader,nounits'],
+                             capture_output=True, text=True, timeout=2)
+        util, name = res.stdout.strip().splitlines()[0].split(',', 1)
+        return {'gpu_percent': float(util), 'name': name.strip()}
+    except Exception:
+        return None
+
+
 @bp.route('/api/system')
 def system_info():
     try:
         boot_time = psutil.boot_time()
-        uptime = int(__import__('time').time() - boot_time)
+        uptime = int(time.time() - boot_time)
         hours, rem = divmod(uptime, 3600)
         mins = rem // 60
 
@@ -61,17 +142,23 @@ def system_info():
             'gpu': gpu,
             'cpu_percent': psutil.cpu_percent(interval=0.5),
             'cpu_cores': psutil.cpu_count(),
+            'cpu_percent': psutil.cpu_percent(interval=None),  # since last poll; non-blocking
+            'gpu_name': gpu_name,
             'ram_total': vm.total,
             'ram_used': vm.used,
             'ram_percent': vm.percent,
-            'disk_total': disk.total,
-            'disk_used': disk.used,
+            'ram_total_gb': round(mem_total_gb, 1),
+            'swap_percent': swap.percent,
             'disk_percent': disk.percent,
+            'disk_total_gb': round(disk_total_gb, 1),
+            'battery': battery,
             'uptime': f'{hours}h {mins}m',
             'temps': temps,
+            **({'gpu': gpu} if gpu else {}),
         })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    except Exception:
+        current_app.logger.exception('[SYSTEM] /api/system failed')
+        return jsonify({'error': 'Could not read system info'}), 500
 
 # ─── API: Network Stats ───────────────────────────────────────
 @bp.route('/api/network/stats')

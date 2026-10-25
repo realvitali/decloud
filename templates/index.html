@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -48,11 +48,11 @@
       <button class="login-key" data-key="7" onclick="loginPress('7')">7<span class="login-key-sub">PQRS</span></button>
       <button class="login-key" data-key="8" onclick="loginPress('8')">8<span class="login-key-sub">TUV</span></button>
       <button class="login-key" data-key="9" onclick="loginPress('9')">9<span class="login-key-sub">WXYZ</span></button>
-      <button class="login-key login-key-go" onclick="loginGo()">
+      <button class="login-key login-key-go" onclick="loginGo()" aria-label="Sign in">
         <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       </button>
       <button class="login-key" data-key="0" onclick="loginPress('0')">0</button>
-      <button class="login-key login-key-back" onclick="loginBack()">
+      <button class="login-key login-key-back" onclick="loginBack()" aria-label="Delete last digit">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/>
           <line x1="18" y1="9" x2="12" y2="15"/>
@@ -60,6 +60,21 @@
         </svg>
       </button>
     </div>
+    <details class="login-forgot">
+      <summary>Forgot passcode?</summary>
+      <p>On the computer running DeCloud, open a terminal in the DeCloud folder and run:</p>
+      <code>./decloud pin</code>
+      <p>to see it, or <code>./decloud pin reset</code> to get a new one.<br>Windows: <code>.\decloud.ps1 pin</code></p>
+    </details>
+  </div>
+</div>
+
+<!-- ═══ OFFLINE SCREEN (auth check could not reach the server) ═══ -->
+<div id="offline-screen" class="login-screen" style="display:none">
+  <div class="login-card">
+    <div class="login-title">Can't reach your computer</div>
+    <div class="login-subtitle">Make sure the computer running DeCloud is on and connected, then try again.</div>
+    <button class="onboarding-btn" style="flex:none;margin-top:20px;min-width:160px" onclick="checkAuth()">Retry</button>
   </div>
 </div>
 
@@ -109,7 +124,6 @@
           <div class="music-player-artist" id="music-player-artist"></div>
         </div>
         <div class="music-player-time"><span id="music-current">0:00</span> / <span id="music-duration">0:00</span></div>
-        </div>
       </div>
       <div class="music-progress-bar" id="music-progress-bar" onclick="seekMusic(event)">
         <div class="music-progress-fill" id="music-progress-fill"></div>
@@ -152,6 +166,13 @@
     <button class="mode-btn" id="audio-mode-btn" onclick="setReaderMode('audio')">Listen</button>
   </div>
 
+  <!-- Audio generation progress banner -->
+  <div class="gen-banner" id="gen-banner" style="display:none;margin:12px 16px 0">
+    <div class="gen-banner-title">Generating audiobook…</div>
+    <div class="gen-progress-bar"><div class="gen-progress-fill" id="gen-progress-fill"></div></div>
+    <div class="gen-banner-sub" id="gen-banner-sub">0%</div>
+  </div>
+
   <!-- Chapter nav -->
   <div class="chapter-nav" id="chapter-nav">
     <button class="chapter-nav-btn" id="prev-ch-btn" onclick="openPrevChapter()"><span class="nav-arrow prev"></span> Prev</button>
@@ -170,11 +191,11 @@
       </div>
       <button class="reader-ctrl-btn sofar-btn" onclick="openSummary()" title="Summarize what you've read so far"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg> So Far</button>
     </div>
-    <div class="reader-text" id="reader-text" onclick="handleReaderTap(event)">Loading...</div>
+    <div class="reader-text" id="reader-text">Loading...</div>
     <div class="bookmark-list-panel" id="bookmark-panel" style="display:none">
       <div class="bookmark-panel-header">
         <span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Bookmarks</span>
-        <button class="reader-ctrl-btn" onclick="toggleBookmarkList()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <button class="reader-ctrl-btn" onclick="toggleBookmarkList()" aria-label="Close bookmarks"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div id="bookmark-items"></div>
     </div>
@@ -185,7 +206,7 @@
     <div class="cover-art"><svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
     <div class="player-controls">
       <button class="player-btn" onclick="prevChapter()" aria-label="Previous"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none"><path d="M6 6h2v8h6V6h2v12H6zM20 6l-6 6 6 6z"/></svg></button>
-      <button class="player-btn play-btn" id="play-btn" onclick="togglePlay()"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg></button>
+      <button class="player-btn play-btn" id="play-btn" onclick="togglePlay()" aria-label="Play or pause"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg></button>
       <button class="player-btn" onclick="nextChapter()" aria-label="Next"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none"><path d="M16 6h2v12h-2zM4 6l6 6-6 6z"/></svg></button>
     </div>
     <div class="progress-section">
@@ -209,7 +230,6 @@
     <div id="chapter-buttons" style="display:none"></div>
   </div>
 </div>
-</div>
 
 <!-- ═══ LEGO FILE BROWSER ═══ -->
 <div id="lego-screen" class="screen">
@@ -220,16 +240,16 @@
   <div class="lego-breadcrumbs" id="lego-breadcrumbs"></div>
   <div class="lego-list" id="lego-list"><span class="text-dim" style="padding:20px;display:block">Loading...</span></div>
   <div class="lego-image-viewer" id="lego-image-viewer" style="display:none">
-    <button class="lego-image-close" onclick="closeLegoImage()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <button class="lego-image-action lego-image-shred" onclick="shredLegoImage()" title="Shred file" aria-label="Shred"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
-    <button class="lego-image-action lego-image-poof" onclick="poofLegoImage()" title="Poof!" aria-label="Poof"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2M9.6 4.6A2 2 0 1 1 11 8H2M12.6 19.4A2 2 0 1 0 14 16H2"/></svg></button>
-    <button class="lego-image-action lego-image-save" onclick="saveLegoFile(legoCurrentImage)" title="Save" aria-label="Save"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+    <button class="lego-image-close" onclick="closeLegoImage()" aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <button class="lego-image-action lego-image-shred" onclick="shredLegoImage()" title="Delete forever" aria-label="Delete forever"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></button>
+    <button class="lego-image-action lego-image-poof" onclick="poofLegoImage()" title="Set aside (moves it to the poof folder)" aria-label="Set aside"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2M9.6 4.6A2 2 0 1 1 11 8H2M12.6 19.4A2 2 0 1 0 14 16H2"/></svg></button>
+    <button class="lego-image-action lego-image-save" onclick="saveLegoFile(legoCurrentImage)" title="Download" aria-label="Download"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
     <img id="lego-image-full" src="" alt="" />
   </div>
   <!-- Swipe mode -->
   <div class="lego-swipe" id="lego-swipe" style="display:none">
     <div class="lego-swipe-header">
-      <button class="lego-swipe-close" onclick="closeSwipeMode()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <button class="lego-swipe-close" onclick="closeSwipeMode()" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       <div class="lego-swipe-info" id="lego-swipe-info">Loading...</div>
     </div>
     <div class="lego-swipe-card-area" id="lego-swipe-card-area">
@@ -237,7 +257,7 @@
         <img id="lego-swipe-img" src="" alt="" />
         <div class="lego-swipe-card-name" id="lego-swipe-card-name"></div>
         <div class="lego-swipe-hint lego-swipe-hint-left" id="lego-swipe-hint-left">TRASH</div>
-        <div class="lego-swipe-hint lego-swipe-hint-right" id="lego-swipe-hint-right">POOF</div>
+        <div class="lego-swipe-hint lego-swipe-hint-right" id="lego-swipe-hint-right">SET ASIDE</div>
       </div>
       <div class="lego-swipe-empty" id="lego-swipe-empty" style="display:none">
         <div style="margin-bottom:12px"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="var(--text-dim)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
@@ -245,9 +265,9 @@
       </div>
     </div>
     <div class="lego-swipe-actions">
-      <button class="lego-swipe-btn lego-swipe-btn-trash" onclick="swipeLeft()" aria-label="Trash"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
-      <button class="lego-swipe-btn lego-swipe-btn-shred" onclick="swipeShred()" aria-label="Shred"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></button>
-      <button class="lego-swipe-btn lego-swipe-btn-poof" onclick="swipeRight()" aria-label="Poof"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2M9.6 4.6A2 2 0 1 1 11 8H2M12.6 19.4A2 2 0 1 0 14 16H2"/></svg></button>
+      <button class="lego-swipe-btn lego-swipe-btn-trash" onclick="swipeLeft()" aria-label="Move to Trash" title="Move to Trash"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+      <button class="lego-swipe-btn lego-swipe-btn-shred" onclick="swipeShred()" aria-label="Delete forever" title="Delete forever"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></button>
+      <button class="lego-swipe-btn lego-swipe-btn-poof" onclick="swipeRight()" aria-label="Set aside" title="Set aside (moves it to the poof folder)"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2M9.6 4.6A2 2 0 1 1 11 8H2M12.6 19.4A2 2 0 1 0 14 16H2"/></svg></button>
     </div>
   </div>
 </div>
@@ -310,9 +330,27 @@
 <div id="system-screen" class="screen">
   <div class="app-header">
     <button class="back-btn" onclick="goHome()">&#8249; Home</button>
-    <h2 id="screen-title-system" class="screen-title"><span class="screen-title-icon"></span> System Monitor</h2>
+    <h2 id="screen-title-system" class="screen-title"><span class="screen-title-icon"></span> My Lab</h2>
   </div>
   <div class="system-content" id="system-content"><p>Loading...</p></div>
+  <div class="models-content">
+    <div class="models-specs" id="models-specs">Checking hardware…</div>
+    <div class="models-add">
+      <input type="text" id="models-add-input" class="models-add-input"
+             placeholder="Paste any HuggingFace link or owner/repo…">
+      <select id="models-add-category" class="models-add-select">
+        <option value="chat">Chat</option>
+        <option value="image">Image</option>
+        <option value="video">Video</option>
+        <option value="music">Music</option>
+      </select>
+      <button class="models-add-btn" onclick="modelsAnalyzeCustom()">Analyze</button>
+    </div>
+    <div id="models-analyzed"></div>
+    <div id="models-downloads"></div>
+    <div class="comfy-gallery-header" style="margin-top:8px">Recommended for this machine</div>
+    <div id="models-catalog"></div>
+  </div>
 </div>
 
 <!-- ═══ COMMAND TERMINAL ═══ -->
@@ -469,14 +507,14 @@
         </div>
         <div class="settings-row">
           <span>Files</span>
-          <input type="text" class="settings-input" id="path-files" placeholder="~/Files">
+          <input type="text" class="settings-input" id="path-files" placeholder="~">
         </div>
         <div class="settings-row">
           <span>Music</span>
-          <input type="text" class="settings-input" id="path-music" placeholder="~/Music/decloud-music">
+          <input type="text" class="settings-input" id="path-music" placeholder="~/Music">
         </div>
         <button class="settings-save-btn" onclick="savePaths()">Save Paths</button>
-        <div class="settings-note" id="paths-save-note">Restart required for path changes to take effect.</div>
+        <div class="settings-note" id="paths-save-note">Changes apply immediately and persist across restarts.</div>
       </div>
     </div>
     <!-- Learn -->
@@ -541,6 +579,7 @@
       <div class="settings-group">
         <div class="settings-label">Maintenance</div>
         <button class="settings-export-btn" onclick="forceRefresh()">Clear Cache &amp; Restart</button>
+        <button class="settings-export-btn" onclick="reopenOnboarding()">Replay intro</button>
       </div>
       <div class="settings-group">
         <div class="settings-label">Updates</div>
@@ -553,11 +592,8 @@
       </div>
       <div class="settings-group">
         <div class="settings-label">About</div>
-        <div class="about-blurb">Self-hosted PWA dashboard. Tailscale-only, no accounts, no cloud. MIT licensed.</div>
-        <div class="about-madeby">Made by linux.user01</div>
+        <div class="about-blurb">Your personal cloud, running on your own computer. Open it from your phone or any browser with your passcode. No accounts, no subscriptions. MIT licensed.</div>
         <div class="about-socials">
-          <a href="https://instagram.com/Linux.user01" target="_blank" rel="noopener" class="about-social-link">Instagram</a>
-          <a href="https://twitter.com/linux_user01" target="_blank" rel="noopener" class="about-social-link">Twitter</a>
           <a href="https://github.com/realvitali/decloud/issues" target="_blank" rel="noopener" class="about-social-link">GitHub</a>
         </div>
       </div>
@@ -583,13 +619,13 @@
     <div class="journal-voice-content">
       <div class="onboarding-banner">
         <h3>Voice Journal</h3>
-        <p>Record a voice memo and DeCloud transcribes it locally. Configure DECLOUD_JOURNAL_DIR in .env to save entries to your Obsidian vault.</p>
+        <p>Record a voice memo and DeCloud turns it into text, right on your computer. Entries are saved as notes in your journal folder.</p>
       </div>
       <button class="journal-record-btn" id="journal-record-btn" onclick="startVoiceJournal()">
         <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-          <line x1="19" y1="10v2a7 7 0 0 1-14 0v-2"/>
-          <line x1="12" y1="19v3"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <path d="M12 19v3"/>
         </svg>
         <span id="journal-record-label">Tap to record</span>
       </button>
@@ -673,7 +709,7 @@
 <div id="comfy-screen" class="screen">
   <div class="app-header">
     <button class="back-btn" onclick="goHome()">&#8249; Home</button>
-    <h2 id="screen-title-comfy" class="screen-title"><span class="screen-title-icon"></span> Generate</h2>
+    <h2 id="screen-title-comfy" class="screen-title"><span class="screen-title-icon"></span> Image Maker</h2>
   </div>
   <div class="comfy-content">
     <div class="comfy-status-bar" id="comfy-status-bar">Checking ComfyUI...</div>
@@ -726,6 +762,65 @@
   </div>
 </div>
 
+<!-- ═══ MUSIC GENERATOR (local MiniMax Music 3 via ComfyUI) ═══ -->
+<div id="musicgen-screen" class="screen">
+  <div class="app-header">
+    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <h2 class="screen-title"><span class="screen-title-icon">🎵</span> Song Maker</h2>
+  </div>
+  <div class="musicgen-content">
+    <div class="musicgen-status" id="musicgen-status">Checking…</div>
+    <div id="musicgen-setup-hint" class="empty-state" style="display:none">
+      <div class="empty-icon">🎵</div>
+      <h3>Music needs a workflow</h3>
+      <p>Music generates songs locally with MiniMax Music 3 running in ComfyUI.</p>
+      <p class="empty-hint">1. Install the MiniMax Music 3 nodes in ComfyUI</p>
+      <p class="empty-hint">2. Load the text-to-music workflow and test it once</p>
+      <p class="empty-hint">3. In ComfyUI: enable dev mode → Save (API format)</p>
+      <p class="empty-hint">4. Put the JSON in the DeCloud app folder as <b>musicgen_workflow.json</b></p>
+    </div>
+    <div class="musicgen-form">
+      <div class="musicgen-field">
+        <label>Describe the song</label>
+        <textarea id="musicgen-prompt" class="comfy-prompt" rows="2"
+          placeholder="e.g. Lo-fi hip hop beat with warm piano and vinyl crackle, chill and nostalgic"></textarea>
+      </div>
+      <div class="musicgen-field">
+        <label>Lyrics (optional — leave empty for instrumental)</label>
+        <textarea id="musicgen-lyrics" class="comfy-prompt" rows="3"
+          placeholder="Verse 1&#10;..."></textarea>
+      </div>
+      <div class="musicgen-params">
+        <div class="comfy-param">
+          <label>Duration</label>
+          <select id="musicgen-duration">
+            <option value="">Workflow default</option>
+            <option value="30">30s</option>
+            <option value="45">45s</option>
+            <option value="60">60s</option>
+          </select>
+        </div>
+        <div class="comfy-param">
+          <label>Mode</label>
+          <select id="musicgen-instrumental">
+            <option value="auto">Auto (lyrics → vocal)</option>
+            <option value="true">Instrumental</option>
+          </select>
+        </div>
+      </div>
+      <button class="comfy-generate-btn" id="musicgen-generate-btn" onclick="musicGenGenerate()">Generate Song</button>
+      <div class="musicgen-progress" id="musicgen-progress" style="display:none">
+        <div class="comfy-progress-text" id="musicgen-progress-text">Queued…</div>
+        <div class="comfy-progress-bar"><div class="comfy-progress-fill" id="musicgen-progress-fill"></div></div>
+      </div>
+    </div>
+    <div class="musicgen-library">
+      <div class="comfy-gallery-header">Your Songs</div>
+      <div id="musicgen-history"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ PROJECT DETAIL ═══ -->
 <div id="project-screen" class="screen">
   <div class="app-header">
@@ -733,19 +828,6 @@
     <h2 id="screen-title-project" class="screen-title"><span class="screen-title-icon"></span> Project</h2>
   </div>
   <div class="project-detail-content" id="project-detail-content"></div>
-</div>
-
-<!-- ═══ SETTINGS ═══ -->
-
-<!-- ═══ SETTINGS ═══ -->
-    <div id="settings-logs" class="settings-tab-content">
-      <div class="settings-section">
-        <h3>Recent Logs</h3>
-        <div id="logs-list" class="logs-list"></div>
-        <button class="settings-btn" onclick="exportLogs()">Export All Logs</button>
-      </div>
-    </div>
-  </div>
 </div>
 
 <!-- ═══ BOOK SETTINGS MODAL ═══ -->
@@ -791,6 +873,7 @@
 
 <audio id="audio-player" preload="auto"></audio>
 <audio id="preview-player" preload="none"></audio>
+<audio id="voice-tts-player" preload="auto"></audio>
 
 <!-- ═══ SUMMARY MODAL ═══ -->
 <div id="summary-modal" class="modal">
@@ -866,6 +949,12 @@
       <!-- Status text -->
       <div id="voice-status" class="voice-status">Listening...</div>
 
+      <!-- Microphone permission -->
+      <button id="voice-perm-btn" class="voice-perm-btn" style="display:none" onclick="requestMicPermission()">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        Enable microphone
+      </button>
+
       <!-- Transcript (user speech, transient — clears each turn) -->
       <div id="voice-transcript" class="voice-transcript"></div>
 
@@ -875,7 +964,7 @@
       <!-- Capabilities -->
       <div id="voice-capabilities" class="voice-capabilities">
         <button class="voice-caps-toggle" onclick="toggleCapabilities()">
-          What can Vui do? &#9656;
+          What can I say? &#9656;
         </button>
         <div id="voice-caps-list" class="voice-caps-list">
           <div class="voice-cap-item"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Read system stats (CPU, RAM, GPU, disk)</span></div>
@@ -888,54 +977,6 @@
         </div>
       </div>
 
-      <!-- Confirmation area -->
-      <div id="voice-confirm" class="voice-confirm" style="display:none">
-        <div id="voice-confirm-text" class="voice-confirm-text"></div>
-        <div class="voice-confirm-buttons">
-          <button class="voice-btn voice-btn-yes" onclick="confirmVoiceCommand(true)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px"><polyline points="20 6 9 17 4 12"/></svg> Yes, run it</button>
-          <button class="voice-btn voice-btn-no" onclick="confirmVoiceCommand(false)"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Cancel</button>
-        </div>
-      </div>
-
-      <!-- Settings -->
-      <div id="voice-settings" class="voice-settings" style="display:none">
-        <div class="voice-setting-row">
-          <label>STT Engine</label>
-          <select id="voice-stt-select" onchange="saveVoiceSettings()"></select>
-        </div>
-        <div class="voice-setting-row">
-          <label>LLM Model</label>
-          <select id="voice-llm-select" onchange="saveVoiceSettings()"></select>
-        </div>
-        <div class="voice-setting-row">
-          <label>TTS Engine</label>
-          <select id="voice-tts-select" onchange="saveVoiceSettings()"></select>
-        </div>
-        <div class="voice-setting-row" style="border-top:1px solid rgba(255,255,255,0.1);padding-top:12px;margin-top:8px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="voice-hermes-toggle" onchange="saveVoiceSettings()" style="width:18px;height:18px;accent-color:#6366f1">
-            Use Hermes (full agent mode)
-          </label>
-          <small style="opacity:0.6;font-size:11px;margin-top:4px;display:block">Talk to Hermes directly. Your voice goes to Whisper STT, then to the Hermes agent, and you get a voice reply. Full agent context, can build things.</small>
-        </div>
-        <div class="voice-setting-row" style="border-top:1px solid rgba(255,255,255,0.1);padding-top:12px;margin-top:8px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="voice-vui-toggle" onchange="saveVoiceSettings()" style="width:18px;height:18px;accent-color:#6366f1">
-            Use Vui (full-duplex voice AI)
-          </label>
-          <small style="opacity:0.6;font-size:11px;margin-top:4px;display:block">Vui handles STT+LLM+TTS in one pass with a neural voice. Overrides the settings above.</small>
-        </div>
-        <div class="voice-setting-row" id="vui-voice-picker" style="display:none;padding-top:12px;margin-top:4px">
-          <label>Vui Voice</label>
-          <select id="voice-vui-voice" onchange="switchVuiVoice()" style="width:100%;margin-top:4px">
-            <option value="abraham">Abraham</option>
-            <option value="harry">Harry</option>
-            <option value="maeve">Maeve</option>
-            <option value="rhian">Rhian</option>
-          </select>
-          <small style="opacity:0.6;font-size:11px;margin-top:2px;display:block">Pick the neural voice persona for Vui.</small>
-        </div>
-      </div>
     </div>
 
     <!-- Text View -->
@@ -952,10 +993,6 @@
       <button id="voice-mute-btn" class="voice-control-btn" onclick="toggleMute()">
         <span class="voice-control-icon" id="voice-mute-icon"></span>
         <span class="voice-control-label" id="voice-mute-label">Mute</span>
-      </button>
-      <button class="voice-control-btn voice-settings-btn" onclick="toggleVoiceSettings()">
-        <span class="voice-control-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
-        <span class="voice-control-label">Settings</span>
       </button>
       <button class="voice-control-btn voice-close-btn" onclick="closeVoice()">
         <span class="voice-control-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
@@ -976,16 +1013,32 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
-<script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-<script type="importmap">
-{ "imports": { "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js" } }
-</script>
-<script type="module">
-import * as CANNON from 'cannon-es';
-window.CANNON = CANNON;
-</script>
+<!-- ═══ FULL ACCESS CONFIRMATION MODAL ═══ -->
+<div id="full-access-modal" class="full-access-modal" style="display:none">
+  <div class="full-access-content">
+    <div class="full-access-title">⚠️ Unrestricted access</div>
+    <p>Full access lets the voice agent run <strong>any shell command</strong> on this machine. It can:</p>
+    <ul>
+      <li>Delete files and folders (<code>rm</code>, <code>shred</code>)</li>
+      <li>Format or wipe disks (<code>mkfs</code>, <code>dd</code>)</li>
+      <li>Change permissions and users (<code>chmod</code>, <code>chown</code>)</li>
+      <li>Install or remove software</li>
+      <li>Shut down or reboot the machine</li>
+      <li>Read and exfiltrate any file it can access</li>
+    </ul>
+    <p style="color:var(--red);font-weight:700">This could permanently break your setup or expose your data.</p>
+    <div class="full-access-buttons">
+      <button class="voice-btn voice-btn-no" onclick="fullAccessConfirm(false)">Cancel</button>
+      <button class="voice-btn voice-btn-yes" style="background:rgba(239,68,68,0.25);border-color:rgba(239,68,68,0.5);color:#f87171" onclick="fullAccessConfirm(true)">I understand — enable Full access</button>
+    </div>
+  </div>
+</div>
+
+<!-- Vendored libs (pinned: @xterm/xterm 5.5.0, @xterm/addon-fit 0.10.0, qrcode-generator 1.4.4).
+     three 0.160.0 + cannon-es 0.20.0 load lazily when Legos opens (legos3d.js). -->
+<script src="/static/vendor/xterm.min.js"></script>
+<script src="/static/vendor/addon-fit.min.js"></script>
+<script src="/static/vendor/qrcode.js"></script>
 <script src="/static/js/thinking-orbs.js"></script>
 <script src="/static/js/avatar3d.js"></script>
 <script src="/static/js/modules/auth.js?v=97"></script>
@@ -1020,20 +1073,23 @@ window.CANNON = CANNON;
     <!-- Step 0: Welcome -->
     <div class="onboarding-step active" data-step="0">
       <h1>Welcome to DeCloud</h1>
-      <p>DeCloud is your personal cloud — a self-hosted dashboard for audiobooks, AI chat, files, music, and more. No accounts, no tracking, no cloud fees. Just your machine, your data, your control.</p>
-      <p style="font-size:0.85em;opacity:0.6">Experimental alpha — things might break. Report bugs on GitHub.</p>
+      <p>DeCloud is your personal cloud. It runs on your own computer and lets you reach your books, files, music and AI helpers from your phone or any browser. No accounts, no tracking, no monthly fees.</p>
+      <div class="onboarding-name">
+        <label for="agent-name-input">Name your AI companion</label>
+        <input type="text" id="agent-name-input" placeholder="DeCloud" maxlength="40" autocomplete="off" autocapitalize="words">
+      </div>
+      <p style="font-size:0.85em;opacity:0.6">Your voice assistant will answer to this name. Change it anytime in Settings → Voice.</p>
     </div>
 
     <!-- Step 1: What's inside -->
     <div class="onboarding-step" data-step="1">
       <h1>What's Inside</h1>
-      <p>📚 <strong>Audiobooks</strong> — Read and listen with real-time word highlighting</p>
-      <p>🤖 <strong>AI Chat</strong> — Local LLM via Ollama, or cloud models</p>
-      <p>📁 <strong>Files</strong> — Browse your filesystem from your phone</p>
-      <p>🎨 <strong>Generate</strong> — AI image generation via ComfyUI</p>
-      <p>🎵 <strong>Music</strong> — Your local music library, anywhere</p>
-      <p>📊 <strong>System Monitor</strong> — CPU, RAM, GPU in real time</p>
-      <p style="font-size:0.85em;opacity:0.6">All features are optional — the app works with zero configuration.</p>
+      <p>📚 <strong>Books</strong> — Read, or have your books read aloud, with each word highlighted</p>
+      <p>🤖 <strong>AI Chat</strong> — Chat with an AI that runs on your own computer</p>
+      <p>📁 <strong>Files</strong> — See the files on your computer from your phone</p>
+      <p>🎵 <strong>Music</strong> — Play your own music collection anywhere</p>
+      <p>📊 <strong>My Lab</strong> — See how busy your computer is right now</p>
+      <p style="font-size:0.85em;opacity:0.6">Everything works out of the box. Extras can be turned on later in Settings.</p>
     </div>
 
     <!-- Step 2: Secure by default -->
@@ -1046,7 +1102,7 @@ window.CANNON = CANNON;
     <!-- Step 3: Phone access -->
     <div class="onboarding-step" data-step="3">
       <h1>Access from Your Phone</h1>
-      <p>Scan this QR code to open DeCloud on your phone, then Add to Home Screen for the full app experience.</p>
+      <p>Open DeCloud on your phone, then choose "Add to Home Screen" so it works like a regular app.</p>
       <div id="qr-phone" style="text-align:center;margin:12px 0"></div>
       <p class="empty-hint" id="onboarding-url-hint" style="text-align:center;font-size:0.8em;word-break:break-all"></p>
     </div>
@@ -1055,15 +1111,15 @@ window.CANNON = CANNON;
     <div class="onboarding-step" data-step="4">
       <h1>You're All Set</h1>
       <p>Tap any app on the home screen to get started. Everything is configurable in <strong>Settings</strong>.</p>
-      <p style="font-size:0.85em;opacity:0.6">DeCloud is experimental software. Found a bug or have an idea? Open an issue on GitHub.</p>
-      <p style="font-size:0.85em;opacity:0.6">Made by linux.user01 • MIT licensed</p>
+      <p style="font-size:0.85em;opacity:0.6">DeCloud is still young. Found a problem or have an idea? Tell us on GitHub (Settings → About).</p>
+      <p style="font-size:0.85em;opacity:0.6">MIT licensed</p>
     </div>
 
     <!-- Nav buttons -->
     <div class="onboarding-nav">
       <button id="onboarding-skip" class="onboarding-btn-secondary" onclick="onboardingSkip()">Skip</button>
       <button id="onboarding-prev" class="onboarding-btn-secondary" onclick="onboardingPrev()" style="display:none">Back</button>
-      <button id="onboarding-next" class="onboarding-btn-primary" onclick="onboardingNext()">Get Started</button>
+      <button id="onboarding-next" class="onboarding-btn" onclick="onboardingNext()">Get Started</button>
     </div>
   </div>
 </div>

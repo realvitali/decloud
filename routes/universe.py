@@ -9,6 +9,7 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request
 from datetime import datetime
 from shared import app, get_whisper_model, STT_ENGINES
+import shared
 
 bp = Blueprint('universe', __name__)
 
@@ -72,7 +73,7 @@ def journal_voice():
         return jsonify({'ok': True, 'text': text, 'date': today})
     except Exception as e:
         app.logger.error(f'[JOURNAL-VOICE] Error: {e}')
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Voice note failed — check the server log'}), 500
 
 def _load_universe_scanner():
     """Import universe_scanner if available."""
@@ -110,6 +111,8 @@ def universe_person(name):
     if not journal_dir:
         return _not_configured()
     safe = name.replace(" ", "_")
+    if not shared.is_safe_book_ref(safe):
+        return jsonify({"error": "Invalid name"}), 400
     path = journal_dir / 'People' / f"{safe}.md"
     if not path.exists():
         return jsonify({"error": "Not found"}), 404
@@ -121,6 +124,8 @@ def universe_person_update(name):
     if not journal_dir:
         return _not_configured()
     safe = name.replace(" ", "_")
+    if not shared.is_safe_book_ref(safe):
+        return jsonify({"error": "Invalid name"}), 400
     path = journal_dir / 'People' / f"{safe}.md"
     if not path.exists():
         return jsonify({"error": "Not found"}), 404
@@ -161,6 +166,9 @@ def universe_add_person():
         return jsonify({"error": "Name required"}), 400
 
     safe = name.replace(" ", "_")
+    # Reject path separators / traversal so a name can't escape People/.
+    if not shared.is_safe_book_ref(safe):
+        return jsonify({"error": "Invalid name"}), 400
     path = journal_dir / 'People' / f"{safe}.md"
     if path.exists():
         return jsonify({"error": "Person already exists"}), 400

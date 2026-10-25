@@ -1,0 +1,92 @@
+name: Release
+
+# When CI passes on a push to main that bumps VERSION (routes/version.py),
+# create a matching git tag + GitHub release on the exact commit CI tested.
+# That is what the in-app updater (Settings → About → Check for updates)
+# consumes. No manual tagging.
+#
+# Actions are pinned by commit SHA (tag in the trailing comment); bump them
+# deliberately, never by moving tag.
+#
+# FOLLOW-UP (audit N3): tags are still lightweight and unsigned, and the
+# updater does not verify them. Before strangers pull updates, sign release
+# tags (e.g. `git tag -s` with a maintainer key, or gitsign) and have
+# routes/update.py run `git verify-tag` against a pinned key before checkout.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Only after CI succeeded, only for pushes to this repo's main (not PRs
+    # or forks whose branch happens to be called main).
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Read version + changelog
+        id: meta
+        run: |
+          python - "$GITHUB_OUTPUT" <<'EOF'
+          import re, sys
+          text = open('routes/version.py').read()
+          m = re.search(r'^VERSION = "([^"]+)"', text, re.MULTILINE)
+          if not m:
+              sys.exit('VERSION not found in routes/version.py')
+          version = m.group(1)
+          seg = text.split('CHANGELOG = [', 1)[1]
+          entry = re.match(r'\s*\{(.*?)\},', seg, re.DOTALL)
+          date = changes = ''
+          if entry:
+              date = (re.search(r'"date":\s*"([^"]+)"', entry.group(1)) or [None, ''])[1]
+              cm = re.search(r'"changes":\s*\[(.*?)\]', entry.group(1), re.DOTALL)
+              changes = cm.group(1) if cm else ''
+          bullets = re.findall(r'"((?:[^"\\]|\\.)*)"', changes)
+          with open('release_body.md', 'w') as f:
+              f.write(f"## Changes in v{version} ({date})\n\n")
+              for b in bullets:
+                  f.write(f"- {b}\n")
+          with open(sys.argv[1], 'a') as out:
+              out.write(f"version={version}\n")
+          EOF
+
+      - name: Check whether the tag already exists
+        id: tag
+        run: |
+          if git rev-parse "v${{ steps.meta.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.tag.outputs.exists == 'false'
+        run: |
+          git tag "v${{ steps.meta.outputs.version }}"
+          git push origin "v${{ steps.meta.outputs.version }}"
+
+      - name: Publish GitHub release
+        if: steps.tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: v${{ steps.meta.outputs.version }}
+          name: DeCloud v${{ steps.meta.outputs.version }}
+          body_path: release_body.md

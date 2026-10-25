@@ -1,7 +1,7 @@
 // ===== Module: onboarding =====
 // First-run walkthrough for new DeCloud users.
 // Shows on first open (localStorage 'decloud_onboarded'), walks through
-// Tailscale setup, phone PWA install, and app configuration.
+// phone install, and app configuration. Started only after sign-in.
 
 var ONBOARDING_STEPS = 5; // 0=welcome, 1=features, 2=security, 3=phone, 4=done
 var onboardingCurrentStep = 0;
@@ -20,6 +20,11 @@ function initOnboarding() {
   buildProgressDots();
   generateOnboardingQRs();
   showOnboardingStep(0);
+  // Prefill the agent name with the current value (if already set).
+  fetch('/api/voice/config').then(function(r) { return r.json(); }).then(function(d) {
+    var input = document.getElementById('agent-name-input');
+    if (input && d.config && d.config.agent_name) input.value = d.config.agent_name;
+  }).catch(function() {});
 }
 
 function buildProgressDots() {
@@ -65,17 +70,27 @@ function showOnboardingStep(step) {
   if (skipBtn) skipBtn.style.display = step < ONBOARDING_STEPS - 1 ? '' : 'none';
 }
 
+// Skip the "open on your phone" step when already on a phone.
+var ONBOARDING_PHONE_STEP = 3;
+function onboardingOnPhone() {
+  return window.matchMedia && window.matchMedia('(pointer: coarse) and (max-width: 820px)').matches;
+}
+
 function onboardingNext() {
   if (onboardingCurrentStep >= ONBOARDING_STEPS - 1) {
     onboardingFinish();
     return;
   }
-  showOnboardingStep(onboardingCurrentStep + 1);
+  var next = onboardingCurrentStep + 1;
+  if (next === ONBOARDING_PHONE_STEP && onboardingOnPhone()) next++;
+  showOnboardingStep(next);
 }
 
 function onboardingPrev() {
   if (onboardingCurrentStep > 0) {
-    showOnboardingStep(onboardingCurrentStep - 1);
+    var prev = onboardingCurrentStep - 1;
+    if (prev === ONBOARDING_PHONE_STEP && onboardingOnPhone()) prev--;
+    showOnboardingStep(prev);
   }
 }
 
@@ -88,6 +103,20 @@ function onboardingFinish() {
 }
 
 function finishOnboarding(skipped) {
+  // Persist the chosen agent name (empty = keep default).
+  var nameInput = document.getElementById('agent-name-input');
+  var name = nameInput ? nameInput.value.trim() : '';
+  if (name) {
+    fetch('/api/voice/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_name: name })
+    }).then(function(r) {
+      if (!r.ok) throw new Error('save failed');
+    }).catch(function() {
+      showToast("Couldn't save the name — set it in Settings → Voice");
+    });
+  }
   localStorage.setItem('decloud_onboarded', '1');
   var overlay = document.getElementById('onboarding-overlay');
   if (overlay) {
@@ -109,56 +138,40 @@ function reopenOnboarding() {
 }
 
 /**
- * Generate QR codes for the onboarding steps.
- * Uses api.qrserver.com as a simple img-based QR (one-time flow, no deps).
+ * Phone QR for the onboarding step. Rendered client-side so the address
+ * never leaves the browser. A localhost address is useless on a phone, so
+ * in that case we point at `./decloud qr` instead.
  */
 function generateOnboardingQRs() {
-  // Tailscale download QR
-  var tailscaleContainer = document.getElementById('qr-tailscale');
-  if (tailscaleContainer && !tailscaleContainer.hasChildNodes()) {
-    var url1 = 'https://tailscale.com/download';
-    var img1 = document.createElement('img');
-    img1.src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(url1);
-    img1.alt = 'QR: ' + url1;
-    img1.loading = 'lazy';
-    tailscaleContainer.appendChild(img1);
-  }
-
-  // Phone PWA QR — current origin
   var phoneContainer = document.getElementById('qr-phone');
-  if (phoneContainer && !phoneContainer.hasChildNodes()) {
-    var pageUrl = window.location.origin;
-    var img2 = document.createElement('img');
-    img2.src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(pageUrl);
-    img2.alt = 'QR: ' + pageUrl;
-    img2.loading = 'lazy';
-    phoneContainer.appendChild(img2);
-  }
-
-  // Show the URL hint
   var hint = document.getElementById('onboarding-url-hint');
-  if (hint) {
-    hint.textContent = window.location.origin;
+  var host = window.location.hostname;
+  var isLocal = host === 'localhost' || host === '::1' || host === '[::1]' || /^127\./.test(host);
+  if (isLocal) {
+    if (hint) hint.textContent = 'On your computer, run ./decloud qr to get a code your phone can scan.';
+    return;
   }
+  if (phoneContainer && !phoneContainer.hasChildNodes()) {
+    var img = generateQR(window.location.origin, 300);
+    if (img) phoneContainer.appendChild(img);
+  }
+  if (hint) hint.textContent = window.location.origin;
 }
 
-/**
- * Generic QR generator (kept for API compatibility / future use).
- * Currently uses api.qrserver.com img fallback.
- */
+/** Client-side QR as a data-URL <img>; null if the lib failed to load. */
 function generateQR(text, size) {
+  if (typeof qrcode !== 'function') return null;
   var s = size || 200;
+  var qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
   var img = document.createElement('img');
-  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=' + s + 'x' + s + '&data=' + encodeURIComponent(text);
+  img.src = qr.createDataURL(Math.max(2, Math.floor(s / (qr.getModuleCount() + 8))), 4);
   img.width = s;
   img.height = s;
-  img.alt = 'QR code';
+  img.style.imageRendering = 'pixelated';
+  img.alt = 'QR: ' + text;
   return img;
 }
 
-// ─── Boot ───────────────────────────────────────────────
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initOnboarding);
-} else {
-  initOnboarding();
-}
+// Boot: started by hideLoginScreen() (auth.js) after a successful sign-in.

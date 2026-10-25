@@ -14,7 +14,7 @@ function Get-Passcode {
         $line = Select-String -Path .env -Pattern '^DECLOUD_PIN=' | Select-Object -First 1
         if ($line) { return $line.Line.Substring(12) }
     }
-    return "(not set — open mode)"
+    return "(not set — the app refuses all logins; re-run .\setup.ps1)"
 }
 
 switch ($Command) {

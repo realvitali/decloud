@@ -1,30 +1,25 @@
 // DeCloud Service Worker
-const CACHE_NAME = 'decloud-v91';
-const ASSETS = [
-  '/',
-  '/manifest.json',
-  '/static/css/app.css?v=72',
-  '/static/css/onboarding.css?v=72'
-];
+const CACHE_NAME = 'decloud-v97';
 
 self.addEventListener('install', e => {
   self.skipWaiting(); // activate immediately
 });
 
 self.addEventListener('activate', e => {
+  // Drop old caches. We don't force-navigate open pages: the page shows an
+  // "Update ready — tap to reload" toast on controllerchange instead.
   e.waitUntil(
     caches.keys().then(keys =>
-      // Nuke ALL caches — forces clean slate on every SW update
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    ).then(() => self.clients.matchAll()).then(clients =>
-      clients.forEach(c => c.navigate(c.url)))
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', e => {
   // Network-first for everything — always get fresh content
   if (e.request.method !== 'GET') return;
+  // Never cache API responses (personal data; server sends no-store anyway)
+  if (new URL(e.request.url).pathname.startsWith('/api/')) return;
   e.respondWith(
     fetch(e.request)
       .then(response => {

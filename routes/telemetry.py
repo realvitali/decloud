@@ -1,40 +1,50 @@
 """Telemetry, app usage, and logs routes."""
 from flask import Blueprint, jsonify, request, Response
-import json, time, re
-from shared import TELEMETRY_DIR, USAGE_FILE, LOG_FILE, _read_logs
+import json, math, threading, time
+from shared import USAGE_FILE, _read_logs, _write_private
 
 bp = Blueprint('telemetry', __name__)
+
+_usage_lock = threading.Lock()
+USAGE_MAX_ENTRIES = 5000  # ponytail: keep the newest N events, plenty for stats
+
+
+def _load_usage():
+    try:
+        log = json.loads(USAGE_FILE.read_text())
+        return log if isinstance(log, list) else []
+    except Exception:  # missing or corrupt
+        return []
+
+
+def _num(v):
+    """Finite non-negative number, else None (bools aren't durations)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    return v if math.isfinite(v) and v >= 0 else None
+
 
 @bp.route('/api/telemetry/app-usage', methods=['GET', 'POST'])
 def app_usage():
     if request.method == 'POST':
         data = request.get_json(silent=True) or {}
-        app_id = data.get('app_id', 'unknown')
-        action = data.get('action', 'open')
-        duration = data.get('duration', 0)
+        duration = _num(data.get('duration', 0))
+        if duration is None:
+            return jsonify({'error': 'duration must be a finite number'}), 400
         entry = {
-            'app_id': app_id,
-            'action': action,
+            'app_id': str(data.get('app_id', 'unknown'))[:64],
+            'action': str(data.get('action', 'open'))[:16],
             'duration': duration,
             'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S'),
         }
-        log = []
-        if USAGE_FILE.exists():
-            try:
-                log = json.loads(USAGE_FILE.read_text())
-            except Exception:
-                log = []
-        log.append(entry)
-        USAGE_FILE.write_text(json.dumps(log, indent=2))
+        with _usage_lock:
+            log = _load_usage()
+            log.append(entry)
+            _write_private(USAGE_FILE, json.dumps(log[-USAGE_MAX_ENTRIES:]))
         return jsonify({'ok': True, 'entry': entry})
 
     # GET — aggregated stats
-    log = []
-    if USAGE_FILE.exists():
-        try:
-            log = json.loads(USAGE_FILE.read_text())
-        except Exception:
-            log = []
+    log = _load_usage()
 
     per_app = {}
     total_opens = 0
@@ -42,10 +52,12 @@ def app_usage():
     today_stats = {}
 
     for e in log:
-        aid = e.get('app_id', 'unknown')
-        ts = e.get('timestamp', '')
+        if not isinstance(e, dict):
+            continue
+        aid = str(e.get('app_id', 'unknown'))
+        ts = str(e.get('timestamp', ''))
         action = e.get('action', '')
-        dur = e.get('duration', 0)
+        dur = _num(e.get('duration', 0)) or 0  # skip legacy junk values
 
         if aid not in per_app:
             per_app[aid] = {'opens': 0, 'total_time': 0}
@@ -90,12 +102,7 @@ def export_logs():
 # ─── API: Telemetry Export ────────────────────────────────────
 @bp.route('/api/telemetry/export')
 def export_telemetry():
-    log = []
-    if USAGE_FILE.exists():
-        try:
-            log = json.loads(USAGE_FILE.read_text())
-        except Exception:
-            log = []
+    log = _load_usage()
     return Response(
         json.dumps(log, indent=2),
         mimetype='application/json',

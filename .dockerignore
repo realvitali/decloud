@@ -3,5 +3,37 @@ Dockerfile
 docker-compose.yml
 .dockerignore
 
-# Test data
+# Git (never bake repo history/remotes into the image)
+.git
+.gitignore
+
+# Secrets & runtime state (never bake credentials or personal data)
+.env
+.env.*
+*.pem
+*.key
+*.crt
+settings.json
+*.pid
+tunnel.url
+tunnel.log
+app.log
+*.log
+voice_hermes_session.txt
+voice_history.json
+.update_meta.json
+
+# Caches / generated
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+audio_cache
+thumb_cache
+text_cache
+telemetry
+archive
+
+# Tests
 tests/
