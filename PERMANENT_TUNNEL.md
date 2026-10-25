@@ -2,7 +2,7 @@
 
 DeCloud uses **Tailscale Serve** for secure, permanent remote access. This gives you a URL like `https://your-machine.tail1234.ts.net` that never changes — and it's **tailnet-only** (private to your own devices) by default.
 
-> ⚠️ **Funnel makes DeCloud public.** Anyone on the internet can open the URL, and the only thing between them and your machine is the passcode. **The passcode unlocks a shell on this machine** (terminal, files, updates). Never share it. If only your own devices need access, use [Private-Only Mode](#private-only-mode-no-public-url) (Tailscale Serve) instead.
+> ⚠️ **Funnel makes DeCloud public.** Anyone on the internet can open the URL, and the only thing between them and your machine is the passcode. **The passcode unlocks a shell on this machine** (terminal, files, updates). Never share it — don't share this code with anyone. If only your own devices need access, use [Private-Only Mode](#private-only-mode-no-public-url) (Tailscale Serve) instead.
 
 ## Quick Setup
 

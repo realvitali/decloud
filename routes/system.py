@@ -91,7 +91,7 @@ def _nvidia_gpu():
 def system_info():
     try:
         boot_time = psutil.boot_time()
-        uptime = int(time.time() - boot_time)
+        uptime = int(__import__('time').time() - boot_time)
         hours, rem = divmod(uptime, 3600)
         mins = rem // 60
 
@@ -133,32 +133,38 @@ def system_info():
             except Exception:
                 pass
         disk = psutil.disk_usage('/')
+        # upstream contract: gpu is a dict {name, gpu_percent} (percent requires poll; None when unknown)
+        gpu_util = None
+        try:
+            u = subprocess.run(['nvidia-smi', '--query-gpu=utilization.gpu', '--format=csv,noheader,nounits'],
+                               capture_output=True, text=True, timeout=3).stdout.strip()
+            if u:
+                gpu_util = float(u.splitlines()[0])
+        except Exception:
+            pass
+        gpu_obj = None
+        if gpu:
+            gpu_obj = {'name': gpu, 'gpu_percent': gpu_util}
         return jsonify({
             'hostname': platform.node(),
             'os': osinfo['name'],
             'os_version': osinfo['version'],
             'os_kernel': osinfo['kernel'],
             'cpu_model': cpu_model,
-            'gpu': gpu,
+            **({'gpu': gpu_obj} if gpu_obj else {}),
             'cpu_percent': psutil.cpu_percent(interval=0.5),
             'cpu_cores': psutil.cpu_count(),
-            'cpu_percent': psutil.cpu_percent(interval=None),  # since last poll; non-blocking
-            'gpu_name': gpu_name,
             'ram_total': vm.total,
             'ram_used': vm.used,
             'ram_percent': vm.percent,
-            'ram_total_gb': round(mem_total_gb, 1),
-            'swap_percent': swap.percent,
+            'disk_total': disk.total,
+            'disk_used': disk.used,
             'disk_percent': disk.percent,
-            'disk_total_gb': round(disk_total_gb, 1),
-            'battery': battery,
             'uptime': f'{hours}h {mins}m',
             'temps': temps,
-            **({'gpu': gpu} if gpu else {}),
         })
-    except Exception:
-        current_app.logger.exception('[SYSTEM] /api/system failed')
-        return jsonify({'error': 'Could not read system info'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ─── API: Network Stats ───────────────────────────────────────
 @bp.route('/api/network/stats')

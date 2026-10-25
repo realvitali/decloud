@@ -76,3 +76,4 @@ sessions.json.tmp
 
 # Lab pairing keys (cert, token)
 lab-state/
+app.log*
