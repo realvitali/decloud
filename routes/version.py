@@ -7,9 +7,39 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.5.3"
+VERSION = "0.5.6"
 
 CHANGELOG = [
+    {
+        "version": "0.5.6",
+        "date": "2026-10-25",
+        "changes": [
+            "Trim duplicate worker regression tests",
+            "Consolidate overlapping tests and replace custom test doubles with standard mocks",
+            "Reuse the local HTTP fixture to test real installer downloads and HTTP failures",
+        ]
+    },
+    {
+        "version": "0.5.5",
+        "date": "2026-10-25",
+        "changes": [
+            "Harden worker retry and stop handling after adversarial review",
+            "Keep voice setup polling active and preserve installed voice files",
+            "Reuse model retries without catalog access and simplify private shard staging",
+            "Wait for owned TTS workers to exit before allowing a restart and show stop failures",
+        ]
+    },
+    {
+        "version": "0.5.4",
+        "date": "2026-10-25",
+        "changes": [
+            "Make worker starts and voice download retries safe",
+            "Reuse active model downloads and reserve conflicting output paths",
+            "Reserve voice setup jobs before dispatch and serialize TTS and ComfyUI starts",
+            "Stage model and Piper downloads before publishing complete files",
+            "Retry interrupted installer voice transfers and reject HTTP error pages",
+        ]
+    },
     {
         "version": "0.5.3",
         "date": "2026-10-25",

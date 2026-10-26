@@ -187,14 +187,17 @@ mkdir -p "$PIPER_DIR"
 _fetch_voice() {
     local name="$1" quality="$2"
     local base="https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/${name}/${quality}/en_US-${name}-${quality}"
-    if [ ! -f "$PIPER_DIR/en_US-${name}-${quality}.onnx" ]; then
-        echo "→ Downloading Piper voice ${name} (${quality})…"
-        curl -sSL "${base}.onnx" -o "$PIPER_DIR/en_US-${name}-${quality}.onnx" \
-            || echo "  (voice ${name} download failed — speech will use browser TTS)"
-    fi
-    if [ ! -f "$PIPER_DIR/en_US-${name}-${quality}.onnx.json" ]; then
-        curl -sSL "${base}.onnx.json" -o "$PIPER_DIR/en_US-${name}-${quality}.onnx.json" 2>/dev/null || true
-    fi
+    local suffix target temporary
+    for suffix in .onnx .onnx.json; do
+        target="$PIPER_DIR/en_US-${name}-${quality}${suffix}"
+        if [ -f "$target" ]; then continue; fi
+        echo "→ Downloading Piper voice ${name} (${quality}${suffix})…"
+        temporary=$(mktemp "${target}.part.XXXXXX") || continue
+        if ! curl -fsSL "${base}${suffix}" -o "$temporary" || ! mv -f "$temporary" "$target"; then
+            rm -f "$temporary"
+            echo "  (voice ${name} download failed — speech will use browser TTS)"
+        fi
+    done
 }
 _fetch_voice "lessac" "high"
 _fetch_voice "lessac" "medium"

@@ -883,7 +883,11 @@ async function startGeneration() {
 
 async function stopGeneration() {
   if (!settingsBookId) return;
-  await fetch(`/api/tts/stop/${settingsBookId}`, { method: 'POST' });
+  try {
+    const r = await fetch(`/api/tts/stop/${encodeURIComponent(settingsBookId)}`, { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok || d.error) { showToast(d.error || 'Could not stop audio generation'); return; }
+  } catch (e) { showToast(friendlyError(e)); return; }
   if (pollInterval) { clearInterval(pollInterval); isGenerating = false; pollInterval = null; }
   if (currentBook === settingsBookId) hideGenBanner();
   loadBooks();

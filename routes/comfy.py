@@ -1,6 +1,6 @@
 """ComfyUI image generation routes."""
 from flask import Blueprint, jsonify, request
-import json, os, shlex, shutil, signal, subprocess, time
+import json, os, shlex, shutil, signal, subprocess, threading, time
 from pathlib import Path
 from shared import _requests, COMFY_URL, COMFY_OUTPUT, BASE_DIR
 
@@ -9,6 +9,8 @@ bp = Blueprint('comfy', __name__)
 # ─── ComfyUI lifecycle (start/stop from the UI — no SSH needed) ───
 COMFY_PID_FILE = BASE_DIR / 'comfy.pid'
 COMFY_LOG_FILE = BASE_DIR / 'comfy.log'
+_comfy_lock = threading.Lock()
+_comfy_process = None
 
 
 def _comfy_strategy() -> tuple:
@@ -77,8 +79,16 @@ def comfy_models():
 @bp.route('/api/comfy/start', methods=['POST'])
 def comfy_start():
     """Start ComfyUI with whatever launcher this machine has."""
+    with _comfy_lock:
+        return _comfy_start()
+
+
+def _comfy_start():
+    global _comfy_process
     if _comfy_online():
         return jsonify({'ok': True, 'message': 'ComfyUI is already running'})
+    if _comfy_process is not None and _comfy_process.poll() is None:
+        return jsonify({'ok': True, 'message': 'ComfyUI is starting'})
 
     strategy, argv = _comfy_strategy()
     if not argv:
@@ -94,16 +104,16 @@ def comfy_start():
             subprocess.run(argv, capture_output=True, text=True, timeout=30)
         else:
             # Detached launch, output to comfy.log so the UI can show it
-            log_f = open(COMFY_LOG_FILE, 'ab')
             cwd = None
             if strategy == 'main.py':
                 cwd = str(Path(argv[1]).parent)
-            proc = subprocess.Popen(
-                argv, cwd=cwd, start_new_session=True,
-                stdout=log_f, stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL,
-            )
-            COMFY_PID_FILE.write_text(str(proc.pid))
+            with open(COMFY_LOG_FILE, 'ab') as log_f:
+                _comfy_process = subprocess.Popen(
+                    argv, cwd=cwd, start_new_session=True,
+                    stdout=log_f, stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL,
+                )
+            COMFY_PID_FILE.write_text(str(_comfy_process.pid))
     except OSError as e:
         return jsonify({'error': f'could not start ComfyUI: {e}'}), 500
 
@@ -115,6 +125,26 @@ def comfy_start():
 @bp.route('/api/comfy/stop', methods=['POST'])
 def comfy_stop():
     """Stop ComfyUI if DeCloud started it (or a systemd unit exists)."""
+    with _comfy_lock:
+        return _comfy_stop()
+
+
+def _comfy_stop():
+    global _comfy_process
+    if _comfy_process is not None:
+        try:
+            if _comfy_process.poll() is None:
+                _comfy_process.terminate()
+                try:
+                    _comfy_process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    _comfy_process.kill()
+                    _comfy_process.wait(timeout=5)
+            _comfy_process = None
+            COMFY_PID_FILE.unlink(missing_ok=True)
+            return jsonify({'ok': True, 'message': 'ComfyUI stopped'})
+        except (OSError, subprocess.TimeoutExpired) as e:
+            return jsonify({'error': f'could not stop ComfyUI: {e}'}), 500
     strategy, _ = _comfy_strategy()
     if strategy == 'systemd':
         subprocess.run(['systemctl', '--user', 'stop', 'comfyui'],

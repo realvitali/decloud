@@ -500,7 +500,8 @@ def _tts_installed(engine_id):
     engine = TTS_ENGINES.get(engine_id)
     if not engine or engine['engine'] == 'browser':
         return True
-    return bool(engine['model']) and os.path.exists(engine['model'])
+    return bool(engine['model']) and os.path.isfile(engine['model']) and \
+        os.path.isfile(engine['model'] + '.json')
 
 
 def _whisper_available():
@@ -632,6 +633,21 @@ def _set_job(job_id, state, message):
         _setup_jobs[job_id] = {'state': state, 'message': message, 'ts': time.time()}
 
 
+def _start_setup_job(job_id, target, *args):
+    with _setup_lock:
+        job = _setup_jobs.get(job_id, {})
+        if job.get('state') == 'running':
+            return jsonify({'status': 'running', 'job': job_id,
+                            'message': job['message']}), 202
+        _setup_jobs[job_id] = {'state': 'running', 'message': 'Starting…', 'ts': time.time()}
+    try:
+        threading.Thread(target=target, args=(job_id, *args), daemon=True).start()
+    except (RuntimeError, OSError) as e:
+        _set_job(job_id, 'error', 'Could not start setup: ' + str(e))
+        return jsonify({'error': 'could not start setup', 'job': job_id}), 500
+    return jsonify({'status': 'started', 'job': job_id}), 202
+
+
 def _valid_model_name(name):
     return bool(re.match(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,127}(:[A-Za-z0-9._-]+)?$', name))
 
@@ -682,12 +698,7 @@ def _run_ollama_pull(job_id, model):
 @bp.route('/api/voice/ollama/install', methods=['POST'])
 @limiter.limit("5 per hour")
 def voice_ollama_install():
-    job_id = 'install_ollama'
-    with _setup_lock:
-        if _setup_jobs.get(job_id, {}).get('state') == 'running':
-            return jsonify({'status': 'running', 'message': _setup_jobs[job_id]['message']}), 202
-    threading.Thread(target=_run_ollama_install, args=(job_id,), daemon=True).start()
-    return jsonify({'status': 'started', 'job': job_id}), 202
+    return _start_setup_job('install_ollama', _run_ollama_install)
 
 
 @bp.route('/api/voice/ollama/pull', methods=['POST'])
@@ -699,12 +710,8 @@ def voice_ollama_pull():
     model = (data.get('model') or '').strip()
     if not _valid_model_name(model):
         return jsonify({'error': 'invalid model name'}), 400
-    job_id = 'pull_' + re.sub(r'[^A-Za-z0-9_-]', '_', model)
-    with _setup_lock:
-        if _setup_jobs.get(job_id, {}).get('state') == 'running':
-            return jsonify({'status': 'running', 'job': job_id}), 202
-    threading.Thread(target=_run_ollama_pull, args=(job_id, model), daemon=True).start()
-    return jsonify({'status': 'started', 'job': job_id}), 202
+    job_id = 'pull_' + model
+    return _start_setup_job(job_id, _run_ollama_pull, model)
 
 
 # ─── Piper voice model download (one-click install of a missing voice) ──
@@ -722,16 +729,30 @@ def _run_voice_download(job_id, engine_id):
     if not engine or engine['engine'] == 'browser' or not base:
         _set_job(job_id, 'done', 'Nothing to download')
         return
+    if _tts_installed(engine_id):
+        _set_job(job_id, 'done', f'{engine_id} is already installed')
+        return
     model_path = engine['model']
     _set_job(job_id, 'running', f'Downloading {engine_id} voice…')
     try:
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
-        for suffix in ('.onnx', '.onnx.json'):
-            with _requests.get(base + suffix, stream=True, timeout=300) as r:
-                r.raise_for_status()
-                with open(model_path + suffix, 'wb') as f:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        f.write(chunk)
+        # Only fill missing files; an install retry must not replace a
+        # working model/config pair. Stage all transfers before publishing.
+        targets = (('.onnx.json', model_path + '.json'), ('.onnx', model_path))
+        with tempfile.TemporaryDirectory(prefix='.decloud-voice-',
+                                         dir=os.path.dirname(model_path)) as scratch:
+            for suffix, target in targets:
+                if os.path.isfile(target):
+                    continue
+                with _requests.get(base + suffix, stream=True, timeout=300) as r:
+                    r.raise_for_status()
+                    with open(os.path.join(scratch, 'voice' + suffix), 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=8192):
+                            f.write(chunk)
+            for suffix, target in targets:
+                staged = os.path.join(scratch, 'voice' + suffix)
+                if os.path.isfile(staged):
+                    os.replace(staged, target)
         _set_job(job_id, 'done', f'{engine_id} is ready')
     except Exception as e:
         _set_job(job_id, 'error', 'Voice download failed: ' + str(e))
@@ -747,8 +768,4 @@ def voice_tts_install():
     if TTS_ENGINES[engine_id]['engine'] == 'browser':
         return jsonify({'status': 'done', 'message': 'Browser voice needs no install'})
     job_id = 'voice_' + engine_id
-    with _setup_lock:
-        if _setup_jobs.get(job_id, {}).get('state') == 'running':
-            return jsonify({'status': 'running', 'job': job_id}), 202
-    threading.Thread(target=_run_voice_download, args=(job_id, engine_id), daemon=True).start()
-    return jsonify({'status': 'started', 'job': job_id}), 202
+    return _start_setup_job(job_id, _run_voice_download, engine_id)
