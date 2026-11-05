@@ -40,7 +40,7 @@ window.fetch = function(input, init) {
 
 // ─── Shared helpers (single source of truth) ──────────────────────
 // escapeHtml escapes quotes so it is safe in quoted HTML attribute values.
-// It is NOT safe inside inline onclick="fn('${...}')" strings: the browser
+// It is NOT safe inside inline handler strings (there are none any more: see handlers.js): the browser
 // decodes &#39; back to ' before running the JS. Use data-* + this.dataset.
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
@@ -86,6 +86,31 @@ function appConfirm(message, opts) {
   });
 }
 
+// Promise-based text prompt (replaces native prompt()). Resolves the text, or null on cancel.
+function appPrompt(message, value) {
+  return new Promise(function(resolve) {
+    var wrap = document.createElement('div');
+    wrap.className = 'app-confirm-overlay';
+    wrap.innerHTML = '<form class="app-confirm-card" role="dialog" aria-modal="true">' +
+      '<p class="app-confirm-msg"></p><input class="app-prompt-input" autocomplete="off" spellcheck="false" maxlength="255">' +
+      '<div class="app-confirm-actions"><button type="button" class="app-confirm-cancel">Cancel</button>' +
+      '<button type="submit" class="app-confirm-ok">OK</button></div></form>';
+    wrap.querySelector('.app-confirm-msg').textContent = message;
+    var input = wrap.querySelector('.app-prompt-input');
+    input.value = value || '';
+    function done(v) { document.removeEventListener('keydown', onKey); wrap.remove(); resolve(v); }
+    function onKey(e) { if (e.key === 'Escape') done(null); }
+    wrap.querySelector('.app-confirm-cancel').onclick = function() { done(null); };
+    wrap.querySelector('form').onsubmit = function(e) { e.preventDefault(); done(input.value); };
+    wrap.onclick = function(e) { if (e.target === wrap) done(null); };
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(wrap);
+    input.focus();
+    var dot = input.value.lastIndexOf('.');   // select the name, not the extension
+    input.setSelectionRange(0, dot > 0 ? dot : input.value.length);
+  });
+}
+
 // Keyboard: Enter/Space activates non-<button> elements marked role="button"
 document.addEventListener('keydown', function(e) {
   var t = e.target;
@@ -117,7 +142,7 @@ function showCrashRecovery(err) {
     '<div style="font-size:48px;margin-bottom:16px">X</div>' +
     '<h2 style="margin:0 0 8px;font-size:20px">DeCloud crashed</h2>' +
     '<p style="margin:0 0 20px;opacity:0.7;font-size:14px;max-width:320px">Something went wrong loading the dashboard. A Force Refresh will clear the cache and reload.</p>' +
-    '<button onclick="forceRefresh()" style="background:#6366f1;color:white;border:none;padding:14px 28px;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:12px">Force Refresh</button>' +
+    '<button data-onclick="c6ac63a3" style="background:#6366f1;color:white;border:none;padding:14px 28px;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:12px">Force Refresh</button>' +
     '<details style="margin-top:16px;opacity:0.5;font-size:12px;max-width:400px;word-break:break-word"><summary>Error details</summary><pre style="text-align:left;white-space:pre-wrap;padding:8px">' +
     escapeHtml(err && err.stack ? err.stack : (err && err.message ? err.message : String(err))) +
     '</pre></details>';

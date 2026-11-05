@@ -124,8 +124,22 @@ class TestAuth:
         monkeypatch.setattr(shared, 'DECLOUD_PIN', '')
         monkeypatch.setattr(shared, 'INSECURE_OPEN', True)
         monkeypatch.setattr(auth_module, 'DECLOUD_PIN', '')
-        resp = client.post('/api/auth/login', json={'pin': ''})
+        resp = client.post('/api/auth/login', json={'pin': ''}, headers={'Origin': 'http://localhost'})
         assert resp.status_code == 200
+
+    def test_open_mode_refuses_other_sites_and_originless_posts(self, client, monkeypatch):
+        # audit 2026-11-04: with no passcode, Origin is the only thing between a web page and the API
+        import shared
+        monkeypatch.setattr(shared, 'DECLOUD_PIN', '')
+        monkeypatch.setattr(shared, 'INSECURE_OPEN', True)
+        for hdrs in ({'Origin': 'https://evil.example'}, {}, {'Origin': 'null'}):
+            r = client.post('/api/comfy/stop', data='x=1', content_type='text/plain', headers=hdrs)
+            assert r.status_code == 403 and r.get_json()['code'] == 'BAD_ORIGIN'
+
+
+def test_pin_mode_refuses_a_foreign_origin_even_with_a_valid_session(client, auth_headers):
+    r = client.post('/api/lab/discover', headers={**auth_headers, 'Origin': 'https://evil.example'})
+    assert r.status_code == 403
 
 
 def test_lab_pairing_code_roundtrip():

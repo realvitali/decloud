@@ -53,7 +53,9 @@ def _save_session(token):
     _sess_cache['v'] = token
     try:
         SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
-        SESSION_FILE.write_text(json.dumps({'session': token}))
+        fd = os.open(SESSION_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)   # never briefly readable
+        with os.fdopen(fd, 'w') as f:
+            f.write(json.dumps({'session': token}))
         SESSION_FILE.chmod(0o600)
     except Exception:
         pass

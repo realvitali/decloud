@@ -46,6 +46,8 @@ def list_books():
             if f.stat().st_size > 3000:
                 source_files.append((f, 'txt'))
 
+        pdf_by_id = {f.stem: f for f, kind in source_files if kind == 'pdf'}
+
         # Deduplicate by book_id (prefer JSON source over PDF if same stem)
         seen_ids = set()
         for f, ftype in source_files:
@@ -108,9 +110,43 @@ def list_books():
                 else:
                     chapters.append({'index': i, 'status': 'pending'})
 
+            author, length_pages = '', None
+            pdf = pdf_by_id.get(book_id)
+            if pdf:
+                try:
+                    import fitz
+                    with fitz.open(str(pdf)) as doc:
+                        author = str((doc.metadata or {}).get('author') or '').strip()[:160]
+                        if author.lower() in ('owner', 'user', 'unknown', 'admin', 'administrator'):
+                            author = ''
+                        length_pages = len(doc)
+                except Exception:
+                    pass
+            elif ftype == 'txt':
+                try:
+                    length_pages = max(1, (len(f.read_text(encoding='utf-8', errors='replace').split()) + 249) // 250)
+                except OSError:
+                    pass
+            elif ftype == 'json':
+                try:
+                    chapters_data = json.loads(f.read_text(encoding='utf-8'))
+                    if isinstance(chapters_data, list):
+                        words = sum(len(str(ch.get('text', '')).split()) for ch in chapters_data if isinstance(ch, dict))
+                        length_pages = max(1, (words + 249) // 250)
+                except (OSError, ValueError):
+                    pass
+            last_opened = 0
+            try:
+                position = json.loads((AUDIO_DIR / f'{book_id}_position.json').read_text())
+                last_opened = float(position.get('last_opened', position.get('updated', 0)))
+            except (OSError, ValueError, TypeError):
+                pass
             books.append({
                 'id': book_id,
                 'title': book_id.replace('_', ' '),
+                'author': author,
+                'length_pages': length_pages,
+                'last_opened': last_opened,
                 'filename': f.name,
                 'source_type': ftype,
                 'size_mb': round(f.stat().st_size / 1024 / 1024, 1),
@@ -172,7 +208,14 @@ def get_book_text():
         elif pdf_matches:
             pdf_path = pdf_matches[0]
         else:
-            return jsonify({'error': 'book not found'}), 404
+            text, title = shared.get_book_chapter_text(book_id, 0)
+            if not text:
+                return jsonify({'error': 'book not found'}), 404
+            if chapter_idx is not None:
+                if chapter_idx != '0':
+                    return jsonify({'error': 'chapter out of range'}), 404
+                return jsonify({'text': text, 'chapter': 0, 'title': title, 'total_chapters': 1})
+            return jsonify({'chapters': [{'start': 0, 'title': title, 'level': 1}], 'total_pages': 1})
     else:
         return jsonify({'error': 'need book or file param'}), 400
 
@@ -223,6 +266,8 @@ def book_settings(book_id):
         settings = json.loads(settings_file.read_text())
     if 'voice' in data and data['voice'] in VOICES:
         settings['voice'] = data['voice']
+    if type(data.get('font_size')) is int and -2 <= data['font_size'] <= 2:
+        settings['font_size'] = data['font_size']
     settings_file.write_text(json.dumps(settings, indent=2))
     return jsonify(settings)
 
@@ -256,6 +301,9 @@ def book_position(book_id):
 
     now = _time.time()
     updated = False
+    opened = data.get('opened') is True
+    if opened:
+        current['last_opened'] = now
 
     def _merge_section(key, allowed_keys):
         nonlocal updated
@@ -287,8 +335,9 @@ def book_position(book_id):
             current['mode'] = data['mode']
             updated = True
 
-    if updated:
-        current['updated'] = now
+    if updated or opened:
+        if updated:
+            current['updated'] = now
         try:
             pos_file.write_text(json.dumps(current, indent=2))
         except OSError:
@@ -327,91 +376,122 @@ def audio_stream(book_id, chapter_idx):
 
 @bp.route('/api/audio/<book_id>/cover')
 def audio_cover(book_id):
-    cover_file = AUDIO_DIR / f'{book_id}_cover.png'
-    if cover_file.exists():
-        return send_file(str(cover_file), mimetype='image/png')
-    # Auto-generate cover on the fly
-    _ensure_book_cover(book_id)
-    if cover_file.exists():
+    cover_file = _ensure_book_cover(book_id)
+    if cover_file and cover_file.exists():
         return send_file(str(cover_file), mimetype='image/png')
     return '', 404
 
 def _ensure_book_cover(book_id):
-    """Auto-generate a cover image for a book if missing."""
+    """Use a PDF's illustrated first page, or generate a hardcover image.
+
+    The new fallback has its own cache name so older generated covers are not
+    overwritten. No author is invented when the source lacks metadata.
+    """
     import hashlib
-    cover_file = AUDIO_DIR / f'{book_id}_cover.png'
-    if cover_file.exists():
-        return
-    # Try extracting first page from PDF
-    pdf_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.pdf'))
+    title, author = book_id.replace('_', ' ').replace('-', ' '), ''
+    if title.islower():
+        title = title.title()
+    pdf_matches = [f for f in shared.BOOKS_DIR.rglob('*.pdf') if f.stem == book_id]
     if pdf_matches:
         try:
             import fitz
             with fitz.open(str(pdf_matches[0])) as doc:
-                doc[0].get_pixmap(matrix=fitz.Matrix(2, 2)).save(str(cover_file))
-            return
+                metadata = doc.metadata or {}
+                pdf_title = str(metadata.get('title') or '').strip()
+                if (pdf_title and not pdf_title.lower().startswith(('microsoft word', 'untitled'))
+                        and not pdf_title.lower().endswith(('.doc', '.docx'))):
+                    title = pdf_title[:200]
+                author = str(metadata.get('author') or '').strip()[:160]
+                if author.lower() in ('owner', 'user', 'unknown', 'admin', 'administrator'):
+                    author = ''
+                page = doc[0] if len(doc) else None
+                # A small publisher logo is not cover artwork. Only use an
+                # image when it occupies a substantial part of the page.
+                has_artwork = bool(page and any(
+                    (fitz.Rect(image['bbox']) & page.rect).get_area() >= page.rect.get_area() * 0.3
+                    for image in page.get_image_info() if image.get('bbox')
+                ))
+                if has_artwork:
+                    cover_file = AUDIO_DIR / f'{book_id}_cover.png'
+                    if not cover_file.exists():
+                        # cap the render at ~1200 px wide: a hostile PDF can declare a huge page
+                        scale = max(0.1, min(2.0, 1200 / max(1.0, page.rect.width)))
+                        page.get_pixmap(matrix=fitz.Matrix(scale, scale)).save(str(cover_file))
+                    return cover_file
         except Exception:
             pass
-    # Generate a colored placeholder
+    cover_file = AUDIO_DIR / f'{book_id}_hardcover_v2.png'
+    if cover_file.exists():
+        return cover_file
     try:
         from PIL import Image, ImageDraw, ImageFont
         h = int(hashlib.md5(book_id.encode()).hexdigest(), 16)
-        r = max(40, min(200, (h >> 8) & 0xFF))
-        g = max(40, min(200, (h >> 16) & 0xFF))
-        b = max(40, min(200, (h >> 24) & 0xFF))
+        palettes = [(55, 48, 43), (40, 55, 50), (53, 46, 61), (67, 42, 40), (39, 49, 65)]
         size = (400, 600)
-        img = Image.new('RGB', size, (r, g, b))
+        img = Image.new('RGB', size, palettes[h % len(palettes)])
         draw = ImageDraw.Draw(img)
-        overlay = Image.new('RGBA', size, (0, 0, 0, 0))
-        draw_o = ImageDraw.Draw(overlay)
-        for y in range(size[1] * 2 // 3, size[1]):
-            alpha = int((y - size[1] * 2 // 3) / (size[1] // 3) * 160)
-            draw_o.line([(0, y), (size[0], y)], fill=(0, 0, 0, alpha))
-        img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
-        draw = ImageDraw.Draw(img)
-        title = book_id.replace('_', ' ')
-        # Cross-platform font: try common system fonts, then Pillow's
-        # bundled default (which supports a size parameter on Pillow >= 10.1).
-        font = None
-        font_candidates = [
-            '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',       # Debian/Ubuntu/Fedora
-            '/System/Library/Fonts/Supplemental/Arial Bold.ttf',          # macOS
-            'C:/Windows/Fonts/arialbd.ttf',                               # Windows
-        ]
-        for cand in font_candidates:
+        draw.rectangle((0, 0, 20, 599), fill=(25, 25, 28))
+        gold = (203, 184, 140)
+        draw.rectangle((29, 22, 380, 577), outline=gold, width=2)
+        draw.rectangle((36, 29, 373, 570), outline=gold, width=1)
+
+        def font_at(size):
+            candidates = ['/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf',
+                          '/System/Library/Fonts/Supplemental/Georgia.ttf',
+                          'C:/Windows/Fonts/georgia.ttf']
+            for candidate in candidates:
+                try:
+                    return ImageFont.truetype(candidate, size)
+                except OSError:
+                    continue
             try:
-                font = ImageFont.truetype(cand, 28)
-                break
-            except Exception:
-                continue
-        if font is None:
-            try:
-                font = ImageFont.load_default(size=28)
+                return ImageFont.load_default(size=size)
             except TypeError:
-                font = ImageFont.load_default()
-        words = title.split()
-        lines = []
-        line = ""
-        for w in words:
-            test = (line + " " + w).strip()
-            bbox = draw.textbbox((0, 0), test, font=font)
-            if bbox[2] - bbox[0] > size[0] - 40:
+                return ImageFont.load_default()
+
+        def wrap(text, font, max_width):
+            lines, line = [], ''
+            for word in text.split():
+                candidate = (line + ' ' + word).strip()
+                if draw.textlength(candidate, font=font) <= max_width:
+                    line = candidate
+                    continue
                 if line:
                     lines.append(line)
-                line = w
-            else:
-                line = test
-        if line:
-            lines.append(line)
-        y = size[1] - 30 - len(lines) * 36
-        for l in lines:
-            bbox = draw.textbbox((0, 0), l, font=font)
-            x = (size[0] - (bbox[2] - bbox[0])) // 2
-            draw.text((x, y), l, fill=(255, 255, 255), font=font)
-            y += 36
+                line = ''
+                for char in word:
+                    if line and draw.textlength(line + char, font=font) > max_width:
+                        lines.append(line)
+                        line = ''
+                    line += char
+            if line:
+                lines.append(line)
+            return lines
+
+        for font_size in range(30, 12, -2):
+            font = font_at(font_size)
+            lines = wrap(title, font, 295)
+            if len(lines) * (font_size + 10) <= 230:
+                break
+        author_font = font_at(18)
+        author_lines = wrap(author, author_font, 285) if author else []
+        spacing = font_size + 10
+        total_height = len(lines) * spacing + (28 + len(author_lines) * 25 if author_lines else 0)
+        y = max(65, (size[1] - total_height) // 2)
+        for line in lines:
+            width = draw.textlength(line, font=font)
+            draw.text(((410 - width) / 2, y), line, fill=(240, 226, 192), font=font)
+            y += spacing
+        if author_lines:
+            y += 28
+            for line in author_lines:
+                width = draw.textlength(line, font=author_font)
+                draw.text(((410 - width) / 2, y), line, fill=gold, font=author_font)
+                y += 25
         img.save(str(cover_file))
+        return cover_file
     except Exception:
-        pass
+        return None
 
 # ─── API: TTS Generation ─────────────────────────────────────
 @bp.route('/api/tts/status/<book_id>')
@@ -422,65 +502,42 @@ def tts_status(book_id):
         progress_str = lock_file.read_text().strip()
         if progress_str == '-1':  # worker crashed or was stopped
             return jsonify({'status': 'error', 'error': 'Audio generation failed or was stopped'})
-        progress = int(progress_str) if progress_str.isdigit() else 0
-        # Count completed chapters from metadata
-        done_chapters = 0
-        total_chapters = 0
-        eta = None
-        if json_file.exists():
-            try:
-                meta = json.loads(json_file.read_text())
-                done_chapters = len(meta.get('chapters', []))
-                total_chapters = meta.get('total_chapters', done_chapters)
-                # If total_chapters equals done_chapters, the worker hasn't set the real total yet
-                # Use the source JSON to get the real total
-                if total_chapters <= done_chapters:
-                    source_json_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.json'))
-                    source_json = source_json_matches[0] if source_json_matches else None
-                    if source_json and source_json.exists():
-                        src = json.loads(source_json.read_text())
-                        total_chapters = len(src)
-            except:
-                pass
-        # Estimate ETA from lock file mtime + progress
+        progress = max(0, min(99, int(progress_str))) if progress_str.isdigit() else 0
+        eta_seconds = None
         import time
-        if progress > 0 and done_chapters > 0:
-            lock_age = time.time() - lock_file.stat().st_ctime
-            if lock_age > 5 and done_chapters > 0:
-                per_chapter = lock_age / done_chapters
-                remaining = total_chapters - done_chapters
-                eta_seconds = per_chapter * remaining
-                eta_mins = int(eta_seconds // 60)
-                eta_secs = int(eta_seconds % 60)
-                eta = f"{eta_mins}m {eta_secs}s" if eta_mins > 0 else f"{eta_secs}s"
-        return jsonify({
-            'status': 'converting',
-            'progress': progress_str,
-            'done_chapters': done_chapters,
-            'total_chapters': total_chapters,
-            'eta': eta
-        })
+        try:
+            started = float((AUDIO_DIR / f'{book_id}.tts_started').read_text())
+            elapsed = time.time() - started
+            if 0 < progress < 100 and elapsed > 0:
+                eta_seconds = max(0, round(elapsed * (100 - progress) / progress))
+        except (OSError, ValueError):
+            pass
+        return jsonify({'status': 'converting', 'progress': progress, 'eta_seconds': eta_seconds})
     if json_file.exists():
-        return jsonify({'status': 'ready'})
-    return jsonify({'status': 'not_started'})
+        try:
+            metadata = json.loads(json_file.read_text())
+            chapters = metadata.get('chapters') or []
+            audio_present = all(
+                isinstance(chapter, dict) and type(chapter.get('index', idx)) is int
+                and 0 <= chapter.get('index', idx) < 10000
+                and (AUDIO_DIR / f"{book_id}_chapter_{chapter.get('index', idx)}.mp3").is_file()
+                for idx, chapter in enumerate(chapters)
+            )
+            if metadata.get('has_audio') and chapters and audio_present:
+                return jsonify({'status': 'ready', 'progress': 100, 'eta_seconds': 0})
+        except (OSError, ValueError, AttributeError):
+            return jsonify({'status': 'error', 'error': 'Could not read audiobook data'})
+    return jsonify({'status': 'not_started', 'progress': 0, 'eta_seconds': None})
 
 @bp.route('/api/tts/start/<book_id>', methods=['POST'])
 def tts_start(book_id):
     """Start TTS generation with the book's configured voice."""
-    # Check for JSON source first (search subfolders)
-    json_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.json'))
-    pdf_matches = list(shared.BOOKS_DIR.rglob(f'{book_id}.pdf'))
-    json_source = json_matches[0] if json_matches else (shared.BOOKS_DIR / f'{book_id}.json')
-    pdf_path = pdf_matches[0] if pdf_matches else (shared.BOOKS_DIR / f'{book_id}.pdf')
-
-    if json_source.exists():
-        source_path = json_source
-        worker_script = BASE_DIR / 'tts_worker_json.py'
-    elif pdf_path.exists():
-        source_path = pdf_path
-        worker_script = BASE_DIR / 'tts_worker.py'
-    else:
+    # Match the reader's JSON, PDF, then TXT source preference exactly.
+    sources = shared.find_book_source(book_id)
+    source_path = sources.get('.json') or sources.get('.pdf') or sources.get('.txt')
+    if not source_path:
         return jsonify({'error': 'Book source not found'}), 404
+    worker_script = BASE_DIR / 'tts_worker_json.py'
 
     # Load book settings for voice
     settings_file = AUDIO_DIR / f'{book_id}_settings.json'
@@ -496,12 +553,18 @@ def tts_start(book_id):
     if lock_file.exists() and lock_file.read_text().strip() != '-1':
         return jsonify({'error': 'Audio is already being generated for this book'}), 409
     lock_file.write_text('0')
+    import time
+    (AUDIO_DIR / f'{book_id}.tts_started').write_text(str(time.time()))
     import sys as _sys
-    subprocess.Popen(
-        [_sys.executable, str(worker_script), str(source_path), str(AUDIO_DIR), book_id, voice_id],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
+    try:
+        subprocess.Popen(
+            [_sys.executable, str(worker_script), str(source_path), str(AUDIO_DIR), book_id, voice_id],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    except OSError:
+        lock_file.write_text('-1')
+        return jsonify({'error': 'Could not start audio generation'}), 500
     return jsonify({'status': 'started', 'voice': voice_id})
 
 @bp.route('/api/tts/stop/<book_id>', methods=['POST'])
@@ -633,4 +696,3 @@ def ask_question():
         return _llm_failed(answer)
 
     return jsonify({'answer': answer})
-

@@ -2,7 +2,6 @@
 from flask import Blueprint, jsonify, request, send_file, current_app
 import subprocess
 from pathlib import Path
-import random as _random
 import shutil as _shutil
 from shared import (
     format_size,
@@ -38,13 +37,15 @@ def lego_browse():
                 try:
                     is_dir = entry.is_dir()
                     rel_path = str(Path(entry.path).relative_to(shared.FILES_DIR))
+                    mtime = entry.stat().st_mtime
                     if is_dir:
                         all_items.append({
                             'name': entry.name,
                             'is_dir': True,
                             'size': 0,
                             'size_human': '',
-                            'modified': '',
+                            'modified': _time.strftime('%Y-%m-%d %H:%M', _time.localtime(mtime)),
+                            'mtime': mtime,
                             'ext': '',
                             'path': rel_path,
                             'child_count': -1,
@@ -60,6 +61,7 @@ def lego_browse():
                             'size': st.st_size,
                             'size_human': format_size(st.st_size),
                             'modified': _time.strftime('%Y-%m-%d %H:%M', _time.localtime(st.st_mtime)),
+                            'mtime': st.st_mtime,
                             'ext': Path(entry.name).suffix.lower().lstrip('.'),
                             'path': rel_path,
                             'child_count': 0,
@@ -72,8 +74,12 @@ def lego_browse():
     except PermissionError:
         return jsonify({'error': 'permission denied'}), 403
 
-    # Sort: folders first, then alpha
-    all_items.sort(key=lambda x: (x['_sort_dir'], x['_sort_name']))
+    # Sort: folders first, then by name (default), date or size
+    sort = request.args.get('sort', 'name')
+    desc = request.args.get('order') == 'desc'
+    keyf = {'date': lambda x: x['mtime'], 'size': lambda x: x['size']}.get(sort, lambda x: x['_sort_name'])
+    all_items.sort(key=keyf, reverse=desc)
+    all_items.sort(key=lambda x: x['_sort_dir'])   # stable: keeps the order within folders and files
     total = len(all_items)
 
     # Paginate
@@ -166,7 +172,7 @@ def lego_thumbnail():
                     thumb = _generate_thumbnail(child)
                     if thumb and thumb.exists():
                         resp = send_file(str(thumb), mimetype='image/webp')
-                        resp.headers['Cache-Control'] = 'public, max-age=86400'
+                        resp.headers['Cache-Control'] = 'private, max-age=86400'
                         return resp
         except (PermissionError, OSError):
             pass
@@ -180,7 +186,7 @@ def lego_thumbnail():
         thumb = _generate_thumbnail(target)
         if thumb and thumb.exists():
             resp = send_file(str(thumb), mimetype='image/webp')
-            resp.headers['Cache-Control'] = 'public, max-age=86400'
+            resp.headers['Cache-Control'] = 'private, max-age=86400'
             return resp
         # Fallback to raw if thumbnail generation fails
         return send_file(str(target), mimetype=f'image/{ext.lstrip(".")}')
@@ -188,168 +194,145 @@ def lego_thumbnail():
         thumb = _generate_thumbnail(target)
         if thumb and thumb.exists():
             resp = send_file(str(thumb), mimetype='image/webp')
-            resp.headers['Cache-Control'] = 'public, max-age=86400'
+            resp.headers['Cache-Control'] = 'private, max-age=86400'
             return resp
         return jsonify({'error': 'cannot thumbnail heic'}), 400
     return jsonify({'error': 'not an image'}), 400
 
 
-# ─── API: Lego Swipe Mode ──────────────────────────────────
+# ─── File operations: upload, new folder, rename, delete ─────────
+# Every target is resolved inside FILES_DIR; the last path part is NOT
+# resolved, so a symlink is renamed/deleted itself, never what it points to.
+import os as _os
+import re as _re
+import time as _time
+from datetime import datetime as _dt
+from urllib.parse import quote as _quote
 
-@bp.route('/api/lego/random_image')
-def lego_random_image():
-    """Get a random image file from a folder (non-recursive, fast). Query: path=<relative>"""
-    subpath = request.args.get('path', '')
-    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/')) if subpath else shared.FILES_DIR
-    if not target.exists() or not target.is_dir():
-        return jsonify({'error': 'not found'}), 404
 
-    img_exts = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic', '.heif'}
-    images = []
+def _valid_name(name):
+    """A plain file or folder name: no separators, no hidden/dot names, no control characters."""
+    return (isinstance(name, str) and 0 < len(name.encode()) <= 255 and name == name.strip()
+            and not name.startswith('.') and not _re.search(r'[/\\\x00-\x1f\x7f]', name))
+
+
+def _locate(subpath, allow_root=False):
+    """Path for a relative Files path, or None if it is malformed or escapes Files."""
+    root = shared.FILES_DIR.resolve()
+    parts = [p for p in str(subpath or '').split('/') if p]
+    if any(p in ('.', '..') or '\0' in p for p in parts):
+        return None
+    if not parts:
+        return root if allow_root else None
     try:
-        for entry in target.iterdir():
-            if entry.is_file() and entry.suffix.lower() in img_exts:
-                images.append(entry)
-    except (PermissionError, OSError):
-        pass
-
-    if not images:
-        return jsonify({'error': 'no images found'}), 404
-
-    pick = _random.choice(images)
-    return jsonify({
-        'path': str(pick.relative_to(shared.FILES_DIR)),
-        'name': pick.name,
-        'total_images': len(images),
-    })
+        parent = root.joinpath(*parts[:-1]).resolve()
+    except (OSError, ValueError):
+        return None
+    if not parent.is_relative_to(root):
+        return None
+    return parent / parts[-1]
 
 
-@bp.route('/api/lego/trash', methods=['POST'])
-def lego_trash():
-    """Move a file to /file types/trash/ inside Files."""
+def _unique(folder, name):
+    """name, or "name (2).ext" … when it is taken."""
+    stem, ext = _os.path.splitext(name)
+    cand, i = folder / name, 2
+    while _os.path.lexists(cand):
+        cand, i = folder / f'{stem} ({i}){ext}', i + 1
+    return cand
+
+
+def _trash_dir():
+    """This computer's trash, so a delete can be undone from the desktop. None on Windows."""
+    import platform
+    if platform.system() == 'Darwin':
+        return Path.home() / '.Trash'
+    if platform.system() == 'Linux':
+        return Path(_os.environ.get('XDG_DATA_HOME') or Path.home() / '.local' / 'share') / 'Trash'
+    return None
+
+
+def _move_to_trash(target):
+    import platform
+    trash = _trash_dir()
+    if trash is None:
+        return False
+    files, info = (trash, None) if platform.system() == 'Darwin' else (trash / 'files', trash / 'info')
+    files.mkdir(parents=True, exist_ok=True)
+    dest = _unique(files, target.name)
+    if info is not None:   # freedesktop.org trash: an .trashinfo file lets the desktop restore it
+        info.mkdir(parents=True, exist_ok=True)
+        (info / (dest.name + '.trashinfo')).write_text(
+            f'[Trash Info]\nPath={_quote(str(target))}\nDeletionDate={_dt.now().strftime("%Y-%m-%dT%H:%M:%S")}\n')
+    _shutil.move(str(target), str(dest))
+    return True
+
+
+@bp.route('/api/files/mkdir', methods=['POST'])
+def files_mkdir():
     data = request.get_json(silent=True) or {}
-    subpath = data.get('path', '')
-    if not subpath:
-        return jsonify({'error': 'path required'}), 400
-
-    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
-    files_root_resolved = shared.FILES_DIR.resolve()
-    target_resolved = target.resolve()
-
-    if not str(target_resolved).startswith(str(files_root_resolved) + '/') and target_resolved != files_root_resolved:
-        return jsonify({'error': 'path outside Files'}), 403
-    if not target_resolved.is_file():
-        return jsonify({'error': 'can only trash files'}), 400
-    if target.is_symlink():
-        return jsonify({'error': 'cannot trash symlinks'}), 400
-
-    trash_dir = (shared.FILES_DIR / 'file types' / 'trash')
-    trash_dir.mkdir(parents=True, exist_ok=True)
-    dest = trash_dir / target_resolved.name
-
-    if dest.exists():
-        stem = target_resolved.stem
-        suffix = target_resolved.suffix
-        i = 1
-        while dest.exists():
-            dest = trash_dir / f'{stem}_{i}{suffix}'
-            i += 1
-
-    try:
-        _shutil.move(str(target_resolved), str(dest))
-        return jsonify({'ok': True, 'moved_to': str(dest.relative_to(shared.FILES_DIR))})
-    except Exception:
-        current_app.logger.exception('[LEGO] trash failed')
-        return jsonify({'error': 'Could not move to trash'}), 500
+    folder, name = _locate(data.get('path'), allow_root=True), data.get('name')
+    if folder is None or not folder.is_dir() or not _valid_name(name):
+        return jsonify({'error': 'Pick a folder name without slashes or a leading dot.'}), 400
+    target = folder / name
+    if _os.path.lexists(target):
+        return jsonify({'error': 'Something with that name is already here.'}), 409
+    target.mkdir()
+    return jsonify({'ok': True, 'path': str(target.relative_to(shared.FILES_DIR.resolve()))})
 
 
-# ─── API: Lego Shred & Poof ────────────────────────────────
-
-@bp.route('/api/lego/shred', methods=['POST'])
-def lego_shred():
-    """Securely shred a single file using shred -uvz. Locked down to one file inside Files."""
+@bp.route('/api/files/rename', methods=['POST'])
+def files_rename():
     data = request.get_json(silent=True) or {}
-    subpath = data.get('path', '')
-    if not subpath:
-        return jsonify({'error': 'path required'}), 400
-
-    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
-
-    # Hard safety checks
-    files_root_resolved = shared.FILES_DIR.resolve()
-    target_resolved = target.resolve()
-
-    # Must be inside Files (strict prefix match)
-    if not str(target_resolved).startswith(str(files_root_resolved) + '/') and target_resolved != files_root_resolved:
-        return jsonify({'error': 'path outside Files'}), 403
-
-    # Must be a file, not a directory
-    if not target_resolved.is_file():
-        return jsonify({'error': 'can only shred files, not directories'}), 400
-
-    # Must not be a symlink (prevent following links outside Files)
-    if target.is_symlink():
-        return jsonify({'error': 'cannot shred symlinks'}), 400
-
-    try:
-        result = subprocess.run(
-            ['shred', '-uvz', '-n', '3', str(target_resolved)],
-            capture_output=True, text=True, timeout=120
-        )
-        if result.returncode != 0:
-            return jsonify({'error': f'shred failed: {result.stderr.strip()}'}), 500
-        return jsonify({'ok': True, 'shredded': target_resolved.name})
-    except subprocess.TimeoutExpired:
-        return jsonify({'error': 'shred timed out'}), 500
-    except Exception:
-        current_app.logger.exception('[LEGO] shred failed')
-        return jsonify({'error': 'Could not shred file'}), 500
+    target, name = _locate(data.get('path')), data.get('name')
+    if target is None or not _os.path.lexists(target) or not _valid_name(name):
+        return jsonify({'error': 'Pick a name without slashes or a leading dot.'}), 400
+    dest = target.parent / name
+    if _os.path.lexists(dest):
+        return jsonify({'error': 'Something with that name is already here.'}), 409
+    _os.rename(target, dest)
+    return jsonify({'ok': True, 'path': str(dest.relative_to(shared.FILES_DIR.resolve()))})
 
 
-@bp.route('/api/lego/poof', methods=['POST'])
-def lego_poof():
-    """Move a file to /file types/poof/ inside Files."""
+@bp.route('/api/files/delete', methods=['POST'])
+def files_delete():
+    """Move items to this computer's trash. Where there is none (Windows), only
+    with permanent=true, which the page asks the user to confirm separately."""
     data = request.get_json(silent=True) or {}
-    subpath = data.get('path', '')
-    if not subpath:
-        return jsonify({'error': 'path required'}), 400
-
-    target = safe_join_browse(shared.FILES_DIR, *subpath.split('/'))
-
-    files_root_resolved = shared.FILES_DIR.resolve()
-    target_resolved = target.resolve()
-
-    # Must be inside Files (strict prefix match)
-    if not str(target_resolved).startswith(str(files_root_resolved) + '/') and target_resolved != files_root_resolved:
-        return jsonify({'error': 'path outside Files'}), 403
-
-    # Must be a file
-    if not target_resolved.is_file():
-        return jsonify({'error': 'can only poof files'}), 400
-
-    # Must not be a symlink
-    if target.is_symlink():
-        return jsonify({'error': 'cannot poof symlinks'}), 400
-
-    # Must not already be in the poof directory
-    poof_dir = (shared.FILES_DIR / 'file types' / 'poof')
-    poof_dir.mkdir(parents=True, exist_ok=True)
-    dest = poof_dir / target_resolved.name
-
-    # If name collision, append number
-    if dest.exists():
-        stem = target_resolved.stem
-        suffix = target_resolved.suffix
-        i = 1
-        while dest.exists():
-            dest = poof_dir / f'{stem}_{i}{suffix}'
-            i += 1
-
-    try:
-        _shutil.move(str(target_resolved), str(dest))
-        return jsonify({'ok': True, 'moved_to': str(dest.relative_to(shared.FILES_DIR))})
-    except Exception:
-        current_app.logger.exception('[LEGO] poof failed')
-        return jsonify({'error': 'Could not delete'}), 500
+    paths = data.get('paths') if isinstance(data.get('paths'), list) else [data.get('path')]
+    targets = [_locate(p) for p in paths[:200]]
+    if not targets or any(t is None or not _os.path.lexists(t) for t in targets):
+        return jsonify({'error': 'Item not found.'}), 404
+    if _trash_dir() is None and data.get('permanent') is not True:
+        return jsonify({'error': 'This computer has no trash, so deleting is permanent.', 'code': 'NO_TRASH'}), 409
+    done = 0
+    for t in targets:
+        try:
+            if _trash_dir() is not None:
+                _move_to_trash(t)
+            elif t.is_dir() and not t.is_symlink():
+                _shutil.rmtree(t)
+            else:
+                t.unlink()
+            done += 1
+        except OSError:
+            current_app.logger.exception('[FILES] delete failed')
+            return jsonify({'error': f'Could not delete {t.name}.', 'deleted': done}), 500
+    return jsonify({'ok': True, 'deleted': done, 'trash': _trash_dir() is not None})
 
 
+@bp.route('/api/files/upload', methods=['POST'])
+def files_upload():
+    folder = _locate(request.form.get('path'), allow_root=True)
+    if folder is None or not folder.is_dir():
+        return jsonify({'error': 'Folder not found.'}), 404
+    saved = []
+    for f in request.files.getlist('files')[:100]:
+        name = _os.path.basename((f.filename or '').replace('\\', '/'))
+        if not _valid_name(name):
+            return jsonify({'error': f'"{name[:60]}" is not a name DeCloud can save.', 'saved': saved}), 400
+        dest = _unique(folder, name)
+        with open(dest, 'xb') as out:   # never overwrites
+            _shutil.copyfileobj(f.stream, out, 1024 * 1024)
+        saved.append(dest.name)
+    return jsonify({'ok': True, 'saved': saved})

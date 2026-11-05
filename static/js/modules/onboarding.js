@@ -20,10 +20,10 @@ function initOnboarding() {
   buildProgressDots();
   generateOnboardingQRs();
   showOnboardingStep(0);
-  // Prefill the agent name with the current value (if already set).
-  fetch('/api/voice/config').then(function(r) { return r.json(); }).then(function(d) {
-    var input = document.getElementById('agent-name-input');
-    if (input && d.config && d.config.agent_name) input.value = d.config.agent_name;
+  // Prefill the device name with the current value (if already set).
+  fetch('/api/lab/prefs').then(function(r) { return r.json(); }).then(function(p) {
+    var input = document.getElementById('device-name-input');
+    if (input && p && p.device_name) input.value = p.device_name;
   }).catch(function() {});
 }
 
@@ -103,18 +103,22 @@ function onboardingFinish() {
 }
 
 function finishOnboarding(skipped) {
-  // Persist the chosen agent name (empty = keep default).
-  var nameInput = document.getElementById('agent-name-input');
-  var name = nameInput ? nameInput.value.trim() : '';
-  if (name) {
-    fetch('/api/voice/config', {
+  // Persist the lab name and this device's name (empty = keep defaults).
+  var labInput = document.getElementById('lab-name-input');
+  var devInput = document.getElementById('device-name-input');
+  var prefs = {};
+  if (labInput && labInput.value.trim()) prefs.name = labInput.value.trim();
+  if (devInput && devInput.value.trim()) prefs.device_name = devInput.value.trim();
+  if (Object.keys(prefs).length) {
+    fetch('/api/lab/prefs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agent_name: name })
+      body: JSON.stringify(prefs)
     }).then(function(r) {
       if (!r.ok) throw new Error('save failed');
+      if (typeof refreshDeviceTitle === 'function') refreshDeviceTitle();
     }).catch(function() {
-      showToast("Couldn't save the name — set it in Settings → Voice");
+      showToast("Couldn't save the names — try again later");
     });
   }
   localStorage.setItem('decloud_onboarded', '1');

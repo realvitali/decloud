@@ -71,6 +71,9 @@ def register_blueprints(app, sock):
     from .lab import bp as lab_bp
     app.register_blueprint(lab_bp)
 
+    from .ai_devices import bp as ai_devices_bp
+    app.register_blueprint(ai_devices_bp)
+
     # WebSocket routes (need sock instance)
     if sock is not None:
         from .terminal import register as register_terminal

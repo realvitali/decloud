@@ -16,8 +16,8 @@ async function musicGenCheckStatus() {
     const d = await r.json();
     if (!d.comfy_online) {
       bar.innerHTML = 'ComfyUI is offline — ' +
-        '<button class="models-get-btn" style="margin-left:10px" onclick="comfyStart()">Start ComfyUI</button>' +
-        '<button class="models-get-btn" style="margin-left:6px;background:var(--glass);color:var(--text);border:1px solid var(--glass-border)" onclick="musicGenCheckStatus()">Check again</button>';
+        '<button class="models-get-btn" style="margin-left:10px" data-onclick="cb570769">Start ComfyUI</button>' +
+        '<button class="models-get-btn" style="margin-left:6px;background:var(--glass);color:var(--text);border:1px solid var(--glass-border)" data-onclick="ca602549">Check again</button>';
       bar.className = 'musicgen-status offline';
       return;
     }
@@ -60,8 +60,8 @@ async function musicGenLoadHistory() {
           <audio class="musicgen-player" controls preload="none" src="/api/musicgen/audio/${encodeURIComponent(s.id)}"></audio>
           <div class="musicgen-song-actions">
             <a class="settings-export-btn" href="/api/musicgen/audio/${encodeURIComponent(s.id)}" download>Download</a>
-            <button class="settings-export-btn" data-id="${escapeHtml(s.id)}" onclick="musicGenDelete(this.dataset.id)">Delete</button>
-            <button class="settings-export-btn" data-id="${escapeHtml(s.id)}" onclick="musicGenAgain(this.dataset.id)">Again</button>
+            <button class="settings-export-btn" data-id="${escapeHtml(s.id)}" data-onclick="c138aa96">Delete</button>
+            <button class="settings-export-btn" data-id="${escapeHtml(s.id)}" data-onclick="cf2861dd">Again</button>
           </div>
         </div>`;
     }).join('');

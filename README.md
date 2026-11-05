@@ -6,19 +6,19 @@ A self-hosted PWA dashboard for audiobooks, AI chat, file browsing, system monit
 
 ## Features
 
-- **📚 Audiobooks** — Real-time word highlighting, voice playback (Piper TTS), bookmarks. Reads PDF, JSON, and TXT.
-- **💬 AI Chat** — Local LLM via Ollama, or cloud models
-- **📁 Files** — Fast file browser with thumbnail previews, image gallery
-- **🎨 Generate** — AI image generation via ComfyUI (FLUX, SDXL, etc)
-- **📊 System Monitor** — CPU, RAM, GPU, network stats in real time
-- **🧠 AI Model Advisor** — reads your hardware, scores chat/image/video/music
+- **Audiobooks** — Real-time word highlighting, voice playback (Piper TTS), bookmarks. Reads PDF, JSON, and TXT.
+- **AI Chat** — Local LLM via Ollama, or cloud models
+- **Files** — Fast file browser with thumbnail previews, image gallery
+- **Generate** — AI image generation via ComfyUI (FLUX, SDXL, etc)
+- **System Monitor** — CPU, RAM, GPU, network stats in real time
+- **AI Model Advisor** — reads your hardware, scores chat/image/video/music
   models from HuggingFace (real file sizes, not guesses), and downloads them
   into the right app folders — split GGUF archives merge automatically and
   chat models import straight into Ollama. No terminal needed.
-- **🖥️ Terminal** — Full interactive web terminal (WebSocket-based)
-- **🎵 Music** — Browse and play your local music library
-- **🔐 Privacy Scanner** — Optional OSINT tool to find and remove your data from broker sites
-- **📓 Journal** — Optional Obsidian vault integration with voice notes (Whisper STT)
+- **Terminal** — Full interactive web terminal (WebSocket-based)
+- **Music** — Browse and play your local music library
+- **Privacy Scanner** — Optional OSINT tool to find and remove your data from broker sites
+- **Journal** — Optional Obsidian vault integration with voice notes (Whisper STT)
 
 All features are optional — the app works with zero configuration. Features that need external services (Ollama, ComfyUI, Piper) gracefully degrade and show helpful messages until configured.
 
@@ -38,30 +38,36 @@ cd ~/decloud
 ./install.sh
 ```
 
+The installer offers a **Host** (the dashboard) or a **Node** (a lightweight
+Lab statistics agent). On Linux, you can choose explicitly with
+`./install.sh --host` or `./install.sh --node`. Node setup asks you to approve
+pairing with the host in the terminal. The node listens on its Tailscale address.
+In Lab → Devices, choose **Find Tailscale devices**, then **Set up** and **Pair**
+for each Linux computer. Nodes currently report statistics only;
+pairing a node does not automatically make its GPU or CPU available for jobs.
+
 The installer:
 1. Creates a Python virtual environment
 2. Installs all dependencies
 3. Creates a `.env` config file with a random secret key
 4. Sets up a systemd service (auto-starts on boot, auto-restarts on crash)
-5. Starts a **public** tunnel via Tailscale Funnel (only when a passcode is set)
+5. Starts private Tailscale Serve access for devices on your tailnet
 6. Prints the URL + QR code for your phone
 
 ### Access from anywhere
 
-DeCloud uses **Tailscale Funnel** for secure remote access:
+DeCloud uses **Tailscale Serve** for private remote access:
 
 - **Permanent URL**: `https://your-machine.tail1234.ts.net`
 - **No port forwarding** — works behind NAT/firewalls
-- **End-to-end encrypted** — WireGuard + TLS 1.3
-- **Public** — anyone with the link reaches the login screen
+- **Encrypted** — WireGuard + HTTPS
+- **Tailnet-only** — connect Tailscale on your phone to reach the login screen
 
 The first time you open DeCloud, enter your passcode to unlock (tap ✓ after typing).
 
-> ⚠️ **The passcode unlocks a shell on your machine** (terminal, files,
-> updates). Funnel URLs are public, so the passcode is all that stands
-> between the internet and your computer. **Don't share it** — DeCloud is a
-> single-owner app. If only your own devices need access, prefer
-> tailnet-only Tailscale Serve; see [docs/PERMANENT_TUNNEL.md](docs/PERMANENT_TUNNEL.md).
+> **The passcode unlocks a shell on your machine** (terminal, files,
+> updates). **Don't share it** — DeCloud is a single-owner app. Tailscale
+> Funnel is a separate public-access option; see [docs/PERMANENT_TUNNEL.md](docs/PERMANENT_TUNNEL.md).
 
 ## Configuration
 
@@ -224,9 +230,8 @@ never break your machine:
   are refused, including on the terminal WebSocket.
 - **Localhost by default** — the app binds to 127.0.0.1 unless you
   explicitly set `DECLOUD_HOST`; binding wider prints a loud warning.
-- **Tailscale Funnel only** — no third-party relay fallbacks. End-to-end
-  encrypted tunnel, no open ports. (cloudflared works manually if you
-  prefer.)
+- **Private Tailscale Serve by default** — no third-party relay fallbacks.
+  Funnel and cloudflared require separate manual setup and can expose the login publicly.
 - **Hardened shell** — quick commands run shell-free from a fixed
   allowlist; the interactive terminal requires the session token,
   including over tunnels.

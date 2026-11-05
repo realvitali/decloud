@@ -1,51 +1,29 @@
-// ===== Module: lego =====
+// ===== Module: lego — the Files app (a plain file browser) =====
+// Browse, sort, filter, open, download, upload, new folder, rename, delete (to the
+// computer's trash). Buttons carry data-act="…"; one listener below handles them.
 let legoCurrentPath = '';
 let legoViewMode = 'grid';  // 'grid' or 'list'
 let legoPage = 1;
 let legoHasMore = false;
 let legoLoading = false;
 let legoAbortController = null;
-let legoSortMode = 'default';  // 'default', 'visited-today', 'unvisited-today'
+let legoSort = { by: 'name', desc: false };
+let legoFilter = '';
+let legoItems = [];          // everything loaded for the current folder
 
-// Track folder visits in localStorage
-function getLegoVisits() {
-  try { return JSON.parse(localStorage.getItem('lego-visits') || '{}'); } catch { return {}; }
-}
-function markLegoVisited(path) {
-  const visits = getLegoVisits();
-  visits[path] = Date.now();
-  localStorage.setItem('lego-visits', JSON.stringify(visits));
-}
-function isVisitedToday(path) {
-  const visits = getLegoVisits();
-  if (!visits[path]) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return visits[path] >= today.getTime();
-}
-
-function formatVisitTime(ts) {
-  if (!ts) return '';
-  const d = new Date(ts);
-  let h = d.getHours();
-  const m = String(d.getMinutes()).padStart(2, '0');
-  const ampm = h >= 12 ? 'pm' : 'am';
-  h = h % 12 || 12;
-  return `${h}:${m}${ampm}`;
-}
+const LEGO_IMAGE = /\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|avif)$/i;
+const legoApi = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  .then(async r => ({ ok: r.ok, data: await r.json().catch(() => ({})) }))
+  .catch(() => ({ ok: false, data: { error: 'Network error' } }));
 
 async function loadLego(path = '', page = 1) {
-  // Cancel any in-flight request (user clicked a different folder)
-  if (legoAbortController) {
-    legoAbortController.abort();
-  }
+  if (legoAbortController) legoAbortController.abort();   // user clicked another folder
   legoAbortController = new AbortController();
-
   if (page === 1) {
     legoCurrentPath = path;
     legoPage = 1;
+    legoItems = [];
     location.hash = `#lego/${path}`;
-    if (path) markLegoVisited(path);
   }
   legoLoading = true;
   const list = document.getElementById('lego-list');
@@ -53,149 +31,21 @@ async function loadLego(path = '', page = 1) {
     list.className = 'lego-list';
     list.innerHTML = `<div class="skeleton-file-grid">${Array(12).fill('<div class="shimmer-block skeleton-file"></div>').join('')}</div>`;
   }
-
   try {
-    const r = await fetch(`/api/lego/browse?path=${encodeURIComponent(path)}&page=${page}&per_page=200`, {
-      signal: legoAbortController.signal,
-    });
+    const q = new URLSearchParams({ path, page, per_page: 200, sort: legoSort.by, order: legoSort.desc ? 'desc' : 'asc' });
+    const r = await fetch(`/api/lego/browse?${q}`, { signal: legoAbortController.signal });
     const data = await r.json();
     if (data.error) {
       list.innerHTML = `<span style="color:var(--red);padding:20px;display:block">${escapeHtml(data.error)}</span>`;
       return;
     }
-
-    // Breadcrumbs (only on first page)
-    if (page === 1) {
-      const bc = document.getElementById('lego-breadcrumbs');
-      bc.innerHTML = data.breadcrumbs.map((b, i) => {
-        const isLast = i === data.breadcrumbs.length - 1;
-        return `<span class="lego-crumb ${isLast ? 'active' : ''}" data-path="${escapeHtml(b.path)}" onclick="loadLego(this.dataset.path)">${escapeHtml(b.name)}</span>${!isLast ? '<span class="lego-crumb-sep">/</span>' : ''}`;
-      }).join('') + `<button class="lego-view-toggle" onclick="toggleLegoView()" aria-label="${legoViewMode === 'grid' ? 'Show as list' : 'Show as grid'}" title="${legoViewMode === 'grid' ? 'Show as list' : 'Show as grid'}">${legoViewMode === 'grid' ? ICONS.layers : ICONS.terminal}</button><button class="lego-view-toggle" onclick="toggleLegoSort()" style="margin-left:6px" aria-label="Sort" title="Sort: ${legoSortMode}">${legoSortIcon()}</button><button class="lego-view-toggle" onclick="openSwipeMode(legoCurrentPath)" style="margin-left:6px" aria-label="Sort photos by swiping" title="Sort photos by swiping">${ICONS.image}</button>`;
-    }
-
+    if (page === 1) legoRenderBar(data.breadcrumbs);
     legoHasMore = data.has_more;
     legoPage = page;
-
-    // Sort folders by visit status if sort mode is active
-    if (legoSortMode !== 'default') {
-      data.items.sort((a, b) => {
-        // Always keep dirs before files
-        if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
-        // Only sort directories by visit status
-        if (!a.is_dir) return 0;
-        const aVisited = isVisitedToday(a.path);
-        const bVisited = isVisitedToday(b.path);
-        if (legoSortMode === 'unvisited-today') {
-          // Unvisited first
-          if (aVisited && !bVisited) return 1;
-          if (!aVisited && bVisited) return -1;
-        } else {
-          // Visited first
-          if (aVisited && !bVisited) return -1;
-          if (!aVisited && bVisited) return 1;
-        }
-        return 0;
-      });
-    }
-
-    // Items
-    if (data.items.length === 0 && page === 1) {
-      list.innerHTML = '<span class="text-dim" style="padding:20px;display:block">Empty folder</span>';
-      return;
-    }
-
-    list.className = legoViewMode === 'grid' ? 'lego-list lego-grid' : 'lego-list';
-
-    const IMAGE_EXTS = ['jpg','jpeg','png','gif','webp','bmp','heic','heif'];
-    const newHTML = data.items.map(item => {
-      const isImage = IMAGE_EXTS.includes(item.ext);
-
-      if (item.is_dir) {
-        const countLabel = item.child_count === -1 ? '...' : (item.child_count > 0 ? `${item.child_count} items` : 'Empty');
-        const visited = isVisitedToday(item.path);
-        const visitTime = visited ? formatVisitTime(getLegoVisits()[item.path]) : '';
-        const visitedDot = visited ? '<div class="lego-visited-dot"></div>' : '';
-        const dimClass = (legoSortMode !== 'default' && !visited && legoSortMode === 'visited-today') ? ' lego-card-dim' : '';
-        const thumb = item.has_images
-          ? `<img class="lego-thumb" data-src="/api/lego/thumbnail?path=${encodeURIComponent(item.path)}" alt="" loading="lazy" />`
-          : `<div class="lego-thumb-placeholder"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>`;
-        return `<div class="lego-card${dimClass}" data-path="${escapeHtml(item.path)}" onclick="if(!legoLoading)loadLego(this.dataset.path)">
-          <div class="lego-thumb-wrap">${thumb}${item.has_images ? '<div class="lego-thumb-badge"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>' : ''}${visitedDot}</div>
-          <div class="lego-card-info">
-            <div class="lego-card-name">${escapeHtml(item.name)}</div>
-            <div class="lego-card-meta" id="meta-${encodeURIComponent(item.path)}">${visited ? `Opened ${visitTime} · ` : ''}${countLabel}</div>
-          </div>
-        </div>`;
-      } else {
-        const thumb = isImage
-          ? `<img class="lego-thumb" data-src="/api/lego/thumbnail?path=${encodeURIComponent(item.path)}" alt="" loading="lazy" data-save-path="${escapeHtml(item.path)}" />`
-          : `<div class="lego-thumb-placeholder">${getLegoIcon(item.ext)}</div>`;
-        return `<div class="lego-card" data-path="${escapeHtml(item.path)}" data-type="${isImage ? 'image' : 'file'}" onclick="if(!legoLoading)legoItemClick(this)">
-          <div class="lego-thumb-wrap">${thumb}</div>
-          <div class="lego-card-info">
-            <div class="lego-card-name">${escapeHtml(item.name)}</div>
-            <div class="lego-card-meta">${escapeHtml(item.size_human || '')}</div>
-          </div>
-        </div>`;
-      }
-    }).join('');
-
-    if (page === 1) {
-      list.innerHTML = newHTML;
-    } else {
-      list.insertAdjacentHTML('beforeend', newHTML);
-    }
-
-    // Add "Load more" indicator if there are more items
-    const existingLoader = document.getElementById('lego-load-more');
-    if (existingLoader) existingLoader.remove();
-    if (data.has_more) {
-      const total = data.item_count;
-      const loaded = page * 200;
-      const loader = document.createElement('div');
-      loader.id = 'lego-load-more';
-      loader.className = 'lego-load-more';
-      loader.style.cursor = 'pointer';
-      loader.innerHTML = `<div class="lego-load-more-text">Tap to load more — ${loaded} / ${total}</div><div class="lego-load-more-bar"><div class="lego-load-more-fill" style="width:${Math.min(100, (loaded/total)*100)}%"></div></div>`;
-      loader.onclick = () => { if (!legoLoading && legoHasMore) loadLego(legoCurrentPath, legoPage + 1); };
-      list.appendChild(loader);
-    }
-
-    // Lazy load visible thumbnails
-    legoLazyLoad();
-    setupLegoLazyLoad();
-
-    // Lazy load folder info for directories (non-blocking)
-    data.items.filter(i => i.is_dir && i.child_count === -1).forEach(dir => {
-      fetch(`/api/lego/folder_info?path=${encodeURIComponent(dir.path)}`)
-        .then(r => r.json())
-        .then(info => {
-          const metaEl = document.getElementById(`meta-${encodeURIComponent(dir.path)}`);
-          if (metaEl) {
-            metaEl.textContent = info.child_count > 0 ? `${info.child_count} items` : 'Empty';
-          }
-          if (info.has_images) {
-            const card = metaEl?.closest('.lego-card');
-            const thumbWrap = card?.querySelector('.lego-thumb-wrap');
-            const placeholder = thumbWrap?.querySelector('.lego-thumb-placeholder');
-            if (placeholder) {
-              const img = document.createElement('img');
-              img.className = 'lego-thumb';
-              img.src = `/api/lego/thumbnail?path=${encodeURIComponent(dir.path)}`;
-              img.alt = '';
-              img.loading = 'lazy';
-              placeholder.replaceWith(img);
-              const badge = document.createElement('div');
-              badge.className = 'lego-thumb-badge';
-              badge.innerHTML = '<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
-              thumbWrap.appendChild(badge);
-            }
-          }
-        })
-        .catch(() => {});
-    });
+    legoItems = page === 1 ? data.items : legoItems.concat(data.items);
+    legoRenderItems(data.item_count);
   } catch (e) {
-    if (e.name === 'AbortError') return;  // user navigated away, ignore
+    if (e.name === 'AbortError') return;
     list.innerHTML = `<span style="color:var(--red);padding:20px;display:block">${escapeHtml(friendlyError(e))}</span>`;
   } finally {
     legoLoading = false;
@@ -203,108 +53,94 @@ async function loadLego(path = '', page = 1) {
   }
 }
 
-// Infinite scroll — load more when user reaches the bottom
-// Attach to both document and the lego-list container since mobile scrolls inside it
-function legoScrollCheck() {
-  if (legoLoading || !legoHasMore) return;
-  const loader = document.getElementById('lego-load-more');
-  if (!loader) return;
-  const rect = loader.getBoundingClientRect();
-  if (rect.top < window.innerHeight + 300) {
-    loadLego(legoCurrentPath, legoPage + 1);
+function legoRenderBar(breadcrumbs) {
+  const bc = document.getElementById('lego-breadcrumbs');
+  bc.innerHTML = breadcrumbs.map((b, i) => {
+    const last = i === breadcrumbs.length - 1;
+    return `<span class="lego-crumb ${last ? 'active' : ''}" data-act="open-folder" data-path="${escapeHtml(b.path)}">${escapeHtml(b.name)}</span>${last ? '' : '<span class="lego-crumb-sep">/</span>'}`;
+  }).join('');
+  const sortLabel = { name: 'Name', date: 'Date', size: 'Size' };
+  document.getElementById('lego-toolbar').innerHTML = `
+    <button class="lego-tool" data-act="upload" title="Upload files">${LEGO_SVG.upload}<span>Upload</span></button>
+    <button class="lego-tool" data-act="new-folder" title="New folder">${LEGO_SVG.folderPlus}<span>New folder</span></button>
+    <input class="lego-filter" id="lego-filter" type="search" placeholder="Filter this folder" value="${escapeHtml(legoFilter)}" aria-label="Filter this folder" autocomplete="off">
+    <select class="lego-sort" id="lego-sort" aria-label="Sort by">${Object.entries(sortLabel).map(([k, v]) => `<option value="${k}"${legoSort.by === k ? ' selected' : ''}>${v}</option>`).join('')}</select>
+    <button class="lego-tool icon" data-act="sort-order" title="${legoSort.desc ? 'Descending' : 'Ascending'}" aria-label="Sort order">${legoSort.desc ? LEGO_SVG.down : LEGO_SVG.up}</button>
+    <button class="lego-tool icon" data-act="view" title="${legoViewMode === 'grid' ? 'Show as list' : 'Show as grid'}" aria-label="Change view">${legoViewMode === 'grid' ? LEGO_SVG.list : LEGO_SVG.grid}</button>`;
+}
+
+function legoRenderItems(total) {
+  const list = document.getElementById('lego-list');
+  const f = legoFilter.trim().toLowerCase();
+  const items = f ? legoItems.filter(i => i.name.toLowerCase().includes(f)) : legoItems;
+  if (!items.length) {
+    list.className = 'lego-list';
+    list.innerHTML = `<span class="text-dim" style="padding:20px;display:block">${f ? 'Nothing here matches that filter.' : 'Empty folder. Drop files here or use Upload.'}</span>`;
+    return;
   }
+  list.className = legoViewMode === 'grid' ? 'lego-list lego-grid' : 'lego-list';
+  list.innerHTML = items.map(item => {
+    const isImage = !item.is_dir && LEGO_IMAGE.test(item.name);
+    const meta = item.is_dir
+      ? `<span id="meta-${encodeURIComponent(item.path)}">${item.child_count === -1 ? '…' : item.child_count > 0 ? `${item.child_count} items` : 'Empty'}</span>`
+      : `${escapeHtml(item.size_human || '')}${item.modified && legoViewMode !== 'grid' ? ' · ' + escapeHtml(item.modified) : ''}`;   // grid: size only
+    const thumb = item.is_dir
+      ? `<svg class="lego-folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`
+      : isImage ? `<img class="lego-thumb" data-src="/api/lego/thumbnail?path=${encodeURIComponent(item.path)}" alt="" loading="lazy">`
+      : `<div class="lego-thumb-placeholder">${getLegoIcon(item.ext)}</div>`;
+    return `<div class="lego-card${item.is_dir ? ' lego-folder' : ''}" data-act="${item.is_dir ? 'open-folder' : isImage ? 'open-image' : 'download'}" data-path="${escapeHtml(item.path)}" data-name="${escapeHtml(item.name)}" data-dir="${item.is_dir ? 1 : 0}" tabindex="0">
+      <div class="lego-thumb-wrap">${thumb}</div>
+      <div class="lego-card-info"><div class="lego-card-name">${escapeHtml(item.name)}</div><div class="lego-card-meta">${meta}</div></div>
+      <button class="lego-more" data-act="menu" aria-label="More for ${escapeHtml(item.name)}" title="More">${LEGO_SVG.more}</button>
+    </div>`;
+  }).join('');
+  if (legoHasMore && !f) {
+    list.insertAdjacentHTML('beforeend', `<div id="lego-load-more" class="lego-load-more" data-act="load-more"><div class="lego-load-more-text">Load more — ${legoItems.length} / ${total}</div></div>`);
+    legoScrollObserver.observe(document.getElementById('lego-load-more'));
+  }
+  legoLazyLoad();
+  setupLegoLazyLoad();
+  items.filter(i => i.is_dir && i.child_count === -1).forEach(dir => {   // folder counts, without blocking the list
+    fetch(`/api/lego/folder_info?path=${encodeURIComponent(dir.path)}`).then(r => r.json()).then(info => {
+      dir.child_count = info.child_count;
+      const el = document.getElementById(`meta-${encodeURIComponent(dir.path)}`);
+      if (el) el.textContent = info.child_count > 0 ? `${info.child_count} items` : 'Empty';
+    }).catch(() => {});
+  });
 }
-document.addEventListener('scroll', legoScrollCheck, { passive: true });
-// Also check when the lego list itself scrolls
-const legoListEl = document.getElementById('lego-list');
-if (legoListEl) {
-  legoListEl.addEventListener('scroll', legoScrollCheck, { passive: true });
-}
-// And use IntersectionObserver as a more reliable trigger
+
 const legoScrollObserver = new IntersectionObserver((entries) => {
-  if (entries[0].isIntersecting && !legoLoading && legoHasMore) {
-    loadLego(legoCurrentPath, legoPage + 1);
-  }
+  if (entries[0].isIntersecting && !legoLoading && legoHasMore) loadLego(legoCurrentPath, legoPage + 1);
 }, { rootMargin: '300px' });
-// Re-observe whenever loader is created
-const legoLoaderObserver = new MutationObserver(() => {
-  const loader = document.getElementById('lego-load-more');
-  if (loader) legoScrollObserver.observe(loader);
-});
-if (legoListEl) legoLoaderObserver.observe(legoListEl, { childList: true });
 
-function toggleLegoView() {
-  legoViewMode = legoViewMode === 'grid' ? 'list' : 'grid';
-  loadLego(legoCurrentPath);
-}
-
-function legoSortIcon() {
-  if (legoSortMode === 'visited-today') return ICONS.check;
-  if (legoSortMode === 'unvisited-today') return ICONS.layers;
-  return ICONS.clock;
-}
-
-function toggleLegoSort() {
-  // Cycle: default -> visited-today -> unvisited-today -> default
-  if (legoSortMode === 'default') legoSortMode = 'unvisited-today';
-  else if (legoSortMode === 'unvisited-today') legoSortMode = 'visited-today';
-  else legoSortMode = 'default';
-  loadLego(legoCurrentPath);
-}
-
-// Lazy loading using IntersectionObserver
+// ── Thumbnails load as they scroll into view ──
 let legoObserver = null;
 function setupLegoLazyLoad() {
   if (legoObserver) legoObserver.disconnect();
   legoObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const img = entry.target;
-        if (img.dataset.src) {
-          img.src = img.dataset.src;
-          img.removeAttribute('data-src');
-        }
-        legoObserver.unobserve(img);
-      }
+      if (!entry.isIntersecting) return;
+      const img = entry.target;
+      if (img.dataset.src) { img.src = img.dataset.src; img.removeAttribute('data-src'); }
+      legoObserver.unobserve(img);
     });
   }, { rootMargin: '200px' });
   document.querySelectorAll('.lego-thumb[data-src]').forEach(img => legoObserver.observe(img));
 }
-
 function legoLazyLoad() {
-  // Fallback for browsers without IntersectionObserver
-  if (!('IntersectionObserver' in window)) {
-    document.querySelectorAll('.lego-thumb[data-src]').forEach(img => {
-      img.src = img.dataset.src;
-      img.removeAttribute('data-src');
-    });
-  }
+  if ('IntersectionObserver' in window) return;
+  document.querySelectorAll('.lego-thumb[data-src]').forEach(img => { img.src = img.dataset.src; img.removeAttribute('data-src'); });
 }
 
 function getLegoIcon(ext) {
-  var i = ICONS.image; // default: image/doc icon
-  var img = 'jpg jpeg png gif webp bmp heic heif'.split(' ');
-  var vid = 'mp4 mov avi mkv webm'.split(' ');
-  var aud = 'mp3 wav flac ogg m4a aac'.split(' ');
-  var doc = 'pdf txt md doc docx'.split(' ');
-  var arc = 'zip 7z tar gz rar bz2'.split(' ');
-  var bin = 'iso appimage deb exe msi dmg'.split(' ');
-  var code = 'py js ts html css json xml yaml yml sh'.split(' ');
-  if (img.includes(ext)) i = ICONS.image;
-  else if (vid.includes(ext)) i = ICONS.terminal; // closest: screen-like
-  else if (aud.includes(ext)) i = ICONS.music;
-  else if (doc.includes(ext)) i = ICONS.book;
-  else if (arc.includes(ext)) i = ICONS.layers;
-  else if (bin.includes(ext)) i = ICONS.settings;
-  else if (code.includes(ext)) i = ICONS.gitCommit;
-  else i = ICONS.book;
-  return i;
-}
-
-function legoItemClick(el) {
-  const path = el.dataset.path;
-  if (el.dataset.type === 'image') openLegoImage(path);
-  else downloadLegoFile(path);
+  const has = (list) => list.split(' ').includes(ext);
+  if (has('jpg jpeg png gif webp bmp heic heif')) return ICONS.image;
+  if (has('mp4 mov avi mkv webm')) return ICONS.terminal;
+  if (has('mp3 wav flac ogg m4a aac')) return ICONS.music;
+  if (has('zip 7z tar gz rar bz2')) return ICONS.layers;
+  if (has('iso appimage deb exe msi dmg')) return ICONS.settings;
+  if (has('py js ts html css json xml yaml yml sh')) return ICONS.gitCommit;
+  return ICONS.book;
 }
 
 function downloadLegoFile(path) {
@@ -316,277 +152,175 @@ function downloadLegoFile(path) {
   link.remove();
 }
 
+// ── Image viewer: previous / next, download, delete ──
 let legoCurrentImage = '';
-
 function openLegoImage(path) {
   legoCurrentImage = path;
-  const viewer = document.getElementById('lego-image-viewer');
-  const img = document.getElementById('lego-image-full');
-  img.src = `/api/lego/download?path=${encodeURIComponent(path)}`;
-  viewer.style.display = 'flex';
+  document.getElementById('lego-image-full').src = `/api/lego/download?path=${encodeURIComponent(path)}`;
+  document.getElementById('lego-image-viewer').style.display = 'flex';
 }
-
 function closeLegoImage() {
   document.getElementById('lego-image-viewer').style.display = 'none';
   document.getElementById('lego-image-full').src = '';
   legoCurrentImage = '';
 }
-
-function advanceLegoImage(direction) {
-  // Find all image cards currently in the DOM, advance to next/prev
-  const cards = document.querySelectorAll('.lego-card[data-path]');
-  const imagePaths = [];
-  for (const card of cards) {
-    const p = card.getAttribute('data-path') || '';
-    if (/\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|tiff?|avif|svg)$/i.test(p)) {
-      imagePaths.push(p);
-    }
-  }
-  if (imagePaths.length === 0) { closeLegoImage(); return; }
-  const currentIdx = imagePaths.indexOf(legoCurrentImage);
-  let nextIdx;
-  if (direction === 'next') {
-    nextIdx = currentIdx + 1 >= imagePaths.length ? -1 : currentIdx + 1;
-  } else {
-    nextIdx = currentIdx - 1 < 0 ? -1 : currentIdx - 1;
-  }
-  if (nextIdx === -1) { closeLegoImage(); return; }
-  // Open next image without closing viewer (keeps scroll position, no reload)
-  legoCurrentImage = imagePaths[nextIdx];
-  document.getElementById('lego-image-full').src = `/api/lego/download?path=${encodeURIComponent(legoCurrentImage)}`;
+function advanceLegoImage(step) {
+  const images = [...document.querySelectorAll('.lego-card[data-act="open-image"]')].map(c => c.dataset.path);
+  const i = images.indexOf(legoCurrentImage) + step;
+  if (i < 0 || i >= images.length) return;
+  openLegoImage(images[i]);
 }
 
-async function shredLegoImage() {
-  if (!legoCurrentImage) return;
-  if (!await appConfirm('Delete this file forever?\nIt is securely erased and cannot be recovered.', { danger: true, ok: 'Delete forever' })) return;
-  try {
-    const r = await fetch('/api/lego/shred', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: legoCurrentImage }),
-    });
-    const d = await r.json();
-    if (d.error) { showToast(d.error); return; }
-    removeLegoCard(legoCurrentImage);
-    advanceLegoImage('next');
-  } catch (e) {
-    showToast("Couldn't delete: " + friendlyError(e));
-  }
-}
-
-async function poofLegoImage() {
-  if (!legoCurrentImage) return;
-  try {
-    const r = await fetch('/api/lego/poof', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: legoCurrentImage }),
-    });
-    const d = await r.json();
-    if (d.error) { showToast(d.error); return; }
-    removeLegoCard(legoCurrentImage);
-    advanceLegoImage('next');
-    showToast('Set aside — moved to the poof folder');
-  } catch (e) {
-    showToast("Couldn't set aside: " + friendlyError(e));
-  }
-}
-
-function removeLegoCard(path) {
-  // Find the card with matching data-path and remove it
-  const cards = document.querySelectorAll('.lego-card');
-  for (const card of cards) {
-    const cardPath = card.getAttribute('data-path') || '';
-    if (cardPath === path) {
-      card.style.transition = 'opacity 0.2s, transform 0.2s';
-      card.style.opacity = '0';
-      card.style.transform = 'scale(0.8)';
-      setTimeout(() => card.remove(), 200);
-      return;
-    }
-  }
-}
-
-// ─── Swipe Mode (Tinder for files) ──────────────────────────
-let swipeFolderPath = '';
-let swipeCurrentPath = '';
-let swipeTotal = 0;
-let swipeStartX = 0;
-let swipeStartY = 0;
-let swipeCurrentX = 0;
-let swipeCurrentY = 0;
-let swipeDragging = false;
-let swipeNextImg = new Image();  // preloaded next image
-
-async function openSwipeMode(path) {
-  swipeFolderPath = path || '';
-  document.getElementById('lego-swipe').style.display = 'flex';
-  document.getElementById('lego-swipe-empty').style.display = 'none';
-  document.getElementById('lego-swipe-card').style.display = '';
-  await loadNextSwipeImage();
-}
-
-function closeSwipeMode() {
-  document.getElementById('lego-swipe').style.display = 'none';
+// ── Actions ──
+async function legoNewFolder() {
+  const name = (await appPrompt('New folder name'))?.trim();
+  if (!name) return;
+  const { ok, data } = await legoApi('/api/files/mkdir', { path: legoCurrentPath, name });
+  if (!ok) return showToast(data.error || 'Could not create the folder.');
   loadLego(legoCurrentPath);
 }
 
-async function loadNextSwipeImage() {
-  const card = document.getElementById('lego-swipe-card');
-  const info = document.getElementById('lego-swipe-info');
-  card.className = 'lego-swipe-card';
-  card.style.transform = '';
-  card.style.opacity = '';
+async function legoRename(path, oldName) {
+  const name = (await appPrompt('Rename to', oldName))?.trim();
+  if (!name || name === oldName) return;
+  const { ok, data } = await legoApi('/api/files/rename', { path, name });
+  if (!ok) return showToast(data.error || 'Could not rename it.');
+  loadLego(legoCurrentPath);
+}
 
-  // Use preloaded image if available (instant swap)
-  if (swipeNextImg._path) {
-    swipeCurrentPath = swipeNextImg._path;
-    swipeTotal = swipeNextImg._total;
-    document.getElementById('lego-swipe-img').src = swipeNextImg.src;
-    document.getElementById('lego-swipe-card-name').textContent = swipeNextImg._name;
-    info.textContent = `${swipeTotal} images left`;
-    card.style.display = '';
-    document.getElementById('lego-swipe-empty').style.display = 'none';
-    const nextPath = swipeNextImg._path;
-    swipeNextImg = new Image();  // clear it
-    // Start preloading the next one in background
-    preloadNextSwipeImage();
+async function legoDelete(path, name) {
+  if (!await appConfirm(`Move "${name}" to the Trash?`, { ok: 'Move to Trash' })) return false;
+  let { ok, data } = await legoApi('/api/files/delete', { paths: [path] });
+  if (!ok && data.code === 'NO_TRASH') {
+    if (!await appConfirm(`This computer has no Trash. Delete "${name}" forever?`, { ok: 'Delete forever' })) return false;
+    ({ ok, data } = await legoApi('/api/files/delete', { paths: [path], permanent: true }));
+  }
+  if (!ok) { showToast(data.error || 'Could not delete it.'); return false; }
+  showToast(data.trash ? `Moved "${name}" to the Trash` : `Deleted "${name}"`);
+  legoItems = legoItems.filter(i => i.path !== path);
+  legoRenderItems(legoItems.length);
+  return true;
+}
+
+function legoUpload(files) {
+  if (!files || !files.length) return;
+  const form = new FormData();
+  form.append('path', legoCurrentPath);
+  [...files].forEach(f => form.append('files', f, f.name));
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/files/upload');
+  const csrf = sessionStorage.getItem('decloud_csrf');
+  if (csrf) xhr.setRequestHeader('X-CSRF-Token', csrf);
+  xhr.upload.onprogress = (e) => { if (e.lengthComputable) showToast(`Uploading… ${Math.round(e.loaded / e.total * 100)}%`); };
+  xhr.onload = () => {
+    let d = {};
+    try { d = JSON.parse(xhr.responseText); } catch { /* not JSON (e.g. too large) */ }
+    if (xhr.status === 413) showToast('That upload is too large (100 MB max per upload).');
+    else showToast(xhr.status === 200 ? `Uploaded ${d.saved.length} file${d.saved.length === 1 ? '' : 's'}` : d.error || 'Upload failed.');
+    loadLego(legoCurrentPath);
+  };
+  xhr.onerror = () => showToast('Upload failed.');
+  xhr.send(form);
+}
+
+function legoMenu(card, btn) {
+  document.getElementById('lego-menu')?.remove();
+  const dir = card.dataset.dir === '1';
+  const m = document.createElement('div');
+  m.id = 'lego-menu';
+  m.className = 'lego-menu';
+  m.setAttribute('role', 'menu');
+  m.innerHTML = `${dir ? '' : `<button role="menuitem" data-act="menu-download">Download</button>`}
+    <button role="menuitem" data-act="menu-rename">Rename</button>
+    <button role="menuitem" data-act="menu-delete" class="danger">Move to Trash</button>`;
+  m.dataset.path = card.dataset.path;
+  m.dataset.name = card.dataset.name;
+  document.body.appendChild(m);
+  const r = btn.getBoundingClientRect();
+  m.style.top = `${Math.min(window.innerHeight - m.offsetHeight - 8, r.bottom + 4)}px`;
+  m.style.left = `${Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, r.right - m.offsetWidth))}px`;
+  m.querySelector('button').focus();
+}
+
+// One listener for everything in Files (no inline handlers)
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]');
+  if (!el || !(el.closest('#lego-screen') || el.closest('#lego-menu'))) {
+    if (!e.target.closest('#lego-menu')) document.getElementById('lego-menu')?.remove();
     return;
   }
-
-  // No preload ready — fetch one
-  info.textContent = 'Loading...';
-  try {
-    const r = await fetch(`/api/lego/random_image?path=${encodeURIComponent(swipeFolderPath)}`);
-    const d = await r.json();
-    if (d.error) {
-      card.style.display = 'none';
-      document.getElementById('lego-swipe-empty').style.display = '';
-      info.textContent = 'No images';
-      return;
+  const act = el.dataset.act, card = el.closest('.lego-card'), menu = el.closest('#lego-menu');
+  if (act !== 'menu') document.getElementById('lego-menu')?.remove();
+  if (legoLoading && act.startsWith('open')) return;
+  switch (act) {
+    case 'open-folder': loadLego(el.dataset.path); break;
+    case 'open-image': openLegoImage(el.dataset.path); break;
+    case 'download': downloadLegoFile(el.dataset.path); break;
+    case 'menu': e.stopPropagation(); legoMenu(card, el); break;
+    case 'menu-download': downloadLegoFile(menu.dataset.path); break;
+    case 'menu-rename': legoRename(menu.dataset.path, menu.dataset.name); break;
+    case 'menu-delete': legoDelete(menu.dataset.path, menu.dataset.name); break;
+    case 'upload': document.getElementById('lego-upload-input').click(); break;
+    case 'new-folder': legoNewFolder(); break;
+    case 'sort-order': legoSort.desc = !legoSort.desc; loadLego(legoCurrentPath); break;
+    case 'view': legoViewMode = legoViewMode === 'grid' ? 'list' : 'grid'; legoRenderBar(legoBarCrumbs()); legoRenderItems(legoItems.length); break;
+    case 'load-more': if (!legoLoading && legoHasMore) loadLego(legoCurrentPath, legoPage + 1); break;
+    case 'viewer-close': closeLegoImage(); break;
+    case 'viewer-prev': advanceLegoImage(-1); break;
+    case 'viewer-next': advanceLegoImage(1); break;
+    case 'viewer-download': if (legoCurrentImage) downloadLegoFile(legoCurrentImage); break;
+    case 'viewer-delete': {
+      const path = legoCurrentImage, name = path.split('/').pop();
+      const next = [...document.querySelectorAll('.lego-card[data-act="open-image"]')].map(c => c.dataset.path);
+      const after = next[next.indexOf(path) + 1] || next[next.indexOf(path) - 1];
+      legoDelete(path, name).then(done => { if (done) { if (after) openLegoImage(after); else closeLegoImage(); } });
+      break;
     }
-    swipeCurrentPath = d.path;
-    swipeTotal = d.total_images;
-    document.getElementById('lego-swipe-img').src = `/api/lego/thumbnail?path=${encodeURIComponent(d.path)}`;
-    document.getElementById('lego-swipe-card-name').textContent = d.name;
-    info.textContent = `${swipeTotal} images left`;
-    card.style.display = '';
-    document.getElementById('lego-swipe-empty').style.display = 'none';
-    preloadNextSwipeImage();
-  } catch (e) {
-    info.textContent = friendlyError(e);
   }
-}
+});
+const legoBarCrumbs = () => [...document.querySelectorAll('#lego-breadcrumbs .lego-crumb')].map(c => ({ name: c.textContent, path: c.dataset.path }));
 
-async function preloadNextSwipeImage() {
-  try {
-    const r = await fetch(`/api/lego/random_image?path=${encodeURIComponent(swipeFolderPath)}`);
-    const d = await r.json();
-    if (!d.error) {
-      swipeNextImg = new Image();
-      swipeNextImg.src = `/api/lego/thumbnail?path=${encodeURIComponent(d.path)}`;
-      swipeNextImg._path = d.path;
-      swipeNextImg._name = d.name;
-      swipeNextImg._total = d.total_images;
-    }
-  } catch (e) {}
-}
-
-// Run a swipe action; on failure snap the card back and say why.
-async function swipeAction(url, flyClass) {
-  if (!swipeCurrentPath) return;
-  const card = document.getElementById('lego-swipe-card');
-  const path = swipeCurrentPath;
-  card.className = 'lego-swipe-card ' + flyClass;
-  try {
-    const r = await fetch(url, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok || d.error) throw new Error(d.error || 'Something went wrong — try again');
-  } catch (e) {
-    card.className = 'lego-swipe-card';
-    card.style.transform = '';
-    showToast(friendlyError(e));
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'lego-filter') { legoFilter = e.target.value; legoRenderItems(legoItems.length); }
+});
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'lego-sort') { legoSort.by = e.target.value; loadLego(legoCurrentPath); }
+  if (e.target.id === 'lego-upload-input') { legoUpload(e.target.files); e.target.value = ''; }
+});
+// Capture phase: Escape closes the viewer or menu first, before desktop mode's "Escape = Home"
+document.addEventListener('keydown', (e) => {
+  const viewerOpen = document.getElementById('lego-image-viewer')?.style.display === 'flex';
+  const menu = document.getElementById('lego-menu');
+  if (viewerOpen) {
+    if (e.key === 'Escape') closeLegoImage();
+    else if (e.key === 'ArrowRight') advanceLegoImage(1);
+    else if (e.key === 'ArrowLeft') advanceLegoImage(-1);
+    else return;
+    e.stopImmediatePropagation(); e.preventDefault();
     return;
   }
-  swipeCurrentPath = '';
-  setTimeout(loadNextSwipeImage, 350);
-}
+  if (e.key === 'Escape' && menu) { menu.remove(); e.stopImmediatePropagation(); return; }
+  if (e.key === 'Enter' && e.target.classList?.contains('lego-card')) e.target.click();
+}, true);
+// Drag files onto the list to upload them into the open folder
+document.addEventListener('dragover', (e) => { if (e.target.closest?.('#lego-list') && e.dataTransfer?.types.includes('Files')) { e.preventDefault(); document.getElementById('lego-list').classList.add('drop'); } });
+document.addEventListener('dragleave', (e) => { if (e.target.id === 'lego-list') e.target.classList.remove('drop'); });
+document.addEventListener('drop', (e) => {
+  if (!e.target.closest?.('#lego-list')) return;
+  e.preventDefault();
+  document.getElementById('lego-list').classList.remove('drop');
+  legoUpload(e.dataTransfer.files);
+});
 
-function swipeLeft() { return swipeAction('/api/lego/trash', 'fly-left'); }
-function swipeRight() { return swipeAction('/api/lego/poof', 'fly-right'); }
-
-async function swipeShred() {
-  if (!swipeCurrentPath) return;
-  if (!await appConfirm('Delete this file forever?\nIt is securely erased and cannot be recovered.', { danger: true, ok: 'Delete forever' })) return;
-  return swipeAction('/api/lego/shred', 'fly-up');
-}
-
-// Touch/drag gestures on the card
-(function() {
-  const card = document.getElementById('lego-swipe-card');
-  if (!card) return;
-
-  function onStart(e) {
-    if (!swipeCurrentPath) return;
-    swipeDragging = true;
-    card.classList.add('swiping');
-    const t = e.touches ? e.touches[0] : e;
-    swipeStartX = t.clientX;
-    swipeStartY = t.clientY;
-    swipeCurrentX = 0;
-    swipeCurrentY = 0;
-  }
-
-  function onMove(e) {
-    if (!swipeDragging) return;
-    e.preventDefault();
-    const t = e.touches ? e.touches[0] : e;
-    swipeCurrentX = t.clientX - swipeStartX;
-    swipeCurrentY = t.clientY - swipeStartY;
-    const rot = swipeCurrentX / 20;
-    card.style.transform = `translate(${swipeCurrentX}px, ${swipeCurrentY * 0.3}px) rotate(${rot}deg)`;
-
-    // Show hints based on drag direction
-    const hintLeft = document.getElementById('lego-swipe-hint-left');
-    const hintRight = document.getElementById('lego-swipe-hint-right');
-    if (swipeCurrentX < -40) {
-      hintLeft.style.opacity = Math.min(1, Math.abs(swipeCurrentX) / 100);
-    } else {
-      hintLeft.style.opacity = 0;
-    }
-    if (swipeCurrentX > 40) {
-      hintRight.style.opacity = Math.min(1, swipeCurrentX / 100);
-    } else {
-      hintRight.style.opacity = 0;
-    }
-  }
-
-  function onEnd(e) {
-    if (!swipeDragging) return;
-    swipeDragging = false;
-    card.classList.remove('swiping');
-    document.getElementById('lego-swipe-hint-left').style.opacity = 0;
-    document.getElementById('lego-swipe-hint-right').style.opacity = 0;
-
-    if (swipeCurrentX < -120) {
-      swipeLeft();
-    } else if (swipeCurrentX > 120) {
-      swipeRight();
-    } else {
-      // Snap back
-      card.style.transform = '';
-    }
-  }
-
-  card.addEventListener('touchstart', onStart, { passive: true });
-  card.addEventListener('touchmove', onMove, { passive: false });
-  card.addEventListener('touchend', onEnd);
-  card.addEventListener('mousedown', onStart);
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onEnd);
+const LEGO_SVG = (() => {
+  const s = (d) => `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  return {
+    upload: s('<path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/>'),
+    folderPlus: s('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><path d="M12 11v6M9 14h6"/>'),
+    up: s('<path d="M12 19V5"/><path d="M6 11l6-6 6 6"/>'),
+    down: s('<path d="M12 5v14"/><path d="M6 13l6 6 6-6"/>'),
+    list: s('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>'),
+    grid: s('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>'),
+    more: s('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>'),
+  };
 })();
-
-// ─── Terminal ───────────────────────────────────────────

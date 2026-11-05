@@ -264,6 +264,64 @@ def _fetch_latest_from_github() -> dict:
             data = None
     return data or {}
 
+# ─── Signed releases ─────────────────────────────────────────────
+# Each release carries release-manifest.json + .sig, signed on the maintainer's
+# machine (scripts/sign_release.py). The keys pinned in THIS install decide what
+# it accepts, so a hijacked repo, account or CI can't publish an update.
+MANIFEST_ASSET, SIG_ASSET = 'release-manifest.json', 'release-manifest.json.sig'
+_signed_cache = {}  # tag -> (time, result)
+
+
+def signing_enabled() -> bool:
+    import lab_report
+    return bool(lab_report.RELEASE_SIGNERS.strip())
+
+
+def _release_assets(tag):
+    """(manifest bytes, signature bytes) attached to a GitHub release, or None."""
+    import requests as _requests
+    if not _REF_PATTERN.match(tag):
+        return None
+    try:
+        r = _requests.get(f'https://api.github.com/repos/{UPDATE_REPO}/releases/tags/{tag}', timeout=8,
+                          headers={'Accept': 'application/vnd.github+json'})
+        if r.status_code != 200:
+            return None
+        urls = {a.get('name'): a.get('browser_download_url') for a in r.json().get('assets', [])}
+        out = []
+        for name in (MANIFEST_ASSET, SIG_ASSET):
+            url = urls.get(name) or ''
+            if not url.startswith(f'https://github.com/{UPDATE_REPO}/releases/download/'):
+                return None
+            a = _requests.get(url, timeout=8)
+            if a.status_code != 200 or len(a.content) > 64_000:
+                return None
+            out.append(a.content)
+        return tuple(out)
+    except Exception:
+        return None
+
+
+def verified_release(tag) -> dict:
+    """{'ok': True, 'manifest', 'raw', 'sig'} when the tag's release is signed by a pinned key."""
+    import lab_report
+    hit = _signed_cache.get(tag)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    assets = _release_assets(tag)
+    if not assets:
+        res = {'ok': False, 'error': 'this release is not signed'}
+    else:
+        try:
+            m = lab_report.verify_release(*assets)
+            res = {'ok': m.get('version') == tag, 'manifest': m, 'raw': assets[0], 'sig': assets[1],
+                   'error': '' if m.get('version') == tag else 'the signature is for a different version'}
+        except ValueError as e:
+            res = {'ok': False, 'error': str(e)}
+    _signed_cache[tag] = (time.time(), res)
+    return res
+
+
 # ─── Core logic (shared by the HTTP routes and the `decloud update` CLI) ──
 
 def check_status():
@@ -282,8 +340,12 @@ def check_status():
     latest = _latest_cache['data'] or {}
 
     update_available = False
+    signing = signing_enabled()
     if is_git and latest.get('tag'):
         update_available = _version_newer(latest['tag'], VERSION)
+        if signing and update_available:   # only ever offer releases signed with a pinned key
+            latest = {**latest, 'signed': verified_release(latest['tag'])['ok']}
+            update_available = latest['signed']
 
     return {
         'current_version': VERSION,
@@ -294,6 +356,7 @@ def check_status():
         'can_rollback': can_rollback,
         'latest': latest,
         'update_available': update_available,
+        'signing': signing,
     }
 
 
@@ -355,6 +418,14 @@ def perform_update(ref):
         if not _on_main(target_sha):
             return 409, {'error': f'{ref} is not on the main branch — refusing it',
                          'code': 'NOT_ON_MAIN'}
+        if signing_enabled() and not is_rollback:
+            signed = verified_release(ref)
+            if not signed['ok']:
+                return 409, {'error': f'{ref} is not signed by DeCloud ({signed["error"]}) — refusing it',
+                             'code': 'UNSIGNED'}
+            if signed['manifest']['commit'] != target_sha:
+                return 409, {'error': f'{ref} does not match its signed release record — refusing it',
+                             'code': 'UNSIGNED'}
 
         write_update_meta({
             'state': 'prepared',

@@ -15,7 +15,7 @@ pymupdf==1.28.0
 mutagen==1.48.1
 
 # ─── Images (file browser thumbnails) ─────────────
-Pillow==12.3.0
+Pillow==13.0.0
 pillow-heif==1.8.1
 
 # ─── TTS / Voice (optional — app works without these) ───
@@ -23,3 +23,6 @@ pillow-heif==1.8.1
 piper-tts==1.6.0
 # Whisper for speech-to-text (CTRanslate2 backend, no torch)
 faster-whisper==1.2.1
+
+# ─── Music download (search + save songs into your library) ───
+yt-dlp==2026.10.26

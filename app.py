@@ -47,17 +47,20 @@ _LOOPBACK_HOSTS = ('127.0.0.1', 'localhost', '::1')
 
 
 def _funnel_active() -> bool:
-    """True when `tailscale funnel status` reports a public Funnel."""
+    """True when Tailscale shares this app: a public Funnel, or a private
+    Serve proxy to our port (the whole tailnet would reach an open app)."""
     import shutil, subprocess
     tailscale = shutil.which('tailscale')
     if not tailscale:
         return False
-    try:
-        out = subprocess.run([tailscale, 'funnel', 'status'], capture_output=True,
-                             text=True, timeout=5).stdout
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return 'Funnel on' in out
+    port = os.environ.get('DECLOUD_PORT', '8899')
+    out = ''
+    for cmd in (['funnel', 'status'], ['serve', 'status']):
+        try:
+            out += subprocess.run([tailscale, *cmd], capture_output=True, text=True, timeout=5).stdout
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return 'Funnel on' in out or any(f'{h}:{port}' in out for h in ('127.0.0.1', 'localhost', '[::1]'))
 
 
 def open_mode_refusal(bind_host: str):
@@ -71,7 +74,8 @@ def open_mode_refusal(bind_host: str):
                 'Set DECLOUD_PIN, or bind 127.0.0.1.')
     if _funnel_active():
         return ('open mode (DECLOUD_INSECURE_OPEN=1) refuses to run while Tailscale '
-                'Funnel is on. Run `tailscale funnel --https=443 off`, or set DECLOUD_PIN.')
+                'shares this app (Funnel or Serve). Run `./decloud stop` or '
+                '`tailscale serve --https=443 off`, or set DECLOUD_PIN.')
     return None
 
 
@@ -116,8 +120,8 @@ if __name__ == '__main__':
         print('*' * 70)
     else:
         print('[DeCloud] Bound to localhost only — zero exposed ports.')
-    print('[DeCloud] For remote/phone access, start a tunnel:')
-    print(f'[DeCloud]   tailscale funnel {PORT}')
+    print('[DeCloud] For private remote/phone access on your tailnet:')
+    print(f'[DeCloud]   tailscale serve --bg --https=443 http://127.0.0.1:{PORT}')
     print(f'[DeCloud]   (or: cloudflared tunnel --url http://localhost:{PORT})')
     print('[DeCloud] The tunnel provides trusted HTTPS automatically.')
 

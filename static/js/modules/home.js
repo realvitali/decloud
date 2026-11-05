@@ -16,7 +16,7 @@ async function loadAgents() {
     const agents = data.agents || [];
 
     if (!agents.length) {
-      listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🤖</div><h3>No agents found</h3><p>To manage agents, set the Hermes path in Settings → Voice.</p></div>';
+      listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">' + ICONS.bot + '</div><h3>No agents found</h3><p>To manage agents, set the Hermes path in Settings → Voice.</p></div>';
       return;
     }
 
@@ -27,7 +27,7 @@ async function loadAgents() {
       const hasJobs = a.jobs && a.jobs.length;
       const note = a.profile === 'local' ? 'This workstation — always on' : 'No cron jobs configured';
       return `
-      <div class="agent-card" role="button" tabindex="0" data-id="${escapeHtml(a.id)}" onclick="toggleAgentDetail(this.dataset.id)">
+      <div class="agent-card" role="button" tabindex="0" data-id="${escapeHtml(a.id)}" data-onclick="ca48106a">
         <div class="agent-header">
           <div class="agent-avatar" style="${agentAvatarStyle(name)}">${escapeHtml(name.charAt(0).toUpperCase())}</div>
           <div class="agent-info">
@@ -56,7 +56,7 @@ async function loadAgents() {
     }
   } catch(e) {
     console.error('loadAgents failed', e);
-    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🤖</div><h3>Agents not set up</h3><p>To manage agents, set the Hermes path in Settings → Voice.</p></div>';
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">' + ICONS.bot + '</div><h3>Agents not set up</h3><p>To manage agents, set the Hermes path in Settings → Voice.</p></div>';
   }
 }
 
@@ -77,7 +77,7 @@ function renderJobs(container, jobs, profile) {
           ${next ? `<div class="job-next">${next}</div>` : ''}
           ${err}
         </div>
-        <label class="job-toggle" data-id="${escapeHtml(j.id)}" data-profile="${escapeHtml(profile)}" onclick="event.stopPropagation(); toggleJob(this.dataset.id, !this.previousElementSibling.checked, this.dataset.profile)">
+        <label class="job-toggle" data-id="${escapeHtml(j.id)}" data-profile="${escapeHtml(profile)}" data-onclick="c41b4ed3">
           <input type="checkbox" ${j.enabled ? 'checked' : ''}>
           <span class="job-toggle-slider"></span>
         </label>
@@ -216,7 +216,7 @@ function buildStatusChips() {
     { key: 'net',  label: 'NET' },
   ];
   container.innerHTML = chips.map(function(c) {
-    return '<div class="stat-chip" role="button" tabindex="0" id="chip-' + c.key + '" data-key="' + c.key + '" onclick="toggleChipGraph(this.dataset.key)">' +
+    return '<div class="stat-chip" role="button" tabindex="0" id="chip-' + c.key + '" data-key="' + c.key + '" data-onclick="c74a04ac">' +
       '<div class="chip-percent">' +
       '<div class="stat-chip-label">' + c.label + '</div>' +
       '<div class="stat-chip-value" id="chip-val-' + c.key + '">--</div>' +
@@ -316,9 +316,18 @@ function buildNotifications(sys) {
   return notifications;
 }
 
+var updateNotice = null;   // a signed DeCloud release waiting to be installed
+function checkUpdateNotice() {
+  fetch('/api/system/update/check').then(function(r) { return r.ok ? r.json() : null; }).then(function(d) {
+    updateNotice = d && d.update_available && d.tree_clean && d.latest && d.latest.tag ? d.latest.tag : null;
+    refreshNotifications();
+  }).catch(function() {});
+}
+
 function refreshNotifications() {
   fetch('/api/system').then(function(r) { return r.json(); }).then(function(sys) {
     buildNotifications(sys);
+    if (updateNotice) notifications.unshift({ text: 'DeCloud ' + updateNotice + ' is ready. Tap to update.', type: 'info', icon: 'refresh', time: 'new', action: 'update' });
     notifRead = false;
     updateNotifBadge();
     var panel = document.getElementById('notif-panel');
@@ -348,6 +357,10 @@ function renderNotifications() {
   }
   list.innerHTML = notifications.map(function(n) {
     var iconSvg = ICONS[n.icon] || ICONS.alert;
+    if (n.action === 'update') return '<button class="notif-item notif-action" data-onclick="c41cfede">' +
+      '<div class="notif-item-icon ' + n.type + '">' + iconSvg + '</div>' +
+      '<div class="notif-item-body"><div class="notif-item-text">' + escapeHtml(n.text) + '</div>' +
+      '<div class="notif-item-time">' + escapeHtml(n.time) + '</div></div></button>';
     return '<div class="notif-item">' +
       '<div class="notif-item-icon ' + n.type + '">' + iconSvg + '</div>' +
       '<div class="notif-item-body">' +
@@ -355,6 +368,15 @@ function renderNotifications() {
       '<div class="notif-item-time">' + escapeHtml(n.time) + '</div>' +
       '</div></div>';
   }).join('');
+}
+
+// One tap: open Settings, confirm the exact version, and run the verified updater
+async function startUpdateFromNotice() {
+  var panel = document.getElementById('notif-panel');
+  if (panel) panel.classList.remove('open');
+  openApp('settings');
+  await checkForUpdates(true);
+  performUpdate();
 }
 
 function clearNotifications() {
@@ -375,15 +397,27 @@ document.addEventListener('click', function(e) {
 // ─── App Grid ────────────────────────────────────────────
 function buildAppGrid() {
   document.getElementById('app-grid').innerHTML = visibleApps(APPS).map(app => `
-    <div class="app-icon" role="button" tabindex="0" data-app-id="${app.id}" onclick="openApp(this.dataset.appId)">
+    <div class="app-icon" role="button" tabindex="0" data-app-id="${app.id}" data-onclick="ca1972b7">
       <div class="app-icon-visual" style="color:${app.color}">${app.svg}</div>
       <div class="app-label">${app.label}</div>
     </div>
   `).join('');
 }
 
+// Experimental features (apps, and Voice) appear only when the Settings toggle is on
 function applyExperimentalApps() {
   buildAppGrid();
+  const orb = document.getElementById('voice-orb');
+  const home = document.getElementById('home-screen')?.classList.contains('active');
+  if (orb) orb.style.display = experimentalApps && home && !(typeof voiceOpen !== 'undefined' && voiceOpen) ? '' : 'none';
+  if (!experimentalApps && typeof voiceOpen !== 'undefined' && voiceOpen && typeof closeVoice === 'function') closeVoice();
+  const tab = document.getElementById('st-tab-voice');
+  if (tab) {
+    tab.hidden = !experimentalApps;
+    if (!experimentalApps && tab.classList.contains('active') && typeof switchSettingsTab === 'function') {
+      switchSettingsTab(document.querySelector('.settings-tab:not([hidden])')?.id || 'st-tab-general');
+    }
+  }
 }
 
 function openApp(id) {
@@ -418,10 +452,11 @@ function showScreen(id) {
   // Track app usage
   var appMap = { 'book-screen': 'books', 'music-screen': 'music', 'lego-screen': 'files', 'ollama-screen': 'ai-chat', 'comfy-screen': 'ai-gen', 'agents-screen': 'agents', 'project-screen': 'projects', 'system-screen': 'system', 'terminal-screen': 'terminal', 'osint-screen': 'privacy', 'musicgen-screen': 'musicgen', 'journal-screen': 'journal', 'legos-screen': 'legos', 'settings-screen': 'settings' };
   if (appMap[id] && typeof trackAppOpen === 'function') trackAppOpen(appMap[id]);  // hash restore runs before telemetry.js loads
+  else if (!appMap[id] && typeof trackAppClose === 'function') trackAppClose();   // Home: stop the last app's clock
   // Voice orb only shows on home screen
   const orb = document.getElementById('voice-orb');
   if (orb) {
-    if (id === 'home-screen' && !voiceOpen) {
+    if (id === 'home-screen' && !voiceOpen && experimentalApps) {   // voice is experimental
       orb.style.display = '';
     } else {
       orb.style.display = 'none';
@@ -547,4 +582,3 @@ function showToast(msg) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3000);
 }
-

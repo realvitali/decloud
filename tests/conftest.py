@@ -36,6 +36,18 @@ def client():
 
 
 @pytest.fixture(autouse=True)
+def _isolate_settings(tmp_path, monkeypatch):
+    """Never read the real settings.json: it can list paired lab devices,
+    which tests must not contact. Also drop the cross-device model cache."""
+    import shared
+    from routes import ai_devices
+    monkeypatch.setattr(shared, 'SETTINGS_FILE', tmp_path / 'settings.json')
+    ai_devices.forget_inventory()
+    yield
+    ai_devices.forget_inventory()
+
+
+@pytest.fixture(autouse=True)
 def _reset_limiter():
     """flask-limiter keys by IP (127.0.0.1 for the test client) — reset
     the counter after every test so login rate limits don't leak."""

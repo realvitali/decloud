@@ -43,6 +43,10 @@ function hideLoginScreen() {
   // Show home screen
   const home = document.getElementById('home-screen');
   if (home) home.classList.add('active');
+  if (typeof refreshDeviceTitle === 'function') refreshDeviceTitle();
+  else document.addEventListener('DOMContentLoaded', () => {
+    if (typeof refreshDeviceTitle === 'function') refreshDeviceTitle();
+  }, { once: true });
   // First-run intro only after sign-in (never over the login screen)
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => initOnboarding());

@@ -16,6 +16,7 @@ credentials.json
 
 # Dependencies
 .venv/
+.node-venv/
 venv/
 node_modules/
 __pycache__/
@@ -72,6 +73,10 @@ voice_hermes_session.txt
 voice_history.json
 sessions.json
 sessions.json.tmp
+data/chats/
 
 # Lab pairing keys (cert, token)
 lab-state/
+
+# atomic-write temp files (sessions.json.<pid>.<tid>.tmp, …)
+*.tmp

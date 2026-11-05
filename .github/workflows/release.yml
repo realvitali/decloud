@@ -8,10 +8,11 @@ name: Release
 # Actions are pinned by commit SHA (tag in the trailing comment); bump them
 # deliberately, never by moving tag.
 #
-# FOLLOW-UP (audit N3): tags are still lightweight and unsigned, and the
-# updater does not verify them. Before strangers pull updates, sign release
-# tags (e.g. `git tag -s` with a maintainer key, or gitsign) and have
-# routes/update.py run `git verify-tag` against a pinned key before checkout.
+# Signing happens OFF this runner, on purpose: after this job publishes the
+# release, the maintainer runs `scripts/sign_release.py sign` locally, which
+# attaches release-manifest.json + .sig. Installs only offer and install
+# releases signed with a key pinned in lab_report.RELEASE_SIGNERS, so nothing
+# this workflow (or anyone who can edit it) produces is trusted on its own.
 
 on:
   workflow_run:

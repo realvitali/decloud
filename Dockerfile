@@ -15,8 +15,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy app code
 COPY . .
 
-# Create default directories
-RUN mkdir -p /data/books /data/files /data/music /data/cache
+# Create default directories, and run as an unprivileged user (the app has a terminal)
+RUN mkdir -p /data/books /data/files /data/music /data/cache \
+    && useradd --create-home --uid 10001 decloud \
+    && chown -R decloud:decloud /app /data
+USER decloud
 
 # Env defaults
 ENV DECLOUD_PORT=8899

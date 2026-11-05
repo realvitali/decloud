@@ -43,55 +43,82 @@ class TestTraversal:
         r = client.get('/api/lego/download', query_string={'path': path}, headers=auth_headers)
         assert r.status_code in (400, 403, 404)
 
-    @pytest.mark.parametrize('path', ['../note.txt', '/etc/passwd'])
-    def test_shred_traversal_rejected(self, client, auth_headers, populated, path):
-        r = client.post('/api/lego/shred', json={'path': path}, headers=auth_headers)
-        assert r.status_code in (400, 403, 404)
+    @pytest.mark.parametrize('path', ['../note.txt', '/etc/passwd', 'sub/../../note.txt', '', 'sub/\0x'])
+    def test_write_actions_reject_escapes(self, client, auth_headers, populated, path, tmp_path, monkeypatch):
+        monkeypatch.setenv('XDG_DATA_HOME', str(tmp_path / 'xdg'))
+        for url, body in (('/api/files/rename', {'path': path, 'name': 'x'}), ('/api/files/delete', {'paths': [path]})):
+            r = client.post(url, json=body, headers=auth_headers)
+            assert r.status_code in (400, 403, 404), (url, path)
+        assert (populated / 'note.txt').exists()
 
-    @pytest.mark.parametrize('path', ['../note.txt', '/etc/passwd'])
-    def test_trash_and_poof_traversal_rejected(self, client, auth_headers, populated, path):
-        for endpoint in ('/api/lego/trash', '/api/lego/poof'):
-            r = client.post(endpoint, json={'path': path}, headers=auth_headers)
-            assert r.status_code in (400, 403, 404), endpoint
+
+class TestFileActions:
+    @pytest.fixture(autouse=True)
+    def trash(self, tmp_path, monkeypatch):
+        monkeypatch.setenv('XDG_DATA_HOME', str(tmp_path / 'xdg'))
+        return tmp_path / 'xdg' / 'Trash'
+
+    def test_names_cannot_carry_paths_or_hide(self, client, auth_headers, populated):
+        for bad in ('../x', 'a/b', '.ssh', '', ' x', 'a\x00b', 'a\nb'):
+            assert client.post('/api/files/mkdir', json={'path': '', 'name': bad}, headers=auth_headers).status_code == 400, bad
+            assert client.post('/api/files/rename', json={'path': 'note.txt', 'name': bad}, headers=auth_headers).status_code == 400, bad
+        assert (populated / 'note.txt').exists()
+
+    def test_mkdir_rename_delete_roundtrip(self, client, auth_headers, populated, trash):
+        assert client.post('/api/files/mkdir', json={'path': 'sub', 'name': 'New'}, headers=auth_headers).status_code == 200
+        assert client.post('/api/files/mkdir', json={'path': 'sub', 'name': 'New'}, headers=auth_headers).status_code == 409
+        assert client.post('/api/files/rename', json={'path': 'note.txt', 'name': 'renamed.txt'}, headers=auth_headers).status_code == 200
+        assert (populated / 'renamed.txt').read_text() == 'hello'
+        r = client.post('/api/files/delete', json={'paths': ['renamed.txt', 'sub/New']}, headers=auth_headers)
+        assert r.status_code == 200 and r.get_json()['deleted'] == 2
+        assert not (populated / 'renamed.txt').exists() and (trash / 'files' / 'renamed.txt').exists()
+        assert (trash / 'info' / 'renamed.txt.trashinfo').exists()
+
+    def test_upload_never_overwrites(self, client, auth_headers, populated):
+        import io
+        r = client.post('/api/files/upload', headers=auth_headers, content_type='multipart/form-data',
+                        data={'path': '', 'files': (io.BytesIO(b'new'), 'note.txt')})
+        assert r.status_code == 200 and r.get_json()['saved'] == ['note (2).txt']
+        assert (populated / 'note.txt').read_text() == 'hello'
+        r = client.post('/api/files/upload', headers=auth_headers, content_type='multipart/form-data',
+                        data={'path': '', 'files': (io.BytesIO(b'x'), '.bashrc')})
+        assert r.status_code == 400 and not (populated / '.bashrc').exists()
+
+    def test_removed_odd_features_are_gone(self, client, auth_headers, populated):
+        for url in ('/api/lego/trash', '/api/lego/poof', '/api/lego/shred'):
+            assert client.post(url, json={'path': 'note.txt'}, headers=auth_headers).status_code in (404, 405)
+        assert client.get('/api/lego/random_image', headers=auth_headers).status_code == 404
 
 
 class TestSymlinkEscape:
-    def test_shred_refuses_symlink(self, client, auth_headers, populated):
+    def test_delete_moves_the_link_not_its_target(self, client, auth_headers, populated, tmp_path, monkeypatch):
         if os.name == 'nt':
             pytest.skip('symlinks need privileges on Windows')
+        monkeypatch.setenv('XDG_DATA_HOME', str(tmp_path / 'xdg'))
         outside = populated.parent / 'outside-secret.txt'
         outside.write_text('do not destroy')
-        link = populated / 'link-to-outside.txt'
-        link.symlink_to(outside)
-        try:
-            r = client.post('/api/lego/shred', json={'path': 'link-to-outside.txt'}, headers=auth_headers)
-            assert r.status_code in (400, 403), r.get_json()
-            assert outside.exists(), 'shred followed a symlink!'
-        finally:
-            link.unlink(missing_ok=True)
+        (populated / 'link.txt').symlink_to(outside)
+        r = client.post('/api/files/delete', json={'paths': ['link.txt']}, headers=auth_headers)
+        assert r.status_code == 200 and outside.read_text() == 'do not destroy'
 
-    def test_trash_and_poof_refuse_symlink(self, client, auth_headers, populated):
+    def test_cannot_act_inside_a_symlinked_folder_outside_files(self, client, auth_headers, populated):
         if os.name == 'nt':
             pytest.skip('symlinks need privileges on Windows')
-        outside = populated.parent / 'outside-secret2.txt'
-        outside.write_text('do not destroy')
-        link = populated / 'link2.txt'
-        link.symlink_to(outside)
-        try:
-            for endpoint in ('/api/lego/trash', '/api/lego/poof'):
-                r = client.post(endpoint, json={'path': 'link2.txt'}, headers=auth_headers)
-                assert r.status_code in (400, 403), endpoint
-            assert outside.exists()
-        finally:
-            link.unlink(missing_ok=True)
+        outdir = populated.parent / 'outside-dir'
+        outdir.mkdir(exist_ok=True)
+        (outdir / 'precious.txt').write_text('keep')
+        (populated / 'portal').symlink_to(outdir)
+        r = client.post('/api/files/delete', json={'paths': ['portal/precious.txt']}, headers=auth_headers)
+        assert r.status_code in (400, 403, 404) and (outdir / 'precious.txt').exists()
 
 
 class TestAuthRequired:
     def test_all_destructive_endpoints_require_auth(self, client, populated):
         for method, url, body in [
-            ('post', '/api/lego/trash', {'path': 'note.txt'}),
-            ('post', '/api/lego/poof', {'path': 'note.txt'}),
-            ('post', '/api/lego/shred', {'path': 'note.txt'}),
+            ('post', '/api/files/delete', {'paths': ['note.txt']}),
+            ('post', '/api/files/rename', {'path': 'note.txt', 'name': 'x'}),
+            ('post', '/api/files/mkdir', {'path': '', 'name': 'x'}),
+            ('post', '/api/files/upload', {}),
             ('get', '/api/lego/browse', None),
             ('get', '/api/lego/download?path=note.txt', None),
         ]:

@@ -9,7 +9,7 @@ async function loadOsintProfiles() {
       return;
     }
     container.innerHTML = profiles.map(p => `
-      <div class="osint-profile-card" data-id="${escapeHtml(p.id)}" onclick="toggleOsintCard(this.dataset.id)">
+      <div class="osint-profile-card" data-id="${escapeHtml(p.id)}" data-onclick="c7fa6003">
         <div class="osint-profile-header">
           <div class="osint-profile-name">${escapeHtml(p.name)}</div>
           <div class="osint-profile-chevron">&#9662;</div>
@@ -21,10 +21,10 @@ async function loadOsintProfiles() {
         </div>
         <div class="osint-profile-expanded" id="expand-${escapeHtml(p.id)}" style="display:none">
           <div class="osint-profile-actions">
-            <button data-id="${escapeHtml(p.id)}" onclick="event.stopPropagation();osintRunScan(this.dataset.id)" class="osint-scan-btn">Scan</button>
-            <button data-id="${escapeHtml(p.id)}" onclick="event.stopPropagation();osintRunScan(this.dataset.id, true)" class="osint-scan-btn deep">Deep Scan</button>
-            <button data-id="${escapeHtml(p.id)}" onclick="event.stopPropagation();osintLoadScans(this.dataset.id)" class="osint-scan-btn">History</button>
-            <button data-id="${escapeHtml(p.id)}" onclick="event.stopPropagation();osintDeleteProfile(this.dataset.id)" class="osint-scan-btn delete">Delete</button>
+            <button data-id="${escapeHtml(p.id)}" data-onclick="ce9dbe9c" class="osint-scan-btn">Scan</button>
+            <button data-id="${escapeHtml(p.id)}" data-onclick="c6f13035" class="osint-scan-btn deep">Deep Scan</button>
+            <button data-id="${escapeHtml(p.id)}" data-onclick="c0f5182d" class="osint-scan-btn">History</button>
+            <button data-id="${escapeHtml(p.id)}" data-onclick="cc1125af" class="osint-scan-btn delete">Delete</button>
           </div>
           <div class="osint-profile-scans" id="scans-${escapeHtml(p.id)}"></div>
         </div>
@@ -141,7 +141,7 @@ function updateScanModal() {
           <span class="osint-scan-task-status">${statusText}</span>
         </div>
         ${progressBar}
-        ${scan.status === 'done' ? `<button class="osint-scan-view-btn" data-id="${escapeHtml(pid)}" onclick="osintViewResults(this.dataset.id)">View Results</button>` : ''}
+        ${scan.status === 'done' ? `<button class="osint-scan-view-btn" data-id="${escapeHtml(pid)}" data-onclick="cccec6d6">View Results</button>` : ''}
       </div>
     `;
   }
@@ -224,11 +224,11 @@ function osintViewResults(profileId) {
   const s = scan.results.summary;
   let html = `
     <div class="osint-summary-grid">
-      <div class="osint-stat"><span class="osint-stat-num">${s.total_results || 0}</span><span class="osint-stat-label">Total Results</span></div>
-      <div class="osint-stat"><span class="osint-stat-num" style="color:#ef4444">${s.high_confidence || 0}</span><span class="osint-stat-label">High Confidence</span></div>
-      <div class="osint-stat"><span class="osint-stat-num" style="color:#fbbf24">${s.medium_confidence || 0}</span><span class="osint-stat-label">Medium</span></div>
-      <div class="osint-stat"><span class="osint-stat-num" style="color:#6b7280">${s.low_confidence || 0}</span><span class="osint-stat-label">Low</span></div>
-      <div class="osint-stat"><span class="osint-stat-num" style="color:#22c55e">${s.opt_outs_available || 0}</span><span class="osint-stat-label">Opt-Outs</span></div>
+      <div class="osint-stat"><span class="osint-stat-num">${Number(s.total_results) || 0}</span><span class="osint-stat-label">Total Results</span></div>
+      <div class="osint-stat"><span class="osint-stat-num" style="color:#ef4444">${Number(s.high_confidence) || 0}</span><span class="osint-stat-label">High Confidence</span></div>
+      <div class="osint-stat"><span class="osint-stat-num" style="color:#fbbf24">${Number(s.medium_confidence) || 0}</span><span class="osint-stat-label">Medium</span></div>
+      <div class="osint-stat"><span class="osint-stat-num" style="color:#6b7280">${Number(s.low_confidence) || 0}</span><span class="osint-stat-label">Low</span></div>
+      <div class="osint-stat"><span class="osint-stat-num" style="color:#22c55e">${Number(s.opt_outs_available) || 0}</span><span class="osint-stat-label">Opt-Outs</span></div>
     </div>
   `;
 
@@ -278,7 +278,7 @@ async function osintLoadScans(profileId) {
       return;
     }
     results.innerHTML = scans.map(s => `
-      <div class="osint-scan-row" data-id="${escapeHtml(s.scan_id)}" onclick="osintLoadScan(this.dataset.id)">
+      <div class="osint-scan-row" data-id="${escapeHtml(s.scan_id)}" data-onclick="cd269771">
         <span>${escapeHtml(s.timestamp)}</span>
         <span>${s.deep ? 'DEEP' : 'standard'}</span>
         <span class="osint-badge ${s.total_exposures > 0 ? 'found' : 'safe'}">${escapeHtml(s.total_exposures)} exposures</span>

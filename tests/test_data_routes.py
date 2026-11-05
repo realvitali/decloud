@@ -84,24 +84,10 @@ class TestTts:
 
 
 class TestVoiceRunCommand:
-    @pytest.mark.parametrize('access,cmd', [
-        ('talk', 'find . -delete'),
-        ('talk', 'find . -execdir id ;'),
-        ('basic', 'git -c core.sshCommand=id fetch'),
-        ('basic', 'tar -cf x.tar --to-command=id .'),
-        ('basic', 'python3 x.py'),
-        ('basic', 'python3 -m http.server'),
-    ])
-    def test_blocked(self, client, auth_headers, monkeypatch, access, cmd):
-        monkeypatch.setattr(shared, 'get_voice_config', lambda: {'voice_access': access})
-        r = client.post('/api/voice/run_command', json={'command': cmd}, headers=auth_headers)
-        assert r.status_code == 403, r.get_json()
-
-    def test_plain_find_allowed(self, client, auth_headers, monkeypatch, tmp_path):
-        monkeypatch.setattr(shared, 'get_voice_config', lambda: {'voice_access': 'talk'})
-        r = client.post('/api/voice/run_command', json={'command': f'find {tmp_path} -maxdepth 0'},
-                        headers=auth_headers)
-        assert r.status_code == 200
+    def test_run_command_route_removed(self, client, auth_headers):
+        # its "talk"/"basic" tiers could not actually contain a command (audit 2026-11-04)
+        r = client.post('/api/voice/run_command', json={'command': 'id'}, headers=auth_headers)
+        assert r.status_code in (404, 405)
 
     def test_intent_route_removed(self, client, auth_headers):
         r = client.post('/api/voice/intent', json={'text': 'hi'}, headers=auth_headers)

@@ -34,30 +34,10 @@ min-height:100vh;margin:0;text-align:center;padding:24px}
 .dot{font-size:48px;margin-bottom:16px;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 p{opacity:0.7;font-size:14px}</style></head><body>
-<div class="dot">🔄</div>
+<div class="dot"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#e0e0e0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></div>
 <h2>Clearing DeCloud cache...</h2>
 <p id="status">Working...</p>
-<script>
-(async function(){
-  var s = document.getElementById('status');
-  try {
-    if ('serviceWorker' in navigator) {
-      var regs = await navigator.serviceWorker.getRegistrations();
-      for (var r of regs) { await r.unregister(); }
-      s.textContent += ' Unregistered ' + regs.length + ' service worker(s).';
-    }
-    if ('caches' in window) {
-      var keys = await caches.keys();
-      for (var k of keys) { await caches.delete(k); }
-      s.textContent += ' Deleted ' + keys.length + ' cache(s).';
-    }
-    s.textContent += ' Redirecting...';
-    setTimeout(function(){ window.location.href = '/'; }, 1500);
-  } catch(e) {
-    s.textContent = 'Error: ' + e.message + ' — try force-closing the app and reopening.';
-  }
-})();
-</script></body></html>'''
+<script src="/static/js/kill-cache.js"></script></body></html>'''
 
 @bp.route('/icons/<path:filename>')
 def icons(filename):

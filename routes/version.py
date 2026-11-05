@@ -7,9 +7,38 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.5.3"
+VERSION = "0.6.0"
 
 CHANGELOG = [
+    {
+        "version": "0.6.0",
+        "date": "2026-11-04",
+        "changes": [
+            "My Lab: connect all your devices and show off your homelab",
+            "My Lab: pair Linux computers with a six-digit code over an encrypted, pinned link",
+            "add iPhones and Android phones on your tailnet",
+            "My Lab: 3D models of each device that float on pedestals and can be spun and thrown, with a Lights up opening",
+            "My Lab: total rings show each device's share of CPU, GPU, memory and storage, plus a power draw tile",
+            "My Lab: a services page shows what runs on each device (Ollama, Docker, Tailscale and more)",
+            "My Lab: Appearance settings with 14 title fonts, 4 accent colours and a 3D or Classic view",
+            "My Lab: tap a device to see its details and update its agent from DeCloud",
+            "AI across devices: see which models live on which device, chat with them and download or remove models on any paired device",
+            "Chat: conversations are saved",
+            "Updates: a notification when a new release is out, installed with one tap",
+            "Signed releases: DeCloud and device agents can check updates against a pinned key (off until a key is set)",
+            "Files: bug fixes",
+            "Files, Music and Books share one grid: more per screen, bigger book covers on phones",
+            "Music: song and artist names read from your files, editable like books, and the search bar now closes",
+            "Books: whole-book audio for PDF and plain-text books",
+            "Every app has the same home icon button",
+            "Voice is now experimental (turn it on under Settings > Experimental)",
+            "Settings: Devices lists only your Lab devices, and usage counts only time an app is on screen",
+            "Installer: separate --host and --node modes, private Tailscale Serve by default",
+            "Security: full audit with every finding fixed (docs/security/SECURITY_AUDIT-2026-11-04.md)",
+            "Security: strict content security policy, no inline scripts",
+            "Security: voice command runner removed, foreign-site requests refused in every mode, Docker runs as a non-root user",
+        ]
+    },
     {
         "version": "0.5.3",
         "date": "2026-10-25",

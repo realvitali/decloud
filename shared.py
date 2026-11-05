@@ -55,6 +55,11 @@ def _load_env_file():
     if not env_path.exists():
         return
     try:
+        if os.name != 'nt' and env_path.stat().st_mode & 0o077:
+            os.chmod(env_path, 0o600)   # it holds the passcode and SECRET_KEY
+    except OSError:
+        pass
+    try:
         # Keys already present in the real environment (e.g. systemd
         # EnvironmentFile) must NOT be overridden by .env. Everything else
         # uses last-wins, so a duplicate key in .env resolves to the final
@@ -95,9 +100,14 @@ DECLOUD_PIN = os.environ.get('DECLOUD_PIN', '')
 # Open mode (no passcode, no auth) only when explicitly opted in.
 INSECURE_OPEN = os.environ.get('DECLOUD_INSECURE_OPEN', '') == '1'
 
+_ENV_LINE_BREAKS = '\n\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029\0'
+
+
 def env_value_is_single_line(value) -> bool:
-    """True when a value can be written to .env without injecting lines."""
-    return isinstance(value, str) and '\n' not in value and '\r' not in value
+    """True when a value can be written to .env without injecting lines.
+    The loader splits with str.splitlines(), which breaks on more than \\n,
+    so every character it treats as a line break is refused (plus NUL)."""
+    return isinstance(value, str) and not any(c in _ENV_LINE_BREAKS for c in value)
 if not DECLOUD_PIN and not INSECURE_OPEN:
     # First run without the installer: never run open (any website could
     # reach the terminal). Make a passcode, save it, and show it once.
@@ -308,6 +318,12 @@ def _require_auth():
     if not host_allowed(req.host):
         return jsonify({'error': 'Unknown host — add it to DECLOUD_ALLOWED_HOSTS in .env',
                         'code': 'BAD_HOST'}), 421
+    # Another site's form or fetch always carries its own Origin: refuse it.
+    # Non-browser clients (CLI/TUI/curl) may omit Origin, except in open mode,
+    # where nothing else stands between a web page and the API.
+    if req.method in ('POST', 'PUT', 'PATCH', 'DELETE') and req.path.startswith('/api/'):
+        if (req.headers.get('Origin') is not None or not DECLOUD_PIN) and not ws_origin_ok(req.environ):
+            return jsonify({'error': 'Request from another site refused', 'code': 'BAD_ORIGIN'}), 403
     if not DECLOUD_PIN:
         return  # Open mode, no auth needed
     # Allow static files and the login page
@@ -317,7 +333,7 @@ def _require_auth():
         return
     if req.path == '/api/auth/login' or req.path == '/api/auth/check':
         return
-    if req.path == '/lab-agent.py' and req.method == 'GET':
+    if req.path in ('/lab-agent.py', '/lab-node.sh') and req.method == 'GET':
         return  # public: this repo's own source, curl'd onto devices being added
     if not _is_authenticated():
         if req.path.startswith('/api/'):
@@ -334,7 +350,7 @@ def _require_auth():
         if not token:
             return jsonify({'error': 'Authentication required', 'code': 'AUTH_REQUIRED'}), 401
         provided = req.headers.get('X-CSRF-Token', '')
-        if not provided or not hmac.compare_digest(provided, _csrf_for_token(token)):
+        if not provided or not hmac.compare_digest(provided.encode(), _csrf_for_token(token).encode()):
             return jsonify({'error': 'Invalid CSRF token', 'code': 'CSRF_REQUIRED'}), 403
 
 # ─── OS detection (cross-platform: Debian/Ubuntu, Fedora, macOS, Windows) ──
@@ -385,6 +401,13 @@ import logging as _logging
 _req_logger = _logging.getLogger('decloud.requests')
 from logging.handlers import RotatingFileHandler as _RotatingFileHandler
 _req_handler = _RotatingFileHandler(BASE_DIR / 'app.log', maxBytes=5 * 1024 * 1024, backupCount=2)
+for _log in [BASE_DIR / 'app.log', BASE_DIR / 'tunnel.log']:
+    try:
+        if os.name != 'nt' and _log.exists():
+            os.chmod(_log, 0o600)   # request paths and tailnet IPs: owner only
+    except OSError:
+        pass
+_logging.getLogger('werkzeug').setLevel(_logging.WARNING)   # its access log prints full URLs; decloud.requests logs paths only
 _req_handler.setFormatter(_logging.Formatter('%(asctime)s %(levelname)s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
 _req_logger.addHandler(_req_handler)
 _req_logger.setLevel(_logging.INFO)
@@ -403,13 +426,13 @@ def _harden_response(resp):
     # CSP: every third-party lib is vendored under /static/vendor, so only
     # 'self' loads code. connect-src 'self' covers same-origin ws:/wss: in
     # current browsers (CSP3; Safari 15.4+), so no wildcard socket hosts.
-    # ponytail: 'unsafe-inline' stays because index.html uses inline onclick
-    # handlers + an inline importmap; the upgrade path is moving those to
-    # addEventListener/data-* and switching to a nonce or hash.
+    # No 'unsafe-inline' for scripts: the page has no inline handlers or
+    # <script> blocks (handlers live in static/js/handlers.js), so injected
+    # markup can't run code even if an escaping bug slips through.
     resp.headers.setdefault(
         'Content-Security-Policy',
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob:; "
         "media-src 'self' blob:; "
@@ -481,11 +504,9 @@ def pdf_sections(key, pdf_path):
     sections = _pdf_chapters_cache.get(key)
     if sections is None:
         import fitz
+        from book_sections import pdf_sections_from_document
         with fitz.open(str(pdf_path)) as doc:
-            sections = [{'start': e[2] - 1, 'title': e[1].strip(), 'level': e[0]}
-                        for e in doc.get_toc() if e[0] <= 2 and e[1].strip() and e[2] - 1 >= 0]
-            for i, sec in enumerate(sections):
-                sec['end'] = sections[i + 1]['start'] - 1 if i + 1 < len(sections) else len(doc) - 1
+            sections = pdf_sections_from_document(doc, pdf_path.stem.replace('_', ' '))
         _cache_book(_pdf_text_cache, key, {})
         _cache_book(_pdf_chapters_cache, key, sections)
     return sections
@@ -607,7 +628,11 @@ def _generate_thumbnail(source_path: Path, size: tuple = THUMB_SIZE) -> Path | N
         return cache_path
     try:
         from PIL import Image
+        Image.MAX_IMAGE_PIXELS = 50_000_000   # beyond this Pillow raises instead of decoding gigabytes
         img = Image.open(source_path)
+        if img.width * img.height > Image.MAX_IMAGE_PIXELS:
+            return None
+        img.draft('RGB', (size[0] * 2, size[1] * 2))   # JPEG: decode at reduced size
         img.thumbnail(size)
         if img.mode in ('RGBA', 'P'):
             img = img.convert('RGB')
@@ -625,9 +650,14 @@ def safe_join_browse(base, *parts):
     result = base
     for part in parts:
         if part and part != '.':
+            if '\0' in str(part):
+                return base.resolve()
             result = result / part
     base_resolved = base.resolve()
-    result_resolved = result.resolve()
+    try:
+        result_resolved = result.resolve()
+    except (ValueError, OSError):
+        return base_resolved
     try:
         if result_resolved.is_relative_to(base_resolved):
             return result_resolved
@@ -645,6 +675,8 @@ def is_safe_book_ref(value):
         return False
     if '/' in value or '\\' in value or '..' in value or '\0' in value:
         return False
+    if any(c in value for c in '*?[]'):
+        return False  # used in glob patterns: wildcards would match other books
     if value.startswith('.'):
         return False
     # Windows: 'C:x' is drive-relative and would escape a Path join
@@ -737,7 +769,6 @@ VOICE_DEFAULTS = {
     'agent_name': 'DeCloud',         # user-named companion (set in onboarding)
     'stt': 'whisper-base',           # engine id from STT_ENGINES
     'tts': 'piper-lessac-medium',    # engine id from TTS_ENGINES
-    'voice_access': 'basic',         # 'talk' | 'basic' | 'full'
     'llm_backend': 'local',          # 'local' | 'cloud'
     'llm_local_model': 'llama3.2',
     'llm_cloud_provider': 'openai',  # 'openai' | 'anthropic' | 'openai-compatible'
@@ -933,12 +964,19 @@ def load_settings():
     return {}
 
 
+def update_settings(fn):
+    """Read settings, let fn(data) change them in place, and save, all under
+    one lock, so two writers can't undo each other. Returns fn's result."""
+    with _settings_lock:
+        data = load_settings()
+        result = fn(data)
+        _write_private(SETTINGS_FILE, json.dumps(data, indent=2))
+        return result
+
+
 def save_settings(data):
     """Persist the settings dict to settings.json (atomic, 0600). Returns
-    True on success. The single writer for settings.json.
-    ponytail: the lock serializes writes only; two concurrent
-    load→modify→save callers can still lose one update. Add an
-    update_settings(fn) that holds the lock across the read if that bites."""
+    True on success. Prefer update_settings() for read-modify-write."""
     with _settings_lock:
         try:
             _write_private(SETTINGS_FILE, json.dumps(data, indent=2))
@@ -954,7 +992,7 @@ def set_env_value(key, value):
     the cloud LLM API key and the access passcode. Refuses values with
     CR/LF/NUL (they would inject extra .env lines)."""
     value = str(value)
-    if any(c in value for c in '\r\n\0'):
+    if not env_value_is_single_line(value):
         return False
     env_path = BASE_DIR / '.env'
     try:

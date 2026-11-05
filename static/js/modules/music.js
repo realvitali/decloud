@@ -3,10 +3,86 @@ var musicPlaylist = [];
 var musicCurrentIdx = 0;
 var musicAudio = null;
 
+// ── Song search + download (saved into the music folder on the host) ──
+async function musicSearch() {
+  var input = document.getElementById('music-search-input');
+  var box = document.getElementById('music-search-results');
+  if (!input || !box) return;
+  var q = input.value.trim();
+  if (!q) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="music-search-note">Searching…</div>';
+  try {
+    var r = await fetch('/api/music/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: q }) });
+    var results = await r.json();
+    if (!r.ok || !Array.isArray(results)) throw new Error((results && results.error) || 'Search failed');
+    if (!results.length) { box.innerHTML = '<div class="music-search-note">No results. Try different words.</div>'; return; }
+    box.innerHTML = results.map(function(s) {
+      return '<div class="music-result-row">' +
+        '<div class="music-result-info"><b>' + escapeHtml(s.title) + '</b>' +
+        '<span>' + escapeHtml(s.channel) + (s.duration ? ' · ' + musicFmtTime(s.duration) : '') + '</span></div>' +
+        '<button class="lab-btn primary" data-id="' + escapeHtml(s.id) + '" data-onclick="cf5d0898" data-title="' + escapeHtml(s.title) + '">Download</button>' +
+      '</div>';
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<div class="music-search-note">' + escapeHtml(friendlyError(e)) + '</div>';
+  }
+}
+
+// The search bar opens from the header's search button and closes with × or Escape
+function toggleMusicSearch(open) {
+  var bar = document.getElementById('music-search-bar'), input = document.getElementById('music-search-input');
+  var btn = document.getElementById('music-search-toggle');
+  if (!bar) return;
+  bar.hidden = !open;
+  if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) { input.focus(); return; }
+  input.value = '';
+  document.getElementById('music-search-results').innerHTML = '';
+  if (btn) btn.focus();
+}
+document.addEventListener('keydown', function(e) {
+  if (e.target && e.target.id === 'music-search-input' && e.key === 'Enter') { e.preventDefault(); musicSearch(); return; }
+  if (e.target && e.target.id === 'music-search-input' && e.key === 'Escape') {
+    e.preventDefault(); e.stopImmediatePropagation();   // close search, don't leave Music
+    toggleMusicSearch(false);
+  }
+}, true);
+document.addEventListener('search', function(e) {   // the input's built-in clear (x) empties the results too
+  if (e.target && e.target.id === 'music-search-input' && !e.target.value) document.getElementById('music-search-results').innerHTML = '';
+}, true);
+
+function musicFmtTime(s) {
+  var m = Math.floor(s / 60);
+  return m + ':' + String(Math.round(s % 60)).padStart(2, '0');
+}
+
+async function musicDownload(id, btn) {
+  var title = btn ? btn.dataset.title : id;
+  if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
+  try {
+    var r = await fetch('/api/music/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id, title: title }) });
+    var d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Could not start the download');
+    for (var i = 0; i < 600; i++) {
+      await new Promise(function(res) { setTimeout(res, 2000); });
+      var j = await (await fetch('/api/music/download/' + encodeURIComponent(d.job))).json();
+      if (btn) btn.textContent = j.state === 'running' ? (j.pct ? (j.pct + '%') : 'Starting…') : (j.state === 'done' ? 'Saved ✓' : 'Failed');
+      if (j.state !== 'running') {
+        if (j.state === 'done') { showToast('Downloaded "' + title + '" to your music folder'); loadMusic(); }
+        else showToast(j.message || 'Download failed');
+        return;
+      }
+    }
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Download'; }
+    showToast(friendlyError(e));
+  }
+}
+
 async function loadMusic() {
   try {
     document.getElementById('music-list').innerHTML = Array(6).fill(
-      '<div class="skeleton-music"><div style="flex:1"><div class="shimmer-block skeleton-title"></div><div class="shimmer-block skeleton-meta"></div></div></div>'
+      '<div class="skeleton-music skeleton-tile"><div class="shimmer-block skeleton-cover"></div><div class="shimmer-block skeleton-titlename"></div></div>'
     ).join('');
     var r = await fetch('/api/music/list');
     musicPlaylist = await r.json();
@@ -16,12 +92,9 @@ async function loadMusic() {
   }
 }
 
-function parseSongMeta(name) {
-  var parts = name.split('_');
-  if (parts.length > 1) {
-    return { artist: parts[0], title: parts.slice(1).join(' ') };
-  }
-  return { artist: '', title: name };
+// Title and artist come from the server (your edits, the file's tags, or "Artist - Title")
+function parseSongMeta(song) {
+  return { title: song.title || song.name, artist: song.artist || '' };
 }
 
 function renderMusicList() {
@@ -30,58 +103,55 @@ function renderMusicList() {
   if (!musicPlaylist.length) {
     el.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">🎵</div>
+        <div class="empty-icon">${ICONS.music}</div>
         <h3>No music yet</h3>
-        <p>Add audio files to your music folder to get started.</p>
+        <p>Add audio files to your music folder, or search above to download songs straight onto this computer.</p>
         <p class="empty-hint">Settings → Music folder to change the path</p>
       </div>`;
     return;
   }
   el.innerHTML = musicPlaylist.map(function(song, i) {
     var isPlaying = i === musicCurrentIdx;
-    var meta = parseSongMeta(song.name);
     var cls = isPlaying ? ' playing' : '';
+    var meta = parseSongMeta(song);
     var artUrl = '/api/music/artwork/' + encodeURIComponent(song.filename);
-    return '<div class="music-song-row' + cls + '" data-idx="' + i + '" onclick="playMusic(' + i + ')">' +
-      '<div class="music-song-thumb" data-art="' + artUrl + '">' +
-        '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg>' +
+    return '<div class="music-tile' + cls + '" data-idx="' + i + '" data-onclick="c70bba1d">' +
+      '<div class="music-tile-cover">' +
+        '<img src="' + artUrl + '" alt="" loading="lazy" data-onload="lea99a7f" data-onerror="ee677121">' +
+        (isPlaying ? '<div class="music-tile-playing"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>' : '') +
+        '<div class="music-tile-more" role="button" tabindex="0" aria-label="Edit song" title="Edit song" data-onclick="cc39d5bd">' +
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>' +
+        '</div>' +
       '</div>' +
-      '<div class="music-song-info">' +
-        '<div class="music-song-name">' + escapeHtml(meta.title) + '</div>' +
-        (meta.artist ? '<div class="music-song-artist">' + escapeHtml(meta.artist) + '</div>' : '') +
-      '</div>' +
-      '<div class="music-song-more" role="button" tabindex="0" aria-label="Song details" onclick="event.stopPropagation(); showSongDetails(' + i + ')">' +
-        '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>' +
-      '</div>' +
+      '<div class="music-tile-name">' + escapeHtml(meta.title) + '</div>' +
+      (meta.artist ? '<div class="music-tile-artist">' + escapeHtml(meta.artist) + '</div>' : '') +
     '</div>';
   }).join('');
-  // Lazily load artwork — each thumb gets its own image, cached by browser
-  el.querySelectorAll('.music-song-thumb').forEach(function(thumb) {
-    var url = thumb.dataset.art;
-    if (!url) return;
-    var img = new Image();
-    img.onload = function() {
-      if (img.naturalWidth > 1) {
-        thumb.innerHTML = '<img src="' + url + '" class="music-thumb-img" alt="" />';
-        thumb.classList.add('has-art');
-      }
-    };
-    img.src = url;
-  });
 }
 
-// Update only the playing state of existing rows (no full re-render)
+// Update only the playing state of existing tiles (no full re-render)
 function updateMusicPlayingState() {
-  document.querySelectorAll('.music-song-row').forEach(function(row) {
-    var idx = parseInt(row.dataset.idx);
-    row.classList.toggle('playing', idx === musicCurrentIdx);
+  document.querySelectorAll('.music-tile').forEach(function(tile) {
+    var idx = parseInt(tile.dataset.idx);
+    var wasPlaying = tile.classList.contains('playing');
+    var nowPlaying = idx === musicCurrentIdx;
+    tile.classList.toggle('playing', nowPlaying);
+    if (nowPlaying !== wasPlaying) {
+      var cover = tile.querySelector('.music-tile-cover');
+      var badge = cover.querySelector('.music-tile-playing');
+      if (nowPlaying && !badge) {
+        cover.insertAdjacentHTML('beforeend', '<div class="music-tile-playing"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>');
+      } else if (!nowPlaying && badge) {
+        badge.remove();
+      }
+    }
   });
 }
 
 function showSongDetails(idx) {
   var song = musicPlaylist[idx];
   if (!song) return;
-  var meta = parseSongMeta(song.name);
+  var meta = parseSongMeta(song);
   var modal = document.getElementById('song-details-modal');
   if (!modal) {
     modal = document.createElement('div');
@@ -91,18 +161,41 @@ function showSongDetails(idx) {
     document.body.appendChild(modal);
   }
   modal.innerHTML =
-    '<div style="background:var(--glass);border:1px solid var(--glass-border);border-radius:16px;padding:20px;max-width:340px;width:100%;backdrop-filter:blur(20px)">' +
-    '<div style="font-weight:700;font-size:1rem;margin-bottom:4px">' + escapeHtml(meta.title) + '</div>' +
-    (meta.artist ? '<div style="color:var(--text-dim);font-size:0.85rem;margin-bottom:12px">' + escapeHtml(meta.artist) + '</div>' : '') +
-    '<div style="font-size:0.78rem;color:var(--text-dim);line-height:1.6">' +
-      '<div>Format: ' + song.ext.toUpperCase() + '</div>' +
-      '<div>Size: ' + song.size_mb + ' MB</div>' +
-      '<div>File: ' + escapeHtml(song.filename) + '</div>' +
-    '</div>' +
-    '<button onclick="document.getElementById(\'song-details-modal\').style.display=\'none\'" style="margin-top:16px;width:100%;padding:12px;border:1px solid var(--glass-border);border-radius:10px;background:var(--glass);color:var(--text);cursor:pointer;font-weight:600">Close</button>' +
-    '</div>';
+    '<form class="song-edit" data-idx="' + idx + '">' +
+      '<label for="song-edit-title">Song</label><input id="song-edit-title" maxlength="200" autocomplete="off" value="' + escapeHtml(meta.title) + '">' +
+      '<label for="song-edit-artist">Artist</label><input id="song-edit-artist" maxlength="200" autocomplete="off" value="' + escapeHtml(meta.artist) + '">' +
+      '<div class="song-edit-file">' + escapeHtml(song.ext.toUpperCase()) + ' · ' + song.size_mb + ' MB · ' + escapeHtml(song.filename) + '</div>' +
+      '<div class="song-edit-actions">' +
+        (song.edited ? '<button type="button" class="song-edit-reset" data-onclick="cb7a51e3">Use automatic</button>' : '') +
+        '<button type="button" data-onclick="c6fe321a">Cancel</button>' +
+        '<button type="submit" class="primary">Save</button>' +
+      '</div>' +
+    '</form>';
   modal.style.display = 'flex';
 }
+
+async function saveSongMeta(idx, reset) {
+  var song = musicPlaylist[idx];
+  if (!song) return;
+  var body = reset ? { filename: song.filename, title: '', artist: '' }
+    : { filename: song.filename, title: document.getElementById('song-edit-title').value, artist: document.getElementById('song-edit-artist').value };
+  var r = await fetch('/api/music/meta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(function() { return null; });
+  var d = r ? await r.json().catch(function() { return {}; }) : {};
+  if (!r || !r.ok) { showToast(d.error || 'Could not save.'); return; }
+  song.title = d.title; song.artist = d.artist; song.edited = d.edited;
+  document.getElementById('song-details-modal').style.display = 'none';
+  renderMusicList();
+  if (idx === musicCurrentIdx && document.getElementById('music-player').style.display !== 'none') {
+    document.getElementById('music-player-title').textContent = d.title;
+    var pa = document.getElementById('music-player-artist'); if (pa) pa.textContent = d.artist;
+  }
+}
+document.addEventListener('submit', function(e) {
+  var form = e.target.closest && e.target.closest('.song-edit');
+  if (!form) return;
+  e.preventDefault();
+  saveSongMeta(+form.dataset.idx, false);
+});
 
 function playMusic(idx) {
   if (!musicPlaylist.length) return;
@@ -112,7 +205,7 @@ function playMusic(idx) {
   musicAudio.src = '/api/music/stream/' + encodeURIComponent(song.filename);
   musicAudio.play();
 
-  var meta = parseSongMeta(song.name);
+  var meta = parseSongMeta(song);
   var artUrl = '/api/music/artwork/' + encodeURIComponent(song.filename);
 
   // Show player bar and fill it

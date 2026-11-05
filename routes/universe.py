@@ -35,23 +35,16 @@ def journal_voice():
         if not audio_file:
             return jsonify({'error': 'No audio file provided'}), 400
 
-        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False, dir=tempfile.gettempdir()) as tmp:
-            audio_file.save(tmp.name)
-            tmp_path = tmp.name
-
-        wav_path = tmp_path.rsplit('.', 1)[0] + '.wav'
-        subprocess.run(
-            ['ffmpeg', '-y', '-i', tmp_path, '-ar', '16000', '-ac', '1', '-f', 'wav', wav_path],
-            capture_output=True, timeout=30
-        )
-
-        model = get_whisper_model(STT_ENGINES.get('whisper-base', STT_ENGINES['whisper-base'])['model'])
-        segments, info = model.transcribe(wav_path, beam_size=1, language='en')
-        text = ' '.join(seg.text.strip() for seg in segments).strip()
-
-        os.unlink(tmp_path)
-        if os.path.exists(wav_path):
-            os.unlink(wav_path)
+        with tempfile.TemporaryDirectory(prefix='decloud-journal-') as d:   # private dir, always removed
+            tmp_path, wav_path = os.path.join(d, 'in.webm'), os.path.join(d, 'in.wav')
+            audio_file.save(tmp_path)
+            subprocess.run(
+                ['ffmpeg', '-y', '-i', tmp_path, '-ar', '16000', '-ac', '1', '-f', 'wav', wav_path],
+                capture_output=True, timeout=30
+            )
+            model = get_whisper_model(STT_ENGINES.get('whisper-base', STT_ENGINES['whisper-base'])['model'])
+            segments, info = model.transcribe(wav_path, beam_size=1, language='en')
+            text = ' '.join(seg.text.strip() for seg in segments).strip()
 
         if not text:
             return jsonify({'error': 'No speech detected'}), 400
@@ -173,10 +166,16 @@ def universe_add_person():
     if path.exists():
         return jsonify({"error": "Person already exists"}), 400
 
+    def _q(v):   # one-line, quote-safe YAML string
+        return str(v).replace('\\', '\\\\').replace('"', '\\"').replace('\n', ' ').replace('\r', ' ')[:200]
+    try:
+        money = float(data.get("money_received", 0) or 0)
+    except (TypeError, ValueError):
+        money = 0
     content = f"""---
-name: "{name}"
-category: "{data.get("category", "contact")}"
-money_received: {data.get("money_received", 0)}
+name: "{_q(name)}"
+category: "{_q(data.get("category", "contact"))}"
+money_received: {money:g}
 last_mentioned: ""
 mention_count: 0
 first_mentioned: ""
