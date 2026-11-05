@@ -72,9 +72,9 @@ def test_no_inline_script_anywhere_and_csp_forbids_it(client):
     root = Path(__file__).resolve().parent.parent
     pages = [root / 'templates/index.html', *sorted((root / 'static/js/modules').glob('*.js'))]
     for f in pages:
-        hits = re.findall(r'\son[a-z]+="', f.read_text())
+        hits = re.findall(r'\son[a-z]+="', f.read_text(encoding='utf-8'))
         assert not hits, f'{f.name}: inline handler — use data-on<event>="key" + static/js/handlers.js'
-    assert not re.search(r'<script(?![^>]*\bsrc=)', (root / 'templates/index.html').read_text())
+    assert not re.search(r'<script(?![^>]*\bsrc=)', (root / 'templates/index.html').read_text(encoding='utf-8'))
     csp = client.get('/').headers['Content-Security-Policy']
     script_src = csp.split('script-src', 1)[1].split(';', 1)[0]
     assert "'unsafe-inline'" not in script_src and "'unsafe-eval'" not in script_src
@@ -84,10 +84,10 @@ def test_every_handler_key_in_the_markup_exists():
     import re
     from pathlib import Path
     root = Path(__file__).resolve().parent.parent
-    defined = set(re.findall(r'^\s{2}([a-z][0-9a-f]{7}): function', (root / 'static/js/handlers.js').read_text(), re.M))
+    defined = set(re.findall(r'^\s{2}([a-z][0-9a-f]{7}): function', (root / 'static/js/handlers.js').read_text(encoding='utf-8'), re.M))
     used = set()
     for f in [root / 'templates/index.html', *sorted((root / 'static/js/modules').glob('*.js'))]:
-        used |= set(re.findall(r'data-on[a-z]+="([a-z][0-9a-f]{7})"', f.read_text()))
+        used |= set(re.findall(r'data-on[a-z]+="([a-z][0-9a-f]{7})"', f.read_text(encoding='utf-8')))
     assert used and used <= defined, used - defined
 
 

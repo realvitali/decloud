@@ -1,6 +1,11 @@
 """Host and node installer entry points must be explicit and non-destructive."""
 from pathlib import Path
 import subprocess
+import sys
+
+import pytest
+
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="install.sh is a bash script")
 
 
 INSTALLER = Path(__file__).resolve().parents[1] / 'install.sh'
@@ -17,6 +22,7 @@ def test_help_describes_host_and_node():
     assert '--host' in result.stdout and '--node' in result.stdout
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="node mode stops earlier off Linux")
 def test_node_requires_interactive_pairing():
     result = run_installer('--node')
     assert result.returncode != 0

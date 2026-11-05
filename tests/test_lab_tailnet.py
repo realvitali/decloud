@@ -100,9 +100,14 @@ def test_add_device_waits_for_agent_then_confirms_and_pins(client, auth_headers,
     service.stop()
 
     shown = []
-    server = lab_report.LabServer(state, 'spark', lambda: {'ok': True},
-                                  lambda hub, number: shown.append(number) or True,
-                                  host='127.0.0.1', port=port).start()
+    for _ in range(40):                      # restarting on the same port: wait until the OS frees it
+        try:
+            server = lab_report.LabServer(state, 'spark', lambda: {'ok': True},
+                                          lambda hub, number: shown.append(number) or True,
+                                          host='127.0.0.1', port=port).start()
+            break
+        except OSError:
+            time.sleep(0.1)
     try:
         current = _wait(client, auth_headers, job['job'], ('done', 'failed'))
         assert current['state'] == 'done', current

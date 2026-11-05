@@ -6,6 +6,9 @@ import shutil
 import subprocess
 
 import pytest
+import sys
+
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="decloud is a bash script")
 
 
 @pytest.fixture
