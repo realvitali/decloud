@@ -176,6 +176,8 @@ def analyze_repo(repo: str, category: str, specs: dict) -> dict:
         if not fname or size <= 0:
             continue
         lname = fname.lower()
+        if category == 'chat' and not lname.endswith('.gguf'):
+            continue  # Ollama import here supports GGUF, not standalone weights
         interesting = (lname.endswith('.gguf') or lname.endswith('.safetensors')
                        or lname.endswith('.pt') or lname.endswith('.ckpt')
                        or (category in ('music', 'video') and lname.endswith(('.onnx', '.bin'))))
@@ -270,6 +272,7 @@ def _download_worker(dl_id: str, repo: str, parts: list, category: str,
     dest_dir = _target_dir(category)
     combined = dest_dir / _merged_name(parts[0])
     part_path = None
+    declared_bytes = int(_downloads.get(dl_id, {}).get('total_bytes', 0))   # size the repo listing declared
     try:
         dest_dir.mkdir(parents=True, exist_ok=True)
         total_size = 0
@@ -277,7 +280,7 @@ def _download_worker(dl_id: str, repo: str, parts: list, category: str,
         for fname in parts:
             url = HF_RESOLVE.format(repo=repo, file=fname)
             dest = dest_dir / _slug(fname)
-            part_path = dest.with_suffix(dest.suffix + '.part')
+            part_path = dest.with_suffix(dest.suffix + f'.{dl_id[-12:]}.part')   # two downloads never share a .part
             with _requests.get(url, stream=True, timeout=30) as r:
                 r.raise_for_status()
                 total_size += int(r.headers.get('content-length') or 0)
@@ -290,6 +293,8 @@ def _download_worker(dl_id: str, repo: str, parts: list, category: str,
                             break
                         f.write(chunk)
                         done += len(chunk)
+                        if declared_bytes and done > declared_bytes * 1.1 + 50_000_000:
+                            raise OSError('the server sent more data than this model should be')
                         with _download_lock:
                             _downloads[dl_id]['done_bytes'] = done
             if _downloads.get(dl_id, {}).get('state') == 'cancelling':
@@ -410,9 +415,14 @@ def models_download():
         parts = [str(f) for f in file_list]
         if not parts or not all(FILE_PATTERN.match(f) for f in parts):
             return jsonify({'error': 'invalid file list'}), 400
-        total_gb = round(sum(
-            next((f['size_gb'] for f in analysis.get('files', [])
-                  if f['file'] == p), 0) for p in parts), 2)
+        file_info = next((f for f in analysis.get('files', [])
+                          if f.get('parts') and f['parts'] == parts), None)
+        if file_info is None:
+            return jsonify({'error': 'model parts not found in that repo'}), 404
+        if file_info['tier'] == 'too-big':
+            return jsonify({'error': 'this model does not fit your hardware '
+                                     f"({file_info['size_gb']} GB)"}), 409
+        total_gb = file_info['size_gb']
     elif fname:
         if not FILE_PATTERN.match(fname):
             return jsonify({'error': 'invalid file name'}), 400
@@ -428,6 +438,10 @@ def models_download():
     else:
         return jsonify({'error': 'file or files required'}), 400
 
+    target = _target_dir(category)
+    probe = next((p for p in [target, *target.parents] if p.exists()), Path('/'))
+    if total_gb * 1e9 * 1.05 > psutil.disk_usage(str(probe)).free:
+        return jsonify({'error': f'Not enough free disk space for this model ({total_gb} GB).'}), 409
     dl_id = f'{int(time.time())}-{uuid.uuid4().hex[:6]}-{_slug(repo)[:16]}-{_slug(parts[0])[:24]}'
     with _download_lock:
         _downloads[dl_id] = {

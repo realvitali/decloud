@@ -101,6 +101,18 @@ class TestEndpoints:
         for key in ('cpu', 'ram_total_gb', 'ram_free_gb', 'disk_free_gb', 'gpus'):
             assert key in s
 
+    def test_split_parts_must_match_catalog_and_fit(self, client, auth_headers, monkeypatch):
+        parts = ['model-00001-of-00002.gguf', 'model-00002-of-00002.gguf']
+        monkeypatch.setattr(mod, 'get_specs', lambda: TestFitTiers.SPECS)
+        monkeypatch.setattr(mod, 'analyze_repo', lambda *args: {'files': [
+            {'file': 'model.gguf', 'parts': parts, 'tier': 'too-big', 'size_gb': 100}
+        ]})
+        url = '/api/models/download'
+        response = client.post(url, json={'repo': 'owner/repo', 'category': 'chat', 'files': parts}, headers=auth_headers)
+        assert response.status_code == 409
+        response = client.post(url, json={'repo': 'owner/repo', 'category': 'chat', 'files': ['other.gguf']}, headers=auth_headers)
+        assert response.status_code == 404
+
 
 def test_merged_split_name_differs_from_part1():
     part1 = 'sub/Model-Q4_K_M-00001-of-00003.gguf'

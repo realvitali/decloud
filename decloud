@@ -12,32 +12,40 @@ TUNNEL_PID_FILE="$APP_DIR/tunnel.pid"
 APP_PID_FILE="$APP_DIR/app.pid"
 
 # ─── Version ──────────────────────────────────────────────────────
-VERSION="0.5.3"
+VERSION="0.6.0"
 
 # ─── Helpers ────────────────────────────────────────────────────
 
+get_serve_state() {
+    # Inspect the actual configuration; a cached URL or a live PID does not
+    # prove that the proxy is private or even points to this app.
+    tailscale serve status --json 2>/dev/null | python3 -c '
+import json, sys
+from urllib.parse import urlsplit
+try:
+    cfg = json.load(sys.stdin)
+    port = int(sys.argv[1])
+    for host, web in (cfg.get("Web") or {}).items():
+        if not host.endswith(":443"):
+            continue
+        target = urlsplit((web.get("Handlers") or {}).get("/", {}).get("Proxy", ""))
+        if target.hostname not in ("localhost", "127.0.0.1", "::1") or target.port != port:
+            print("occupied")
+            break
+        public = (cfg.get("AllowFunnel") or {}).get(host, False)
+        print(("public " if public else "private ") + "https://" + host[:-4])
+        break
+    else:
+        print("none")
+except (ValueError, TypeError, AttributeError):
+    print("unknown")
+' "$PORT"
+}
+
 get_tunnel_url() {
-    # First check cached URL file
-    if [ -f "$TUNNEL_URL_FILE" ]; then
-        cat "$TUNNEL_URL_FILE"
-        return 0
-    fi
-
-    # Tailscale Funnel is the only supported tunnel. We deliberately do
-    # NOT fall back to third-party relays (localhost.run etc.): those
-    # terminate TLS on someone else's box and forward plaintext HTTP,
-    # which contradicts DeCloud's privacy story.
-    if command -v tailscale &>/dev/null && tailscale status &>/dev/null; then
-        URL=$(tailscale funnel status 2>/dev/null | grep -oE 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
-        if [ -n "$URL" ]; then
-            echo "$URL" > "$TUNNEL_URL_FILE"
-            echo "$URL"
-            return 0
-        fi
-    fi
-
-    echo ""
-    return 1
+    local state
+    state=$(get_serve_state)
+    case "$state" in private\ *) echo "${state#private }" ;; *) return 1 ;; esac
 }
 
 start_app() {
@@ -55,6 +63,7 @@ start_app() {
     # Supervise the app: if it exits (crash or a self-update restart), bring
     # it right back on the new code — one-click updates work even when
     # systemd/launchd/scheduled-task aren't the thing managing it.
+    umask 077   # app.log / tunnel.log hold request paths and tailnet IPs: owner only
     setsid env DECLOUD_DIR="$APP_DIR" nohup sh -c '
         cd "$DECLOUD_DIR" || exit 1
         . ./.venv/bin/activate 2>/dev/null || true
@@ -85,10 +94,12 @@ stop_app() {
 }
 
 start_tunnel() {
-    # Kill existing tunnel
-    stop_tunnel
-
-    echo "Starting Tailscale Funnel..."
+    # Open mode has no passcode: never share it with the tailnet
+    if [ "${DECLOUD_INSECURE_OPEN:-}" = "1" ] || grep -qE '^[[:space:]]*DECLOUD_INSECURE_OPEN[[:space:]]*=[[:space:]]*"?1"?[[:space:]]*$' "$APP_DIR/.env" 2>/dev/null; then
+        echo "⚠ Open mode (DECLOUD_INSECURE_OPEN=1) is on, so DeCloud stays local. Set DECLOUD_PIN to share it."
+        return 1
+    fi
+    echo "Starting private Tailscale Serve..."
     # Check if tailscale is available
     if ! command -v tailscale &>/dev/null; then
         echo "⚠ Tailscale not installed — skipping tunnel."
@@ -106,40 +117,31 @@ start_tunnel() {
         return 1
     fi
 
-    # Start funnel in background
-    setsid nohup tailscale funnel --bg --https=443 http://localhost:$PORT \
-        > "$TUNNEL_LOG" 2>&1 < /dev/null &
-    echo $! > "$TUNNEL_PID_FILE"
-    disown
-
-    echo "Waiting for funnel..."
-    sleep 3
-
-    # Get the funnel URL
-    URL=$(tailscale funnel status 2>/dev/null | grep -oE 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
-    if [ -n "$URL" ]; then
-        echo "$URL" > "$TUNNEL_URL_FILE"
-        echo "✓ Funnel active: $URL"
-        return 0
+    local state url
+    state=$(get_serve_state)
+    case "$state" in
+        private\ *) echo "✓ Private Serve active: ${state#private }"; return 0 ;;
+        public\ *)
+            # Remove the existing public DeCloud route before replacing it.
+            tailscale funnel --https=443 off > "$TUNNEL_LOG" 2>&1 || { echo "Could not turn off Funnel; check tunnel.log"; return 1; } ;;
+        occupied) echo "Tailscale HTTPS port 443 is used by another service; not changing it."; return 1 ;;
+        unknown) echo "Could not inspect Tailscale Serve configuration."; return 1 ;;
+    esac
+    if ! tailscale serve --bg --https=443 "http://127.0.0.1:$PORT" > "$TUNNEL_LOG" 2>&1; then
+        echo "⚠ Serve failed — check tunnel.log"
+        return 1
     fi
-
-    # Fallback: try to get from tailscale status
-    DNSNAME=$(tailscale status --json 2>/dev/null | python3 -c 'import sys, json; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))' 2>/dev/null)
-    if [ -n "$DNSNAME" ]; then
-        URL="https://${DNSNAME}"
-        echo "$URL" > "$TUNNEL_URL_FILE"
-        echo "✓ Funnel active: $URL"
-        return 0
-    fi
-
-    echo "⚠ Funnel failed — check tunnel.log"
-    return 1
+    url=$(get_tunnel_url) || { echo "⚠ Could not confirm private Serve; check Tailscale status."; return 1; }
+    echo "$url" > "$TUNNEL_URL_FILE"
+    echo "✓ Private Serve active: $url"
 }
 
 stop_tunnel() {
-    # Stop Tailscale funnel if running
+    # Only remove the matching DeCloud route, leaving other Tailscale services alone.
     if command -v tailscale &>/dev/null; then
-        tailscale funnel --https=443 off 2>/dev/null || true
+        case "$(get_serve_state)" in
+            private\ *|public\ *) tailscale serve --https=443 off 2>/dev/null || true ;;
+        esac
     fi
 
     if [ -f "$TUNNEL_PID_FILE" ]; then
@@ -171,7 +173,7 @@ show_qr() {
     PASSCODE=$(grep '^DECLOUD_PIN=' .env 2>/dev/null | tail -1 | cut -d= -f2- || echo "not set")
 
     echo ""
-    echo "📱 DeCloud Tunnel"
+    echo "DeCloud Tunnel"
     echo "════════════════════════════════════════"
     echo "URL: $URL"
     echo "Passcode: $PASSCODE"
@@ -185,10 +187,8 @@ show_qr() {
     fi
 
     echo ""
-    echo "🔒 The URL is public (https://….ts.net) — anyone who opens it"
-    echo "   still needs the passcode to unlock anything."
-    echo "⚠  The passcode unlocks a shell on this machine. Don't share it."
-    echo "   For private (tailnet-only) access, see: docs/PERMANENT_TUNNEL.md"
+    echo "Private access: connect your phone to the same Tailscale tailnet."
+    echo "The passcode unlocks a shell on this machine. Don't share it."
     echo ""
 }
 
@@ -199,14 +199,15 @@ status() {
     # App status
     if [ -f "$APP_PID_FILE" ] && kill -0 $(cat "$APP_PID_FILE") 2>/dev/null; then
         echo "App:     ✓ running (PID: $(cat $APP_PID_FILE))"
+    elif curl -s "http://localhost:$PORT/" > /dev/null 2>&1; then
+        echo "App:     ✓ responding on port $PORT"
     else
         echo "App:     ✗ not running"
     fi
     
     # Tunnel status
-    if [ -f "$TUNNEL_PID_FILE" ] && kill -0 $(cat "$TUNNEL_PID_FILE") 2>/dev/null; then
-        URL=$(get_tunnel_url)
-        echo "Tunnel:  ✓ active"
+    if URL=$(get_tunnel_url); then
+        echo "Tunnel:  ✓ private Serve active"
         echo "URL:     ${URL:-pending}"
     else
         echo "Tunnel:  ✗ not running"
@@ -227,7 +228,7 @@ case "${1:-}" in
         echo "DeCloud $VERSION"
         ;;
     start)
-        start_app && start_tunnel
+        start_app && start_tunnel || exit $?
         echo "Forgot your passcode? Run: ./decloud pin"
         ;;
     stop)
@@ -238,10 +239,10 @@ case "${1:-}" in
     restart)
         # Installed as a service? Let the service manager restart it.
         if systemctl --user is-active --quiet decloud 2>/dev/null; then
-            systemctl --user restart decloud && echo "✓ DeCloud restarted"
+            systemctl --user restart decloud && start_tunnel
             exit $?
         elif [ "$(uname)" = "Darwin" ] && launchctl list com.decloud.app &>/dev/null; then
-            launchctl kickstart -k "gui/$(id -u)/com.decloud.app" && echo "✓ DeCloud restarted"
+            launchctl kickstart -k "gui/$(id -u)/com.decloud.app" && start_tunnel
             exit $?
         fi
         stop_app

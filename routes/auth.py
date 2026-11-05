@@ -33,6 +33,9 @@ def _record_failure(addr: str) -> float:
         attempts = [t for t in _LOGIN_ATTEMPTS.get(addr, []) if now - t < _LOGIN_BACKOFF_WINDOW]
         attempts.append(now)
         _LOGIN_ATTEMPTS[addr] = attempts
+        if len(_LOGIN_ATTEMPTS) > 1000:   # bounded: drop addresses with no recent failures
+            for k in [k for k, v in _LOGIN_ATTEMPTS.items() if not v or now - v[-1] > _LOGIN_BACKOFF_WINDOW]:
+                _LOGIN_ATTEMPTS.pop(k, None)
         _LOGIN_GLOBAL_FAILS.append(now)
     # Exponential backoff once past the threshold
     over = max(0, len(attempts) - _LOGIN_BACKOFF_MAX)
@@ -63,7 +66,7 @@ def login():
             'code': 'LOGIN_LOCKED',
         }), 429
 
-    if not hmac.compare_digest(pin, DECLOUD_PIN):
+    if not hmac.compare_digest(pin.encode(), DECLOUD_PIN.encode()):
         backoff = _record_failure(addr)
         if backoff > 0:
             time.sleep(backoff)
@@ -146,7 +149,7 @@ def change_pin():
     if not shared.DECLOUD_PIN:
         return jsonify({'error': 'No passcode is set — configure DECLOUD_PIN in .env first.'}), 400
 
-    if not hmac.compare_digest(current, shared.DECLOUD_PIN):
+    if not hmac.compare_digest(current.encode(), shared.DECLOUD_PIN.encode()):
         return jsonify({'error': 'Current passcode is incorrect'}), 401
 
     new = new.strip()
@@ -154,7 +157,7 @@ def change_pin():
     # would lock the owner out.
     if not (new.isascii() and new.isdigit() and 8 <= len(new) <= 10):
         return jsonify({'error': 'New passcode must be 8 to 10 numbers'}), 400
-    if hmac.compare_digest(new, shared.DECLOUD_PIN):
+    if hmac.compare_digest(new.encode(), shared.DECLOUD_PIN.encode()):
         return jsonify({'error': 'New passcode must be different from the current one'}), 400
 
     if not shared.set_env_value('DECLOUD_PIN', new):

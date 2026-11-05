@@ -4,7 +4,8 @@ Requires an external osint-tools package. Set DECLOUD_OSINT_DIR in .env
 to the directory containing osint_watcher.py. If not configured,
 endpoints return helpful error messages.
 """
-import os, sys, subprocess
+import os
+import re, sys, subprocess
 from flask import Blueprint, jsonify, request
 
 bp = Blueprint('osint', __name__)
@@ -72,7 +73,9 @@ def osint_run_scan():
     if not _osint_available():
         return _not_configured()
     data = request.get_json(silent=True) or {}
-    pid = data.get('profile_id', '')
+    pid = str(data.get('profile_id', ''))
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', pid):
+        return jsonify({'error': 'Invalid profile'}), 400
     deep = data.get('deep', False)
     deep_flag = "--deep" if deep else ""
     try:

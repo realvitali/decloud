@@ -178,10 +178,6 @@ function loadVoicePanel() {
     var hermesHome = document.getElementById('voicecfg-hermes-home');
     if (hermesHome) hermesHome.value = hermes.home || '~/.hermes';
 
-    // Access level
-    var accessSel = document.getElementById('voicecfg-access');
-    if (accessSel) accessSel.value = cfg.voice_access || 'basic';
-
     // STT select
     var sttSel = document.getElementById('voicecfg-stt');
     if (sttSel) sttSel.innerHTML = (d.engines.stt || []).map(function(e) {
@@ -291,30 +287,6 @@ function saveHermesHome() {
   });
 }
 
-function voiceAccessChanged() {
-  var sel = document.getElementById('voicecfg-access');
-  if (!sel) return;
-  if (sel.value === 'full') {
-    // Require explicit confirmation before enabling unrestricted access.
-    document.getElementById('full-access-modal').style.display = 'flex';
-    return;
-  }
-  saveVoiceConfig();
-}
-
-function fullAccessConfirm(approved) {
-  document.getElementById('full-access-modal').style.display = 'none';
-  if (approved) {
-    saveVoiceConfig();
-  } else {
-    // Revert the select back to the previous (safe) value.
-    fetch('/api/voice/config').then(function(r) { return r.json(); }).then(function(d) {
-      var sel = document.getElementById('voicecfg-access');
-      if (sel) sel.value = (d.config && d.config.voice_access) || 'basic';
-    }).catch(function() {});
-  }
-}
-
 function voiceCloudProviderChanged() {
   var cp = document.getElementById('voicecfg-cloud-provider');
   var row = document.getElementById('voicecfg-cloud-base-row');
@@ -326,7 +298,6 @@ function saveVoiceConfig() {
     agent_name: document.getElementById('voicecfg-name')?.value,
     stt: document.getElementById('voicecfg-stt')?.value,
     tts: document.getElementById('voicecfg-tts')?.value,
-    voice_access: document.getElementById('voicecfg-access')?.value,
     llm_backend: document.getElementById('voicecfg-backend')?.value,
     llm_local_model: document.getElementById('voicecfg-local-model')?.value,
     llm_cloud_provider: document.getElementById('voicecfg-cloud-provider')?.value,
@@ -474,6 +445,10 @@ function loadSettingsDevices() {
   }).catch(function() {});
 }
 
+const USAGE_NAMES = { system: 'Lab', 'ai-chat': 'AI Chat', 'ai-gen': 'Image Gen', books: 'Books', music: 'Music', files: 'Files',
+  agents: 'Agents', projects: 'Projects', terminal: 'Terminal', privacy: 'Privacy', musicgen: 'Music Gen', journal: 'Journal',
+  legos: 'Legos', settings: 'Settings' };
+
 function loadSettingsUsage() {
   fetch('/api/telemetry/app-usage').then(function(r) { return r.json(); }).then(function(data) {
     var el = document.getElementById('settings-usage-list');
@@ -490,7 +465,7 @@ function loadSettingsUsage() {
       var mins = Math.round(time / 60);
       var secs = Math.round(time % 60);
       return '<div class="settings-usage-row">' +
-        '<div class="settings-usage-app">' + escapeHtml(id) + '</div>' +
+        '<div class="settings-usage-app">' + escapeHtml(USAGE_NAMES[id] || id) + '</div>' +
         '<div class="settings-usage-stats">' +
           '<span>' + (stats.opens || 0) + ' opens</span>' +
           '<span>' + (mins > 0 ? mins + 'm ' : '') + secs + 's</span>' +

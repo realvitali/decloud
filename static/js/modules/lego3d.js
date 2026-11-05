@@ -35,7 +35,7 @@ document.addEventListener('contextmenu', e => {
 // Instead offer a reload (or do it silently if the tab is hidden).
 if ('serviceWorker' in navigator) {
   const hadController = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.register('/sw.js?v=112').catch(() => {});
+  navigator.serviceWorker.register('/sw.js?v=151').catch(() => {});
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadController) return;  // first install, nothing stale
     if (document.hidden) { location.reload(); return; }
@@ -66,6 +66,8 @@ function decloudInit() {
   loadQuickStats();
   updateNotifBadge();
   refreshNotifications();
+  checkUpdateNotice();
+  fetch('/api/settings/experimental').then(r => r.json()).then(d => { experimentalApps = !!d.experimental; applyExperimentalApps(); }).catch(() => {});
   loadAgents();
   loadActivity();
   refreshProjectCards();
@@ -78,6 +80,7 @@ function decloudInit() {
   setInterval(onHome(loadActivity), 30000);
   setInterval(onHome(refreshProjectCards), 120000);
   setInterval(() => { if (!document.hidden) refreshNotifications(); }, 60000);
+  setInterval(() => { if (!document.hidden) checkUpdateNotice(); }, 6 * 3600 * 1000);   // signed releases only
 }
 try { decloudInit(); } catch(e) { console.error('DeCloud init error:', e); showCrashRecovery(e); }
 

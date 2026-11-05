@@ -11,8 +11,8 @@
   <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="/static/manifest.json">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=112">
-  <link rel="stylesheet" href="/static/css/onboarding.css?v=112">
+  <link rel="stylesheet" href="/static/css/app.css?v=151">
+  <link rel="stylesheet" href="/static/css/onboarding.css?v=151">
   <link rel="stylesheet" href="/static/vendor/xterm.min.css">
   <title>DeCloud</title>
 </head>
@@ -39,20 +39,20 @@
     <div class="login-dots" id="login-dots"></div>
     <div class="login-error" id="login-error"></div>
     <div class="login-keypad" id="login-keypad">
-      <button class="login-key" data-key="1" onclick="loginPress('1')">1</button>
-      <button class="login-key" data-key="2" onclick="loginPress('2')">2<span class="login-key-sub">ABC</span></button>
-      <button class="login-key" data-key="3" onclick="loginPress('3')">3<span class="login-key-sub">DEF</span></button>
-      <button class="login-key" data-key="4" onclick="loginPress('4')">4<span class="login-key-sub">GHI</span></button>
-      <button class="login-key" data-key="5" onclick="loginPress('5')">5<span class="login-key-sub">JKL</span></button>
-      <button class="login-key" data-key="6" onclick="loginPress('6')">6<span class="login-key-sub">MNO</span></button>
-      <button class="login-key" data-key="7" onclick="loginPress('7')">7<span class="login-key-sub">PQRS</span></button>
-      <button class="login-key" data-key="8" onclick="loginPress('8')">8<span class="login-key-sub">TUV</span></button>
-      <button class="login-key" data-key="9" onclick="loginPress('9')">9<span class="login-key-sub">WXYZ</span></button>
-      <button class="login-key login-key-go" onclick="loginGo()" aria-label="Sign in">
+      <button class="login-key" data-key="1" data-onclick="ca806024">1</button>
+      <button class="login-key" data-key="2" data-onclick="c7e99733">2<span class="login-key-sub">ABC</span></button>
+      <button class="login-key" data-key="3" data-onclick="cfe8c404">3<span class="login-key-sub">DEF</span></button>
+      <button class="login-key" data-key="4" data-onclick="cb57655f">4<span class="login-key-sub">GHI</span></button>
+      <button class="login-key" data-key="5" data-onclick="cd84f2ac">5<span class="login-key-sub">JKL</span></button>
+      <button class="login-key" data-key="6" data-onclick="c2190445">6<span class="login-key-sub">MNO</span></button>
+      <button class="login-key" data-key="7" data-onclick="cf600aec">7<span class="login-key-sub">PQRS</span></button>
+      <button class="login-key" data-key="8" data-onclick="c5fc7507">8<span class="login-key-sub">TUV</span></button>
+      <button class="login-key" data-key="9" data-onclick="c63c74c9">9<span class="login-key-sub">WXYZ</span></button>
+      <button class="login-key login-key-go" data-onclick="c125c21e" aria-label="Sign in">
         <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       </button>
-      <button class="login-key" data-key="0" onclick="loginPress('0')">0</button>
-      <button class="login-key login-key-back" onclick="loginBack()" aria-label="Delete last digit">
+      <button class="login-key" data-key="0" data-onclick="cdf4c09e">0</button>
+      <button class="login-key login-key-back" data-onclick="ccfbde95" aria-label="Delete last digit">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/>
           <line x1="18" y1="9" x2="12" y2="15"/>
@@ -74,7 +74,7 @@
   <div class="login-card">
     <div class="login-title">Can't reach your computer</div>
     <div class="login-subtitle">Make sure the computer running DeCloud is on and connected, then try again.</div>
-    <button class="onboarding-btn" style="flex:none;margin-top:20px;min-width:160px" onclick="checkAuth()">Retry</button>
+    <button class="onboarding-btn" style="flex:none;margin-top:20px;min-width:160px" data-onclick="c79cf015">Retry</button>
   </div>
 </div>
 
@@ -82,15 +82,19 @@
 <div id="home-screen" class="screen active">
   <div class="top-bar">
     <div class="top-bar-left">
-      <div class="clock" id="clock"></div>
+      <div class="device-title" id="device-title" title="">
+        <div class="device-title-name" id="device-title-name"></div>
+        <div class="device-title-lab" id="device-title-lab"></div>
+      </div>
     </div>
-    <button class="notif-bell" id="notif-bell" onclick="toggleNotifications()" aria-label="Notifications">
+    <button class="notif-bell" id="notif-bell" data-onclick="ccde407f" aria-label="Notifications">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
         <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
       </svg>
       <span class="notif-badge" id="notif-badge"></span>
     </button>
+    <div class="clock" id="clock"></div>
   </div>
 
   <!-- Kali-style live status chips -->
@@ -100,7 +104,7 @@
   <div class="notif-panel" id="notif-panel">
     <div class="notif-panel-header">
       <span>Notifications</span>
-      <button class="notif-clear" onclick="clearNotifications()">Mark all read</button>
+      <button class="notif-clear" data-onclick="c80f5e32">Mark all read</button>
     </div>
     <div class="notif-list" id="notif-list"></div>
   </div>
@@ -111,10 +115,17 @@
 <!-- ═══ MUSIC PLAYER ═══ -->
 <div id="music-screen" class="screen">
   <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <button class="back-btn home-btn" data-onclick="c6e4dcec" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></button>
     <h2 class="screen-title">Music</h2>
+    <button class="music-search-toggle" id="music-search-toggle" data-onclick="cb7a51e1" aria-label="Search songs to download" aria-expanded="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
   </div>
   <div class="music-content">
+    <div class="music-search" id="music-search-bar" hidden>
+      <input type="search" id="music-search-input" placeholder="Search songs to download…" enterkeyhint="search" autocomplete="off">
+      <button class="music-search-btn" data-onclick="c351370d" aria-label="Search">Search</button>
+      <button class="music-search-close" data-onclick="cb7a51e2" aria-label="Close search" title="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div id="music-search-results"></div>
     <div class="music-list" id="music-list"></div>
     <div class="music-player" id="music-player" style="display:none">
       <div class="music-player-info">
@@ -125,17 +136,17 @@
         </div>
         <div class="music-player-time"><span id="music-current">0:00</span> / <span id="music-duration">0:00</span></div>
       </div>
-      <div class="music-progress-bar" id="music-progress-bar" onclick="seekMusic(event)">
+      <div class="music-progress-bar" id="music-progress-bar" data-onclick="c1213646">
         <div class="music-progress-fill" id="music-progress-fill"></div>
       </div>
       <div class="music-controls">
-        <button class="music-btn" onclick="prevSong()" aria-label="Previous">
+        <button class="music-btn" data-onclick="cc32b340" aria-label="Previous">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
         </button>
-        <button class="music-btn music-btn-play" id="music-play-btn" onclick="togglePlayMusic()" aria-label="Play/Pause">
+        <button class="music-btn music-btn-play" id="music-play-btn" data-onclick="c7ae456b" aria-label="Play/Pause">
           <svg id="music-play-icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         </button>
-        <button class="music-btn" onclick="nextSong()" aria-label="Next">
+        <button class="music-btn" data-onclick="cae1a198" aria-label="Next">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
         </button>
       </div>
@@ -147,55 +158,42 @@
 <!-- ═══ AUDIOBOOK PLAYER ═══ -->
 <div id="book-screen" class="screen">
   <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <button class="back-btn home-btn" data-onclick="c6e4dcec" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></button>
     <h2 id="screen-title-books" class="screen-title"><span class="screen-title-icon"></span> Books</h2>
+    <label class="books-sort-label">Sort <select id="books-sort" data-onchange="c7aa96c8" title="Length uses PDF pages or an estimate for text books"><option value="title">A–Z</option><option value="author">Author</option><option value="length">Length</option><option value="recent">Recently opened</option></select></label>
   </div>
   <div class="book-list" id="book-list"></div>
 </div>
 
 <!-- ═══ BOOK READER ═══ -->
 <div id="reader-screen" class="screen">
-  <div class="app-header">
-    <button class="back-btn" onclick="showScreen('book-screen')">&#8249; Library</button>
-    <h2 id="reader-title">Reader</h2>
+  <div class="reader-header">
+    <button class="reader-icon-btn" data-onclick="cdb70302" aria-label="Back to library" title="Library"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <div class="reader-heading"><h2 id="reader-title">Reader</h2><div id="reader-author"></div></div>
+    <div class="reader-header-actions">
+      <button class="reader-icon-btn" data-onclick="c09d44e8" aria-label="Bookmarks" title="Bookmarks"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg><span id="bookmark-count" class="reader-bookmark-count"></span></button>
+      <button class="reader-icon-btn" id="audio-mode-btn" data-onclick="c70af266" aria-label="Toggle audiobook" title="Audiobook"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 14v-3a9 9 0 0 1 18 0v3"/><rect x="3" y="13" width="4" height="7" rx="2"/><rect x="17" y="13" width="4" height="7" rx="2"/></svg></button>
+      <button class="reader-icon-btn" data-onclick="cb8f387e" aria-label="Book AI" title="Book AI"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg></button>
+      <button class="reader-icon-btn" data-onclick="c7e02dfb" aria-label="Book settings" title="Book settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/></svg></button>
+    </div>
   </div>
 
-  <!-- Mode toggle: read vs listen -->
-  <div class="book-mode-bar" id="reader-mode-bar">
-    <button class="mode-btn active" id="reader-mode-btn" onclick="setReaderMode('reader')">Read</button>
-    <button class="mode-btn" id="audio-mode-btn" onclick="setReaderMode('audio')">Listen</button>
-  </div>
-
-  <!-- Audio generation progress banner -->
-  <div class="gen-banner" id="gen-banner" style="display:none;margin:12px 16px 0">
-    <div class="gen-banner-title">Generating audiobook…</div>
-    <div class="gen-progress-bar"><div class="gen-progress-fill" id="gen-progress-fill"></div></div>
-    <div class="gen-banner-sub" id="gen-banner-sub">0%</div>
-  </div>
+  <button id="reader-mode-btn" hidden></button>
 
   <!-- Chapter nav -->
   <div class="chapter-nav" id="chapter-nav">
-    <button class="chapter-nav-btn" id="prev-ch-btn" onclick="openPrevChapter()"><span class="nav-arrow prev"></span> Prev</button>
-    <span class="chapter-nav-label" id="chapter-label">Ch 1</span>
-    <button class="chapter-nav-btn" id="next-ch-btn" onclick="openNextChapter()">Next <span class="nav-arrow next"></span></button>
+    <button class="chapter-nav-btn" id="prev-ch-btn" data-onclick="ce982209" aria-label="Previous page"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <span class="chapter-nav-label" id="chapter-label" title="Page within this chapter">1 / 1</span>
+    <button class="chapter-nav-btn" id="next-ch-btn" data-onclick="cab66ad9" aria-label="Next page"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>
   </div>
 
   <!-- E-READER MODE -->
   <div class="reader-pane" id="reader-pane">
-    <div class="reader-controls-bar">
-      <button class="reader-ctrl-btn" onclick="toggleBookmarkList()" title="Bookmarks"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> <span id="bookmark-count">0</span></button>
-      <div class="reader-font-size">
-        <button class="reader-ctrl-btn" onclick="changeFontSize(-1)" title="Smaller">A-</button>
-        <span id="font-size-label">M</span>
-        <button class="reader-ctrl-btn" onclick="changeFontSize(1)" title="Larger">A+</button>
-      </div>
-      <button class="reader-ctrl-btn sofar-btn" onclick="openSummary()" title="Summarize what you've read so far"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg> So Far</button>
-    </div>
     <div class="reader-text" id="reader-text">Loading...</div>
     <div class="bookmark-list-panel" id="bookmark-panel" style="display:none">
       <div class="bookmark-panel-header">
         <span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Bookmarks</span>
-        <button class="reader-ctrl-btn" onclick="toggleBookmarkList()" aria-label="Close bookmarks"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <button class="reader-ctrl-btn" data-onclick="c09d44e8" aria-label="Close bookmarks"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
       <div id="bookmark-items"></div>
     </div>
@@ -205,12 +203,12 @@
   <div class="audio-pane" id="audio-pane" style="display:none">
     <div class="cover-art"><svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
     <div class="player-controls">
-      <button class="player-btn" onclick="prevChapter()" aria-label="Previous"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none"><path d="M6 6h2v8h6V6h2v12H6zM20 6l-6 6 6 6z"/></svg></button>
-      <button class="player-btn play-btn" id="play-btn" onclick="togglePlay()" aria-label="Play or pause"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg></button>
-      <button class="player-btn" onclick="nextChapter()" aria-label="Next"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none"><path d="M16 6h2v12h-2zM4 6l6 6-6 6z"/></svg></button>
+      <button class="player-btn" data-onclick="ca3655d8" aria-label="Previous"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none"><path d="M6 6h2v8h6V6h2v12H6zM20 6l-6 6 6 6z"/></svg></button>
+      <button class="player-btn play-btn" id="play-btn" data-onclick="c0fb260d" aria-label="Play or pause"><svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg></button>
+      <button class="player-btn" data-onclick="cc73744d" aria-label="Next"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="none"><path d="M16 6h2v12h-2zM4 6l6 6-6 6z"/></svg></button>
     </div>
     <div class="progress-section">
-      <div class="progress-bar" id="progress-bar" onclick="seekTo(event)">
+      <div class="progress-bar" id="progress-bar" data-onclick="cbc2c70f">
         <div class="progress-fill" id="progress-fill"></div>
       </div>
       <div class="time-display">
@@ -221,12 +219,11 @@
     <div class="transcript-box" id="transcript-box">
       <div class="transcript-text" id="transcript-text">Select a chapter to begin.</div>
     </div>
-    <button class="reader-ctrl-btn sofar-btn" onclick="openSummary()" style="margin-bottom:12px"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg> So Far</button>
     <div class="chapter-dropdown-header">
       <label>Chapters</label>
       <span id="resume-hint" class="resume-hint" style="display:none"></span>
     </div>
-    <select id="chapter-dropdown" onchange="onChapterDropdownChange(this.value)"></select>
+    <select id="chapter-dropdown" data-onchange="c707483c"></select>
     <div id="chapter-buttons" style="display:none"></div>
   </div>
 </div>
@@ -234,48 +231,27 @@
 <!-- ═══ LEGO FILE BROWSER ═══ -->
 <div id="lego-screen" class="screen">
   <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <button class="back-btn home-btn" data-onclick="c6e4dcec" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></button>
     <h2 id="screen-title-lego" class="screen-title"><span class="screen-title-icon"></span> Files</h2>
   </div>
   <div class="lego-breadcrumbs" id="lego-breadcrumbs"></div>
+  <div class="lego-toolbar" id="lego-toolbar"></div>
+  <input type="file" id="lego-upload-input" multiple hidden>
   <div class="lego-list" id="lego-list"><span class="text-dim" style="padding:20px;display:block">Loading...</span></div>
   <div class="lego-image-viewer" id="lego-image-viewer" style="display:none">
-    <button class="lego-image-close" onclick="closeLegoImage()" aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <button class="lego-image-action lego-image-shred" onclick="shredLegoImage()" title="Delete forever" aria-label="Delete forever"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></button>
-    <button class="lego-image-action lego-image-poof" onclick="poofLegoImage()" title="Set aside (moves it to the poof folder)" aria-label="Set aside"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2M9.6 4.6A2 2 0 1 1 11 8H2M12.6 19.4A2 2 0 1 0 14 16H2"/></svg></button>
-    <button class="lego-image-action lego-image-save" onclick="saveLegoFile(legoCurrentImage)" title="Download" aria-label="Download"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+    <button class="lego-image-close" data-act="viewer-close" aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <button class="lego-image-nav prev" data-act="viewer-prev" aria-label="Previous image"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button class="lego-image-nav next" data-act="viewer-next" aria-label="Next image"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button>
+    <button class="lego-image-action lego-image-shred" data-act="viewer-delete" title="Move to Trash" aria-label="Move to Trash"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+    <button class="lego-image-action lego-image-save" data-act="viewer-download" title="Download" aria-label="Download"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg></button>
     <img id="lego-image-full" src="" alt="" />
-  </div>
-  <!-- Swipe mode -->
-  <div class="lego-swipe" id="lego-swipe" style="display:none">
-    <div class="lego-swipe-header">
-      <button class="lego-swipe-close" onclick="closeSwipeMode()" aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-      <div class="lego-swipe-info" id="lego-swipe-info">Loading...</div>
-    </div>
-    <div class="lego-swipe-card-area" id="lego-swipe-card-area">
-      <div class="lego-swipe-card" id="lego-swipe-card">
-        <img id="lego-swipe-img" src="" alt="" />
-        <div class="lego-swipe-card-name" id="lego-swipe-card-name"></div>
-        <div class="lego-swipe-hint lego-swipe-hint-left" id="lego-swipe-hint-left">TRASH</div>
-        <div class="lego-swipe-hint lego-swipe-hint-right" id="lego-swipe-hint-right">SET ASIDE</div>
-      </div>
-      <div class="lego-swipe-empty" id="lego-swipe-empty" style="display:none">
-        <div style="margin-bottom:12px"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="var(--text-dim)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
-        <div>All done! No more images in this folder.</div>
-      </div>
-    </div>
-    <div class="lego-swipe-actions">
-      <button class="lego-swipe-btn lego-swipe-btn-trash" onclick="swipeLeft()" aria-label="Move to Trash" title="Move to Trash"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
-      <button class="lego-swipe-btn lego-swipe-btn-shred" onclick="swipeShred()" aria-label="Delete forever" title="Delete forever"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></button>
-      <button class="lego-swipe-btn lego-swipe-btn-poof" onclick="swipeRight()" aria-label="Set aside" title="Set aside (moves it to the poof folder)"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2M9.6 4.6A2 2 0 1 1 11 8H2M12.6 19.4A2 2 0 1 0 14 16H2"/></svg></button>
-    </div>
   </div>
 </div>
 
 <!-- ═══ AGENT MANAGER ═══ -->
 <div id="agents-screen" class="screen">
   <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <button class="back-btn home-btn" data-onclick="c6e4dcec" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></button>
     <h2 id="screen-title-agents" class="screen-title"><span class="screen-title-icon"></span> Agents</h2>
   </div>
   <div class="agents-content">
@@ -294,38 +270,21 @@
 <!-- ═══ SYSTEM MONITOR ═══ -->
 <div id="system-screen" class="screen">
   <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
-    <h2 id="screen-title-system" class="screen-title"><span class="screen-title-icon"></span> My Lab</h2>
+    <button class="back-btn home-btn" data-onclick="c6e4dcec" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></button>
+    <h2 id="screen-title-system" class="lab-hidden">My Lab</h2>
+    <div class="lab-gear-wrap"><button class="lab-gear" aria-label="Lab settings" aria-haspopup="menu" aria-expanded="false" data-onclick="c65e8448"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button></div>
   </div>
   <div class="system-content" id="system-content"><p>Loading...</p></div>
-  <div class="models-content">
-    <div class="models-specs" id="models-specs">Checking hardware…</div>
-    <div class="models-add">
-      <input type="text" id="models-add-input" class="models-add-input"
-             placeholder="Paste any HuggingFace link or owner/repo…">
-      <select id="models-add-category" class="models-add-select">
-        <option value="chat">Chat</option>
-        <option value="image">Image</option>
-        <option value="video">Video</option>
-        <option value="music">Music</option>
-      </select>
-      <button class="models-add-btn" onclick="modelsAnalyzeCustom()">Analyze</button>
-    </div>
-    <div id="models-analyzed"></div>
-    <div id="models-downloads"></div>
-    <div class="comfy-gallery-header" style="margin-top:8px">Recommended for this machine</div>
-    <div id="models-catalog"></div>
-  </div>
 </div>
 
 <!-- ═══ COMMAND TERMINAL ═══ -->
 <div id="terminal-screen" class="screen">
   <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <button class="back-btn home-btn" data-onclick="c6e4dcec" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></button>
     <h2 id="screen-title-terminal" class="screen-title"><span class="screen-title-icon"></span> Terminal</h2>
     <div class="terminal-tabs">
-      <button class="terminal-tab active" id="tab-interactive" onclick="switchTerminalMode('interactive')">Interactive</button>
-      <button class="terminal-tab" id="tab-quick" onclick="switchTerminalMode('quick')">Quick</button>
+      <button class="terminal-tab active" id="tab-interactive" data-onclick="c9d4f5fe">Interactive</button>
+      <button class="terminal-tab" id="tab-quick" data-onclick="cb3c86ad">Quick</button>
     </div>
   </div>
   <div class="terminal-content">
@@ -351,17 +310,17 @@
       <div class="terminal-output" id="terminal-output"></div>
       <div class="terminal-input-row">
         <input type="text" id="terminal-input" class="terminal-input" placeholder="Type a quick command..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-        <button class="terminal-send-btn" onclick="runTermCmd()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+        <button class="terminal-send-btn" data-onclick="c2702efb"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
       </div>
       <div class="command-buttons">
-        <button onclick="runCmd('ls -la')">ls</button>
-        <button onclick="runCmd('uptime')">Uptime</button>
-        <button onclick="runCmd('free -h')">Memory</button>
-        <button onclick="runCmd('df -h')">Disk</button>
-        <button onclick="runCmd('tailscale status')">Tailscale</button>
-        <button onclick="runCmd('nvidia-smi')">GPU</button>
-        <button onclick="runCmd('who')">Who</button>
-        <button onclick="runCmd('hostname')">Hostname</button>
+        <button data-onclick="c0445bf6">ls</button>
+        <button data-onclick="c51bd3af">Uptime</button>
+        <button data-onclick="c797b9ca">Memory</button>
+        <button data-onclick="cf9c046a">Disk</button>
+        <button data-onclick="c7c43e12">Tailscale</button>
+        <button data-onclick="c088daee">GPU</button>
+        <button data-onclick="cc73b073">Who</button>
+        <button data-onclick="cdcf4b21">Hostname</button>
       </div>
     </div>
   </div>
@@ -370,7 +329,7 @@
 <!-- ═══ OSINT PRIVACY WATCHER ═══ -->
 <div id="osint-screen" class="screen">
   <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <button class="back-btn home-btn" data-onclick="c6e4dcec" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></button>
     <h2 id="screen-title-osint" class="screen-title"><span class="screen-title-icon"></span> Privacy Watcher</h2>
   </div>
   <div class="osint-content">
@@ -384,7 +343,7 @@
         <input type="text" id="osint-phone" placeholder="Phone" autocomplete="off" />
         <input type="text" id="osint-address" placeholder="Address" autocomplete="off" />
         <input type="text" id="osint-usernames" placeholder="Usernames (comma separated)" autocomplete="off" />
-        <button onclick="osintCreateProfile()">Add Profile</button>
+        <button data-onclick="c23686d1">Add Profile</button>
       </div>
     </div>
     <!-- Scan results -->
@@ -397,11 +356,11 @@
 </div>
 
 <!-- OSINT Scan Modal -->
-<div id="osint-scan-modal" class="osint-scan-modal" style="display:none" onclick="closeScanModal(event)">
+<div id="osint-scan-modal" class="osint-scan-modal" style="display:none" data-onclick="c9f6db8b">
   <div class="osint-scan-modal-content">
     <div class="osint-scan-modal-header">
       <h3>Scans</h3>
-      <button class="osint-scan-modal-close" onclick="closeScanModal()">&#215;</button>
+      <button class="osint-scan-modal-close" data-onclick="c8f8f534">&#215;</button>
     </div>
     <div id="osint-scan-modal-body" class="osint-scan-modal-body"></div>
   </div>
@@ -410,17 +369,17 @@
 <!-- ═══ SETTINGS ═══ -->
 <div id="settings-screen" class="screen">
   <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <button class="back-btn home-btn" data-onclick="c6e4dcec" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></button>
     <h2 class="screen-title">Settings</h2>
   </div>
   <div class="settings-tabs">
-    <button class="settings-tab active" id="st-tab-appearance" onclick="switchSettingsTab('st-tab-appearance')">Appearance</button>
-    <button class="settings-tab" id="st-tab-voice" onclick="switchSettingsTab('st-tab-voice')">Voice</button>
-    <button class="settings-tab" id="st-tab-paths" onclick="switchSettingsTab('st-tab-paths')">Paths</button>
-    <button class="settings-tab" id="st-tab-network" onclick="switchSettingsTab('st-tab-network')">Devices</button>
-    <button class="settings-tab" id="st-tab-telemetry" onclick="switchSettingsTab('st-tab-telemetry')">Usage</button>
-    <button class="settings-tab" id="st-tab-logs" onclick="switchSettingsTab('st-tab-logs')">Logs</button>
-    <button class="settings-tab" id="st-tab-about" onclick="switchSettingsTab('st-tab-about')">About</button>
+    <button class="settings-tab active" id="st-tab-appearance" data-onclick="ce80a430">Appearance</button>
+    <button class="settings-tab" id="st-tab-voice" data-onclick="c0d860ba" hidden>Voice</button>
+    <button class="settings-tab" id="st-tab-paths" data-onclick="cc7c1e86">Paths</button>
+    <button class="settings-tab" id="st-tab-network" data-onclick="cfea1072">Devices</button>
+    <button class="settings-tab" id="st-tab-telemetry" data-onclick="c4a5cf4c">Usage</button>
+    <button class="settings-tab" id="st-tab-logs" data-onclick="c76e3fea">Logs</button>
+    <button class="settings-tab" id="st-tab-about" data-onclick="c9a53f4e">About</button>
   </div>
   <div class="settings-body">
     <!-- Appearance -->
@@ -428,13 +387,13 @@
       <div class="settings-group">
         <div class="settings-label">Theme</div>
         <div class="settings-theme-row">
-          <button class="theme-option" data-theme="light" onclick="setTheme('light')">
+          <button class="theme-option" data-theme="light" data-onclick="c3c48883">
             <div class="theme-preview light"></div><span>Light</span>
           </button>
-          <button class="theme-option" data-theme="dark" onclick="setTheme('dark')">
+          <button class="theme-option" data-theme="dark" data-onclick="cd99111f">
             <div class="theme-preview dark"></div><span>Dark</span>
           </button>
-          <button class="theme-option" data-theme="auto" onclick="setTheme('auto')">
+          <button class="theme-option" data-theme="auto" data-onclick="cc980e1e">
             <div class="theme-preview auto"></div><span>Auto</span>
           </button>
         </div>
@@ -443,9 +402,9 @@
         <div class="settings-label">Experimental Apps</div>
         <div class="settings-row">
           <span>Show hidden apps</span>
-          <input type="checkbox" id="experimental-toggle" onchange="setExperimentalApps(this.checked)">
+          <input type="checkbox" id="experimental-toggle" data-onchange="c91abead">
         </div>
-        <div class="settings-note">Legos, Projects, Journal, Image Maker, Terminal and Privacy Watcher are hidden by default.</div>
+        <div class="settings-note">Voice, Legos, Projects, Journal, Image Maker, Terminal and Privacy Watcher are hidden by default.</div>
       </div>
       <div class="settings-group">
         <div class="settings-label">Passcode</div>
@@ -461,7 +420,7 @@
           <span>Confirm</span>
           <input type="password" id="pin-confirm" class="settings-input" placeholder="Repeat new passcode" inputmode="numeric" maxlength="10" autocomplete="off">
         </div>
-        <button class="settings-save-btn" onclick="changePin()">Change Passcode</button>
+        <button class="settings-save-btn" data-onclick="c6af51d6">Change Passcode</button>
         <div class="settings-note" id="pin-note">Changing your passcode signs out all devices. Write the new one down somewhere safe. Forgot it? On this computer, run <code>./decloud pin</code>.</div>
       </div>
     </div>
@@ -473,34 +432,22 @@
           <span>Name</span>
           <input type="text" id="voicecfg-name" class="settings-input" placeholder="DeCloud" maxlength="40">
         </div>
-        <button class="settings-save-btn" onclick="saveVoiceConfig()">Save Name</button>
+        <button class="settings-save-btn" data-onclick="c570a98b">Save Name</button>
         <div class="settings-note" id="voice-setup-status">Checking…</div>
       </div>
 
       <div class="settings-group">
         <div class="settings-label">Memory</div>
-        <button class="settings-save-btn" onclick="clearVoiceMemory()">Clear conversation memory</button>
+        <button class="settings-save-btn" data-onclick="c1b95bd0">Clear conversation memory</button>
         <div class="settings-note">The agent remembers your conversation across sessions. Clear it to start fresh.</div>
       </div>
 
-      <div class="settings-group">
-        <div class="settings-label">Access Level</div>
-        <div class="settings-row">
-          <span>What the agent can do</span>
-          <select id="voicecfg-access" class="settings-input" onchange="voiceAccessChanged()">
-            <option value="talk">Talk — chat &amp; view only</option>
-            <option value="basic">Basic — create files (non-destructive)</option>
-            <option value="full">Full — unrestricted access</option>
-          </select>
-        </div>
-        <div class="settings-note" id="voice-access-note">Talk mode can read system info but never changes anything. Basic can create and move files. Full can run any command.</div>
-      </div>
 
       <div class="settings-group">
         <div class="settings-label">Speech-to-Text (STT)</div>
         <div class="settings-row">
           <span>Engine</span>
-          <select id="voicecfg-stt" class="settings-input" onchange="saveVoiceConfig()"></select>
+          <select id="voicecfg-stt" class="settings-input" data-onchange="c4f9f2d8"></select>
         </div>
         <div class="settings-note">Browser speech is instant and needs no install. Whisper is fully offline and private.</div>
       </div>
@@ -512,7 +459,7 @@
           <span>Hermes path</span>
           <input type="text" id="voicecfg-hermes-home" class="settings-input" placeholder="~/.hermes">
         </div>
-        <button class="settings-save-btn" onclick="saveHermesHome()">Save Hermes path</button>
+        <button class="settings-save-btn" data-onclick="cfb69b14">Save Hermes path</button>
         <div class="settings-note">The agent uses Hermes (smart, agentic) if it's installed — otherwise it falls back to the LLM below.</div>
       </div>
 
@@ -520,7 +467,7 @@
         <div class="settings-label">Brain (LLM fallback)</div>
         <div class="settings-row">
           <span>Provider</span>
-          <select id="voicecfg-backend" class="settings-input" onchange="voiceBackendChanged()">
+          <select id="voicecfg-backend" class="settings-input" data-onchange="c2efd28a">
             <option value="local">Local (Ollama)</option>
             <option value="cloud">Cloud API</option>
           </select>
@@ -528,13 +475,13 @@
         <div id="voicecfg-local-block">
           <div class="settings-row">
             <span>Model</span>
-            <select id="voicecfg-local-model" class="settings-input" onchange="saveVoiceConfig()"></select>
+            <select id="voicecfg-local-model" class="settings-input" data-onchange="c4f9f2d8"></select>
           </div>
           <div class="settings-row">
             <span>Actions</span>
             <span class="settings-value" style="display:flex;gap:8px">
-              <button class="settings-save-btn" style="margin:0" onclick="installOllama()">Install Ollama</button>
-              <button class="settings-save-btn" style="margin:0" onclick="pullOllamaModel()">Download model</button>
+              <button class="settings-save-btn" style="margin:0" data-onclick="cdf0fb91">Install Ollama</button>
+              <button class="settings-save-btn" style="margin:0" data-onclick="c9e6ff2c">Download model</button>
             </span>
           </div>
           <div class="settings-note" id="voice-ollama-note">Local models run on this machine — private, no API costs.</div>
@@ -542,7 +489,7 @@
         <div id="voicecfg-cloud-block">
           <div class="settings-row">
             <span>Provider</span>
-            <select id="voicecfg-cloud-provider" class="settings-input" onchange="voiceCloudProviderChanged()">
+            <select id="voicecfg-cloud-provider" class="settings-input" data-onchange="c883b732">
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic</option>
               <option value="openai-compatible">OpenAI-compatible</option>
@@ -561,7 +508,7 @@
             <input type="password" id="voicecfg-api-key" class="settings-input" placeholder="sk-…">
           </div>
           <div class="settings-note" id="voice-api-key-note">Your key is stored in .env on this machine only.</div>
-          <button class="settings-save-btn" onclick="saveVoiceConfig()">Save Cloud Settings</button>
+          <button class="settings-save-btn" data-onclick="c570a98b">Save Cloud Settings</button>
         </div>
       </div>
 
@@ -569,9 +516,9 @@
         <div class="settings-label">Text-to-Speech (TTS)</div>
         <div class="settings-row">
           <span>Voice</span>
-          <select id="voicecfg-tts" class="settings-input" onchange="saveVoiceConfig()"></select>
+          <select id="voicecfg-tts" class="settings-input" data-onchange="c4f9f2d8"></select>
         </div>
-        <button class="settings-save-btn" onclick="installVoice()">Download voice</button>
+        <button class="settings-save-btn" data-onclick="c9a26aa9">Download voice</button>
         <div class="settings-note" id="voice-tts-note">Piper voices are downloaded on demand.</div>
       </div>
     </div>
@@ -591,15 +538,16 @@
           <span>Music</span>
           <input type="text" class="settings-input" id="path-music" placeholder="~/Music">
         </div>
-        <button class="settings-save-btn" onclick="savePaths()">Save Paths</button>
+        <button class="settings-save-btn" data-onclick="c903ac88">Save Paths</button>
         <div class="settings-note" id="paths-save-note">Changes apply immediately and persist across restarts.</div>
       </div>
     </div>
     <!-- Devices -->
     <div class="settings-panel" id="st-panel-network" style="display:none">
       <div class="settings-group">
-        <div class="settings-label">Connected Devices</div>
+        <div class="settings-label">Lab devices</div>
         <div id="settings-devices-list" class="settings-device-list">Loading...</div>
+        <div class="settings-note">Add or remove devices in the Lab (settings button, then Add device).</div>
       </div>
       <div class="settings-group">
         <div class="settings-label">Network</div>
@@ -618,7 +566,7 @@
       <div class="settings-group">
         <div class="settings-label">App Usage</div>
         <div id="settings-usage-list" class="settings-usage-list">Loading...</div>
-        <button class="settings-export-btn" onclick="exportTelemetry()">Export Usage Data</button>
+        <button class="settings-export-btn" data-onclick="c82a9526">Export Usage Data</button>
       </div>
     </div>
     <!-- Logs -->
@@ -626,7 +574,7 @@
       <div class="settings-group">
         <div class="settings-label">Application Logs</div>
         <div id="settings-logs" class="settings-logs-view">Loading...</div>
-        <button class="settings-export-btn" onclick="exportLogs()">Export Logs</button>
+        <button class="settings-export-btn" data-onclick="c8779f89">Export Logs</button>
       </div>
     </div>
     <!-- About -->
@@ -648,17 +596,17 @@
       </div>
       <div class="settings-group">
         <div class="settings-label">Maintenance</div>
-        <button class="settings-export-btn" onclick="forceRefresh()">Clear Cache &amp; Restart</button>
-        <button class="settings-export-btn" onclick="reopenOnboarding()">Replay intro</button>
+        <button class="settings-export-btn" data-onclick="c6ac63a3">Clear Cache &amp; Restart</button>
+        <button class="settings-export-btn" data-onclick="cd854e06">Replay intro</button>
       </div>
       <div class="settings-group">
         <div class="settings-label">Updates</div>
         <div class="settings-note" id="update-status">Not checked yet.</div>
         <div id="update-actions" style="display:none;margin-top:8px">
-          <button class="settings-save-btn" id="update-go-btn" onclick="performUpdate()">Update &amp; Restart</button>
-          <button class="settings-note-btn" id="update-rollback-btn" style="display:none" onclick="performRollback()">↩ Revert last update</button>
+          <button class="settings-save-btn" id="update-go-btn" data-onclick="c5d84ce8">Update &amp; Restart</button>
+          <button class="settings-note-btn" id="update-rollback-btn" style="display:none" data-onclick="cd42c5bc">↩ Revert last update</button>
         </div>
-        <button class="settings-note-btn" onclick="checkForUpdates(true)">Check for updates</button>
+        <button class="settings-note-btn" data-onclick="c9ee5f32">Check for updates</button>
       </div>
       <div class="settings-group">
         <div class="settings-label">About</div>
@@ -669,7 +617,7 @@
       </div>
       <div class="settings-group">
         <div class="settings-label">Feedback</div>
-        <button class="settings-feedback-btn" onclick="window.open('https://github.com/realvitali/decloud/issues/new', '_blank')">Open GitHub Issue</button>
+        <button class="settings-feedback-btn" data-onclick="c768d331">Open GitHub Issue</button>
       </div>
     </div>
   </div>
@@ -678,12 +626,12 @@
 <!-- ═══ JOURNAL (tabs: Voice + Universe) ═══ -->
 <div id="journal-screen" class="screen">
   <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <button class="back-btn home-btn" data-onclick="c6e4dcec" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></button>
     <h2 class="screen-title">Journal</h2>
   </div>
   <div class="journal-tabs">
-    <button class="journal-tab active" id="journal-tab-voice" onclick="switchJournalTab('journal-tab-voice')">Voice</button>
-    <button class="journal-tab" id="journal-tab-universe" onclick="switchJournalTab('journal-tab-universe')">Universe</button>
+    <button class="journal-tab active" id="journal-tab-voice" data-onclick="c5b47f6f">Voice</button>
+    <button class="journal-tab" id="journal-tab-universe" data-onclick="c92278f7">Universe</button>
   </div>
   <div class="journal-panel" id="journal-panel-voice">
     <div class="journal-voice-content">
@@ -691,7 +639,7 @@
         <h3>Voice Journal</h3>
         <p>Record a voice memo and DeCloud turns it into text, right on your computer. Entries are saved as notes in your journal folder.</p>
       </div>
-      <button class="journal-record-btn" id="journal-record-btn" onclick="startVoiceJournal()">
+      <button class="journal-record-btn" id="journal-record-btn" data-onclick="cd90efef">
         <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
           <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
@@ -708,8 +656,8 @@
       <div id="universe-detail" class="universe-detail"></div>
       <div class="universe-add-bar">
         <input type="text" id="universe-add-name" placeholder="Add person..." />
-        <button onclick="addUniversePerson()">Add</button>
-        <button class="universe-rescan-btn" onclick="rescanUniverse()">Rescan</button>
+        <button data-onclick="cbfd3dc4">Add</button>
+        <button class="universe-rescan-btn" data-onclick="c8c78e35">Rescan</button>
       </div>
     </div>
   </div>
@@ -718,17 +666,17 @@
 <!-- ═══ LEGOS 3D ═══ -->
 <div id="legos-screen" class="screen">
   <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <button class="back-btn home-btn" data-onclick="c6e4dcec" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></button>
     <h2 class="screen-title">Legos</h2>
     <span class="legos-counter" id="legos-counter">0 bricks</span>
   </div>
   <div class="legos-content">
     <canvas id="legos-canvas"></canvas>
     <div class="legos-fab-row">
-      <button id="legos-delete-fab" class="legos-fab legos-fab-delete" onclick="toggleDeleteMode()" aria-label="Delete">
+      <button id="legos-delete-fab" class="legos-fab legos-fab-delete" data-onclick="c791ef5a" aria-label="Delete">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
       </button>
-      <button id="legos-add-fab" class="legos-fab legos-fab-add" onclick="toggleLegosAddSpread()" aria-label="Add brick">
+      <button id="legos-add-fab" class="legos-fab legos-fab-add" data-onclick="c4ff67f2" aria-label="Add brick">
         <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
     </div>
@@ -738,21 +686,36 @@
 <!-- ═══ OLLAMA CHAT ═══ -->
 <div id="ollama-screen" class="screen">
   <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <button class="back-btn home-btn" data-onclick="c6e4dcec" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></button>
     <h2 id="screen-title-ollama" class="screen-title"><span class="screen-title-icon"></span> AI Chat</h2>
   </div>
   <div class="ollama-model-bar">
-    <select id="ollama-model-select" onchange="onOllamaModelChange(this.value)"></select>
+    <select id="ollama-model-select" aria-label="Model" data-onchange="ce262274"></select>
+    <select id="ollama-device-select" aria-label="Run on" data-onchange="c9deac74" hidden></select>
     <span id="ollama-model-info" class="ollama-model-info"></span>
+    <button class="lab-btn" data-onclick="ccd3c40b">Chats</button>
+    <button class="lab-btn" data-onclick="ca63a0ad">New</button>
   </div>
+  <div id="ollama-chat-list" class="ollama-chat-list" hidden></div>
+  <details id="chat-model-downloads" class="models-picker" data-ontoggle="t940ee5b" hidden>
+    <summary>Find and download chat models</summary>
+    <div class="models-picker-body chat-lib">
+      <div class="chat-lib-bar"><label for="chat-lib-device">Download to</label><select id="chat-lib-device" data-onchange="c6575841"></select></div>
+      <p class="chat-lib-specs" id="chat-lib-specs"></p>
+      <div id="chat-lib-pulls"></div>
+      <div id="chat-lib-list" class="chat-lib-list"></div>
+      <div class="chat-lib-custom"><label for="chat-lib-custom">Any model from ollama.com/library</label>
+        <div class="lab-row"><input id="chat-lib-custom" placeholder="for example qwen3.5:9b" autocomplete="off" autocapitalize="none"><button class="lab-btn" data-onclick="cc02d4d1">Download</button></div></div>
+    </div>
+  </details>
   <div class="ollama-chat" id="ollama-chat">
     <div class="ollama-messages" id="ollama-messages">
       <div class="ollama-welcome">Pick a model and start chatting</div>
     </div>
     <div class="ollama-input-bar">
       <textarea id="ollama-input" class="ollama-input" placeholder="Send a message..." rows="1" autocomplete="off"></textarea>
-      <button class="ollama-send-btn" id="ollama-send-btn" onclick="sendOllamaMessage()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
-      <button class="ollama-stop-btn" id="ollama-stop-btn" onclick="stopOllama()" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
+      <button class="ollama-send-btn" id="ollama-send-btn" data-onclick="cea87b9d"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+      <button class="ollama-stop-btn" id="ollama-stop-btn" data-onclick="cbae66cf" style="display:none"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
     </div>
   </div>
 </div>
@@ -760,13 +723,17 @@
 <!-- ═══ COMFYUI GENERATE ═══ -->
 <div id="comfy-screen" class="screen">
   <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <button class="back-btn home-btn" data-onclick="c6e4dcec" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></button>
     <h2 id="screen-title-comfy" class="screen-title"><span class="screen-title-icon"></span> Image Maker</h2>
   </div>
   <div class="comfy-content">
+    <details class="models-picker" data-category="image" data-ontoggle="t366851d">
+      <summary>Find and download image models</summary>
+      <div class="models-picker-body"><p>Image models also need a compatible image generation setup and may require additional files.</p><div class="models-specs"></div><div class="models-downloads"></div><div class="models-catalog"></div></div>
+    </details>
     <div class="comfy-status-bar" id="comfy-status-bar">Checking ComfyUI...</div>
     <div id="comfy-offline-hint" class="empty-state" style="display:none">
-      <div class="empty-icon">🎨</div>
+      <div class="empty-icon"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></div>
       <h3>ComfyUI is offline</h3>
       <p>Generate uses ComfyUI running locally for AI image generation.</p>
       <p class="empty-hint">Install: git clone https://github.com/comfyanonymous/ComfyUI && cd ComfyUI && pip install -r requirements.txt</p>
@@ -801,7 +768,7 @@
         <input type="text" id="comfy-seed" placeholder="random" />
       </div>
     </div>
-    <button class="comfy-generate-btn" id="comfy-generate-btn" onclick="comfyGenerate()"><span class="comfy-gen-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg></span> Generate</button>
+    <button class="comfy-generate-btn" id="comfy-generate-btn" data-onclick="ccee1ba0"><span class="comfy-gen-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg></span> Generate</button>
     <div class="comfy-progress" id="comfy-progress" style="display:none">
       <div class="comfy-progress-text" id="comfy-progress-text">Generating...</div>
       <div class="comfy-progress-bar"><div class="comfy-progress-fill" id="comfy-progress-fill"></div></div>
@@ -817,13 +784,17 @@
 <!-- ═══ MUSIC GENERATOR (local MiniMax Music 3 via ComfyUI) ═══ -->
 <div id="musicgen-screen" class="screen">
   <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
-    <h2 class="screen-title"><span class="screen-title-icon">🎵</span> Song Maker</h2>
+    <button class="back-btn home-btn" data-onclick="c6e4dcec" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></button>
+    <h2 class="screen-title"><span class="screen-title-icon"></span> Song Maker</h2>
   </div>
   <div class="musicgen-content">
+    <details class="models-picker" data-category="music" data-ontoggle="td1b932e">
+      <summary>Find and download music models</summary>
+      <div class="models-picker-body"><p>Music models also need a compatible generation setup and workflow; the model alone does not complete setup.</p><div class="models-specs"></div><div class="models-downloads"></div><div class="models-catalog"></div></div>
+    </details>
     <div class="musicgen-status" id="musicgen-status">Checking…</div>
     <div id="musicgen-setup-hint" class="empty-state" style="display:none">
-      <div class="empty-icon">🎵</div>
+      <div class="empty-icon"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
       <h3>Music needs a workflow</h3>
       <p>Music generates songs locally with MiniMax Music 3 running in ComfyUI.</p>
       <p class="empty-hint">1. Install the MiniMax Music 3 nodes in ComfyUI</p>
@@ -860,7 +831,7 @@
           </select>
         </div>
       </div>
-      <button class="comfy-generate-btn" id="musicgen-generate-btn" onclick="musicGenGenerate()">Generate Song</button>
+      <button class="comfy-generate-btn" id="musicgen-generate-btn" data-onclick="c0aef1a9">Generate Song</button>
       <div class="musicgen-progress" id="musicgen-progress" style="display:none">
         <div class="comfy-progress-text" id="musicgen-progress-text">Queued…</div>
         <div class="comfy-progress-bar"><div class="comfy-progress-fill" id="musicgen-progress-fill"></div></div>
@@ -876,7 +847,7 @@
 <!-- ═══ PROJECT DETAIL ═══ -->
 <div id="project-screen" class="screen">
   <div class="app-header">
-    <button class="back-btn" onclick="goHome()">&#8249; Home</button>
+    <button class="back-btn home-btn" data-onclick="c6e4dcec" aria-label="Home" title="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg></button>
     <h2 id="screen-title-project" class="screen-title"><span class="screen-title-icon"></span> Project</h2>
   </div>
   <div class="project-detail-content" id="project-detail-content"></div>
@@ -887,36 +858,34 @@
   <div class="modal-content">
     <div class="modal-header">
       <h3 id="settings-book-title">Book Settings</h3>
-      <button class="modal-close" onclick="closeSettings()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <button class="modal-close" data-onclick="c48b3acd"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
 
     <!-- Voice Selector -->
+    <div class="settings-section">
+      <label class="settings-label" for="book-font-size">Text size</label>
+      <select id="book-font-size" data-onchange="cf604f75"><option value="-2">Small</option><option value="-1">Medium</option><option value="0">Large</option><option value="1">Extra large</option><option value="2">Largest</option></select>
+    </div>
     <div class="settings-section">
       <div class="settings-label">Voice</div>
       <div class="voice-grid" id="voice-grid"></div>
     </div>
 
-    <!-- Chapter Status -->
-    <div class="settings-section">
-      <div class="settings-label">Chapters</div>
-      <div class="chapter-status-list" id="chapter-status-list"></div>
-    </div>
-
     <!-- Generate Controls -->
     <div class="settings-section">
-      <div class="settings-label">Generation</div>
+      <div class="settings-label">Audiobook</div>
+      <div class="gen-status" id="gen-status" role="status">0% audio generated</div>
+      <div class="gen-progress-bar" role="progressbar" id="book-gen-progress" aria-label="Audiobook generation" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="gen-progress-fill" id="book-gen-progress-fill"></div></div>
       <div class="gen-controls" id="gen-controls">
-        <button class="gen-btn" id="gen-start-btn" onclick="startGeneration()">Generate Audio</button>
-        <button class="gen-btn stop" id="gen-stop-btn" onclick="stopGeneration()" style="display:none">Stop</button>
+        <button class="gen-btn" id="gen-start-btn" data-onclick="cdd807b4">Generate Audio</button>
       </div>
-      <div class="gen-status" id="gen-status" style="display:none"></div>
     </div>
 
     <!-- Audio Preview -->
     <div class="settings-section">
       <div class="settings-label">Preview</div>
       <div id="settings-preview">
-        <button class="gen-btn" onclick="previewVoice()">Play Preview</button>
+        <button class="gen-btn" data-onclick="c07d541f">Play Preview</button>
         <span class="settings-label" style="margin-top:8px" id="settings-preview-voice"></span>
       </div>
     </div>
@@ -932,7 +901,7 @@
   <div class="modal-content summary-modal-content">
     <div class="modal-header">
       <h3><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg> So Far</h3>
-      <button class="modal-close" onclick="closeSummary()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <button class="modal-close" data-onclick="cbe3776a"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="summary-loading" id="summary-loading" style="display:none">
       <div class="summary-spinner"></div>
@@ -941,8 +910,8 @@
     <div class="summary-body" id="summary-body" style="display:none">
       <div class="summary-section">
         <div class="summary-tab-bar">
-          <button class="summary-tab active" id="tab-chapter" onclick="switchSummaryTab('chapter')">This Chapter</button>
-          <button class="summary-tab" id="tab-sofar" onclick="switchSummaryTab('sofar')">Whole Story</button>
+          <button class="summary-tab active" id="tab-chapter" data-onclick="ca0df7c8">This Chapter</button>
+          <button class="summary-tab" id="tab-sofar" data-onclick="ca63c710">Whole Story</button>
         </div>
         <div class="summary-text" id="summary-text-chapter"></div>
         <div class="summary-text" id="summary-text-sofar" style="display:none"></div>
@@ -952,7 +921,7 @@
         <div class="summary-chat" id="summary-chat"></div>
         <div class="summary-ask-row">
           <input type="text" id="summary-ask-input" class="terminal-input" placeholder="Ask about what you've read..." autocomplete="off" />
-          <button class="terminal-send-btn" onclick="askSummaryQuestion()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+          <button class="terminal-send-btn" data-onclick="c2a66ef1"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
         </div>
       </div>
     </div>
@@ -960,7 +929,7 @@
 </div>
 
 <!-- ═══ VOICE ORB ═══ -->
-<button id="voice-orb" class="voice-orb" onclick="toggleVoice()" aria-label="Voice control">
+<button id="voice-orb" class="voice-orb" data-onclick="c7addac0" aria-label="Voice control" style="display:none">
   <div class="voice-orb-inner">
     <svg class="voice-orb-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
       <line x1="4" y1="10" x2="4" y2="14"/>
@@ -977,8 +946,8 @@
   <div class="voice-overlay-content">
     <!-- Mode Toggle -->
     <div class="voice-mode-toggle">
-      <button id="voice-mode-voice" class="voice-mode-btn active" onclick="setVoiceMode('voice')"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Voice</button>
-      <button id="voice-mode-text" class="voice-mode-btn" onclick="setVoiceMode('text')"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg> Text</button>
+      <button id="voice-mode-voice" class="voice-mode-btn active" data-onclick="c7830917"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Voice</button>
+      <button id="voice-mode-text" class="voice-mode-btn" data-onclick="c22391d5"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg> Text</button>
     </div>
 
     <!-- Voice View -->
@@ -1002,7 +971,7 @@
       <div id="voice-status" class="voice-status">Listening...</div>
 
       <!-- Microphone permission -->
-      <button id="voice-perm-btn" class="voice-perm-btn" style="display:none" onclick="requestMicPermission()">
+      <button id="voice-perm-btn" class="voice-perm-btn" style="display:none" data-onclick="c41381ac">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
         Enable microphone
       </button>
@@ -1011,11 +980,11 @@
       <div id="voice-transcript" class="voice-transcript"></div>
 
       <!-- Response (AI text, fades after turn done; tap for history) -->
-      <div id="voice-response" class="voice-response" onclick="showChatHistory()"></div>
+      <div id="voice-response" class="voice-response" data-onclick="c0579e50"></div>
 
       <!-- Capabilities -->
       <div id="voice-capabilities" class="voice-capabilities">
-        <button class="voice-caps-toggle" onclick="toggleCapabilities()">
+        <button class="voice-caps-toggle" data-onclick="cfc72e0f">
           What can I say? &#9656;
         </button>
         <div id="voice-caps-list" class="voice-caps-list">
@@ -1035,18 +1004,18 @@
     <div id="text-view" class="text-view" style="display:none">
       <div id="voice-chat-messages" class="voice-chat-messages"></div>
       <div class="voice-chat-input-bar">
-        <input type="text" id="voice-chat-input" class="voice-chat-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendVoiceTextMessage();}">
-        <button class="voice-chat-send" onclick="sendVoiceTextMessage()"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+        <input type="text" id="voice-chat-input" class="voice-chat-input" placeholder="Type a message..." data-onkeydown="kc0fa567">
+        <button class="voice-chat-send" data-onclick="c2e727c8"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
       </div>
     </div>
 
     <!-- Controls -->
     <div class="voice-controls">
-      <button id="voice-mute-btn" class="voice-control-btn" onclick="toggleMute()">
+      <button id="voice-mute-btn" class="voice-control-btn" data-onclick="c49cf235">
         <span class="voice-control-icon" id="voice-mute-icon"></span>
         <span class="voice-control-label" id="voice-mute-label">Mute</span>
       </button>
-      <button class="voice-control-btn voice-close-btn" onclick="closeVoice()">
+      <button class="voice-control-btn voice-close-btn" data-onclick="cf62089e">
         <span class="voice-control-icon"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
         <span class="voice-control-label">Close</span>
       </button>
@@ -1055,69 +1024,51 @@
 </div>
 
 <!-- ═══ CHAT HISTORY MODAL ═══ -->
-<div id="chat-history-modal" class="chat-history-modal" style="display:none" onclick="hideChatHistory(event)">
-  <div class="chat-history-content" onclick="event.stopPropagation()">
+<div id="chat-history-modal" class="chat-history-modal" style="display:none" data-onclick="c5e7c742">
+  <div class="chat-history-content" data-onclick="c6d55428">
     <div class="chat-history-header">
       <h3>Chat History</h3>
-      <button class="chat-history-close" onclick="hideChatHistory()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <button class="chat-history-close" data-onclick="cdef0de4"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div id="chat-history-list" class="chat-history-list"></div>
   </div>
 </div>
 
 <!-- ═══ FULL ACCESS CONFIRMATION MODAL ═══ -->
-<div id="full-access-modal" class="full-access-modal" style="display:none">
-  <div class="full-access-content">
-    <div class="full-access-title">⚠️ Unrestricted access</div>
-    <p>Full access lets the voice agent run <strong>any shell command</strong> on this machine. It can:</p>
-    <ul>
-      <li>Delete files and folders (<code>rm</code>, <code>shred</code>)</li>
-      <li>Format or wipe disks (<code>mkfs</code>, <code>dd</code>)</li>
-      <li>Change permissions and users (<code>chmod</code>, <code>chown</code>)</li>
-      <li>Install or remove software</li>
-      <li>Shut down or reboot the machine</li>
-      <li>Read and exfiltrate any file it can access</li>
-    </ul>
-    <p style="color:var(--red);font-weight:700">This could permanently break your setup or expose your data.</p>
-    <div class="full-access-buttons">
-      <button class="voice-btn voice-btn-no" onclick="fullAccessConfirm(false)">Cancel</button>
-      <button class="voice-btn voice-btn-yes" style="background:rgba(239,68,68,0.25);border-color:rgba(239,68,68,0.5);color:#f87171" onclick="fullAccessConfirm(true)">I understand — enable Full access</button>
-    </div>
-  </div>
-</div>
-
 <!-- Vendored libs (pinned: @xterm/xterm 5.5.0, @xterm/addon-fit 0.10.0, qrcode-generator 1.4.4).
      three 0.160.0 + cannon-es 0.20.0 load lazily when Legos opens (legos3d.js). -->
 <script src="/static/vendor/xterm.min.js"></script>
 <script src="/static/vendor/addon-fit.min.js"></script>
 <script src="/static/vendor/qrcode.js"></script>
 <script src="/static/js/thinking-orbs.js"></script>
-<script src="/static/js/modules/auth.js?v=112"></script>
-<script src="/static/js/modules/netloc.js?v=112"></script>
-<script src="/static/js/modules/onboarding.js?v=112"></script>
-<script src="/static/js/modules/core.js?v=112"></script>
-<script src="/static/js/modules/media-session.js?v=112"></script>
-<script src="/static/js/modules/home.js?v=112"></script>
- <script src="/static/js/modules/liquid.js?v=112"></script>
- <script src="/static/js/modules/musicgen.js?v=112"></script>
- <script src="/static/js/modules/models.js?v=112"></script>
-<script src="/static/js/modules/projects.js?v=112"></script>
-<script src="/static/js/modules/audiobooks.js?v=112"></script>
-<script src="/static/js/modules/lego.js?v=112"></script>
-<script src="/static/js/modules/terminal.js?v=112"></script>
-<script src="/static/js/modules/osint.js?v=112"></script>
-<script src="/static/js/modules/universe.js?v=112"></script>
-<script src="/static/js/modules/system.js?v=112"></script>
-<script src="/static/js/modules/ollama.js?v=112"></script>
-<script src="/static/js/modules/comfy.js?v=112"></script>
-<script src="/static/js/modules/lego3d.js?v=112"></script>
-<script src="/static/js/modules/voice.js?v=112"></script>
-<script src="/static/js/modules/journal.js?v=112"></script>
-<script src="/static/js/modules/legos3d.js?v=112"></script>
-<script src="/static/js/modules/settings.js?v=112"></script>
-<script src="/static/js/modules/telemetry.js?v=112"></script>
-<script src="/static/js/modules/desktop.js?v=112"></script>
-<script src="/static/js/modules/music.js?v=112"></script>
+<script src="/static/js/modules/auth.js?v=151"></script>
+<script src="/static/js/modules/netloc.js?v=151"></script>
+<script src="/static/js/modules/onboarding.js?v=151"></script>
+<script src="/static/js/modules/core.js?v=151"></script>
+<script src="/static/js/handlers.js?v=151"></script>
+<script src="/static/js/modules/media-session.js?v=151"></script>
+<script src="/static/js/modules/home.js?v=151"></script>
+ <script src="/static/js/modules/liquid.js?v=151"></script>
+ <script src="/static/js/modules/musicgen.js?v=151"></script>
+ <script src="/static/js/modules/models.js?v=151"></script>
+<script src="/static/js/modules/projects.js?v=151"></script>
+<script src="/static/js/modules/audiobooks.js?v=151"></script>
+<script src="/static/js/modules/lego.js?v=151"></script>
+<script src="/static/js/modules/terminal.js?v=151"></script>
+<script src="/static/js/modules/osint.js?v=151"></script>
+<script src="/static/js/modules/universe.js?v=151"></script>
+<script src="/static/js/modules/device-art.js?v=151"></script>
+<script src="/static/js/modules/system.js?v=151"></script>
+<script src="/static/js/modules/ollama.js?v=151"></script>
+<script src="/static/js/modules/comfy.js?v=151"></script>
+<script src="/static/js/modules/lego3d.js?v=151"></script>
+<script src="/static/js/modules/voice.js?v=151"></script>
+<script src="/static/js/modules/journal.js?v=151"></script>
+<script src="/static/js/modules/legos3d.js?v=151"></script>
+<script src="/static/js/modules/settings.js?v=151"></script>
+<script src="/static/js/modules/telemetry.js?v=151"></script>
+<script src="/static/js/modules/desktop.js?v=151"></script>
+<script src="/static/js/modules/music.js?v=151"></script>
 
 <!-- ═══ ONBOARDING OVERLAY ═══ -->
 <div id="onboarding-overlay" class="onboarding-overlay" style="display:none">
@@ -1129,20 +1080,24 @@
       <h1>Welcome to DeCloud</h1>
       <p>DeCloud is your personal cloud. It runs on your own computer and lets you reach your books, files, music and AI helpers from your phone or any browser. No accounts, no tracking, no monthly fees.</p>
       <div class="onboarding-name">
-        <label for="agent-name-input">Name your AI companion</label>
-        <input type="text" id="agent-name-input" placeholder="DeCloud" maxlength="40" autocomplete="off" autocapitalize="words">
+        <label for="lab-name-input">Name your lab</label>
+        <input type="text" id="lab-name-input" placeholder="Home Lab" maxlength="24" autocomplete="off" autocapitalize="words">
       </div>
-      <p style="font-size:0.85em;opacity:0.6">Your voice assistant will answer to this name. Change it anytime in Settings → Voice.</p>
+      <div class="onboarding-name">
+        <label for="device-name-input">Name this computer</label>
+        <input type="text" id="device-name-input" placeholder="e.g. Cabin, Office PC" maxlength="40" autocomplete="off" autocapitalize="words">
+      </div>
+      <p style="font-size:0.85em;opacity:0.6">You'll see these on the My Lab screen. To change them later, replay this walkthrough from Settings → About.</p>
     </div>
 
     <!-- Step 1: What's inside -->
     <div class="onboarding-step" data-step="1">
       <h1>What's Inside</h1>
-      <p>📚 <strong>Books</strong> — Read, or have your books read aloud, with each word highlighted</p>
-      <p>🤖 <strong>AI Chat</strong> — Chat with an AI that runs on your own computer</p>
-      <p>📁 <strong>Files</strong> — See the files on your computer from your phone</p>
-      <p>🎵 <strong>Music</strong> — Play your own music collection anywhere</p>
-      <p>📊 <strong>My Lab</strong> — See how busy your computer is right now</p>
+      <p><strong>Books</strong> — Read, or have your books read aloud, with each word highlighted</p>
+      <p><strong>AI Chat</strong> — Chat with an AI that runs on your own computer</p>
+      <p><strong>Files</strong> — See the files on your computer from your phone</p>
+      <p><strong>Music</strong> — Play your own music collection anywhere</p>
+      <p><strong>My Lab</strong> — See how busy your computer is right now</p>
       <p style="font-size:0.85em;opacity:0.6">Everything works out of the box. Extras can be turned on later in Settings.</p>
     </div>
 
@@ -1171,9 +1126,9 @@
 
     <!-- Nav buttons -->
     <div class="onboarding-nav">
-      <button id="onboarding-skip" class="onboarding-btn-secondary" onclick="onboardingSkip()">Skip</button>
-      <button id="onboarding-prev" class="onboarding-btn-secondary" onclick="onboardingPrev()" style="display:none">Back</button>
-      <button id="onboarding-next" class="onboarding-btn" onclick="onboardingNext()">Get Started</button>
+      <button id="onboarding-skip" class="onboarding-btn-secondary" data-onclick="c158f606">Skip</button>
+      <button id="onboarding-prev" class="onboarding-btn-secondary" data-onclick="c576c1bb" style="display:none">Back</button>
+      <button id="onboarding-next" class="onboarding-btn" data-onclick="c49c78d7">Get Started</button>
     </div>
   </div>
 </div>

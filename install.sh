@@ -10,6 +10,54 @@ set -e
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_NAME="decloud"
 
+# A node runs the lightweight Lab agent; it does not install the dashboard.
+INSTALL_MODE=""
+case "${1:-}" in
+    --host) INSTALL_MODE=host ;;
+    --node) INSTALL_MODE=node ;;
+    -h|--help)
+        echo "Usage: ./install.sh [--host|--node]"
+        echo "  --host  Install the DeCloud dashboard and private Tailscale access."
+        echo "  --node  Install the Lab monitoring agent on this computer."
+        exit 0 ;;
+    '') ;;
+    *) echo "Unknown option: $1" >&2; echo "Usage: ./install.sh [--host|--node]" >&2; exit 2 ;;
+esac
+if [ "$#" -gt 1 ]; then
+    echo "Usage: ./install.sh [--host|--node]" >&2
+    exit 2
+fi
+if [ -z "$INSTALL_MODE" ] && [ -t 0 ]; then
+    echo "Install DeCloud on this computer as:"
+    echo "  1. Host — dashboard, libraries and AI apps"
+    echo "  2. Node — report this computer's stats to a host"
+    read -r -p "Choose 1 or 2 [1]: " choice
+    case "$choice" in
+        ''|1) INSTALL_MODE=host ;;
+        2) INSTALL_MODE=node ;;
+        *) echo "Choose 1 or 2." >&2; exit 2 ;;
+    esac
+fi
+INSTALL_MODE=${INSTALL_MODE:-host}
+if [ "$INSTALL_MODE" = node ]; then
+    if [ "$(uname -s)" != Linux ]; then
+        echo "Node installation currently requires Linux and a user systemd service." >&2
+        exit 1
+    fi
+    if [ ! -t 0 ]; then
+        echo "Node setup needs an interactive terminal for pairing." >&2
+        exit 1
+    fi
+    if ! command -v python3 >/dev/null || ! command -v systemctl >/dev/null; then
+        echo "Install Python 3 with venv support and systemd before setting up a node." >&2
+        exit 1
+    fi
+    echo "Setting up the private Tailscale Lab node. This reports device statistics; it does not yet run jobs for the host."
+    python3 -m venv "$APP_DIR/.node-venv"
+    "$APP_DIR/.node-venv/bin/python" -m pip install 'psutil==7.2.2' 'cryptography==50.0.0'
+    exec "$APP_DIR/.node-venv/bin/python" "$APP_DIR/lab_report.py" --install-service --tailnet
+fi
+
 # ─── Detect OS ──────────────────────────────────────────────────
 OS_TYPE="linux"
 if [[ "$(uname)" == "Darwin" ]]; then
@@ -109,17 +157,12 @@ else
 fi
 
 # ─── Tunnel client (for secure HTTPS access from phone) ──────────
-# Tailscale Funnel is the only supported tunnel: it terminates TLS on your
-# own machine and requires your own tailnet. We deliberately do NOT use
-# third-party relays (localhost.run, localhost tunnel via SSH) — those
-# forward plaintext HTTP through someone else's box, which contradicts
-# DeCloud's privacy story. cloudflared (your own Cloudflare account) is the
-# fallback.
+# Tailscale Serve restricts access to devices on the owner's tailnet.
 TUNNEL_TOOL=""
 
 if command -v tailscale &>/dev/null; then
     TUNNEL_TOOL="tailscale"
-    echo "✓ Tunnel client ready (Tailscale Funnel)"
+    echo "✓ Tunnel client ready (private Tailscale Serve)"
 elif command -v cloudflared &>/dev/null; then
     TUNNEL_TOOL="cloudflared"
     echo "✓ Tunnel client ready (cloudflared — your own Cloudflare account)"
@@ -182,7 +225,7 @@ PIPER_DIR=$(grep '^DECLOUD_PIPER_DIR=' .env 2>/dev/null | cut -d= -f2- | sed 's/
 if [ -z "$PIPER_DIR" ]; then
     PIPER_DIR="$HOME/.local/share/piper"
 fi
-PIPER_DIR=$(eval echo "$PIPER_DIR")  # expand ~
+PIPER_DIR="${PIPER_DIR/#\~/$HOME}"  # expand a leading ~ (no eval: the value comes from .env)
 mkdir -p "$PIPER_DIR"
 _fetch_voice() {
     local name="$1" quality="$2"
@@ -284,7 +327,7 @@ SVCEOF
     echo "✓ Service installed and started"
 fi
 
-# ─── Start DeCloud (app + Tailscale funnel together) ─────────────
+# ─── Start DeCloud (app + private Tailscale Serve) ───────────────
 echo ""
 echo "→ Starting DeCloud..."
 chmod +x "$APP_DIR/decloud"
@@ -295,26 +338,21 @@ mkdir -p "$HOME/.local/bin"
 ln -sf "$APP_DIR/decloud" "$HOME/.local/bin/decloud"
 echo "✓ 'decloud' command installed to ~/.local/bin (decloud update, status, qr, …)"
 
-# The decloud wrapper starts the app and the Tailscale funnel together
-# (no third-party relays). A non-root user may need `sudo tailscale funnel`.
-"$APP_DIR/decloud" start
+# The wrapper starts the app and private Tailscale Serve together. Without
+# Tailscale it exits non-zero; keep going so the summary and passcode still print.
+"$APP_DIR/decloud" start || true
 
-# Get the funnel URL (can take a few seconds to appear)
-TUNNEL_URL=""
-for _ in 1 2 3 4 5; do
-    TUNNEL_URL=$(tailscale funnel status 2>/dev/null | grep -oP 'https://[a-z0-9-]+\.tail[a-z0-9-]+\.ts\.net' | head -1)
-    [ -n "$TUNNEL_URL" ] && break
-    sleep 2
-done
+# Only report a URL if the wrapper confirmed private Serve is active.
+TUNNEL_URL=$("$APP_DIR/decloud" status | grep '^URL:' | cut -d: -f2- | xargs || true)
 
 if [ -n "$TUNNEL_URL" ]; then
-    echo "✓ Funnel active: $TUNNEL_URL"
+    echo "✓ Private Serve active: $TUNNEL_URL"
     ACCESS_URL="$TUNNEL_URL"
 else
-    echo "⚠ Funnel not active yet. Local access only:"
+    echo "⚠ Private Serve not active yet. Local access only:"
     ACCESS_URL="http://localhost:${PORT}"
     echo "  $ACCESS_URL"
-    echo "  To start the tunnel: sudo tailscale funnel ${PORT}"
+    echo "  Connect Tailscale, then run: ./decloud start"
 fi
 
 # ─── Done ───────────────────────────────────────────────────────
@@ -325,44 +363,19 @@ echo "╔═══════════════════════�
 echo "║   ✓ DeCloud installed!                       ║"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
-echo "🌐 LOCAL ACCESS: http://localhost:${PORT}"
+echo "LOCAL ACCESS: http://localhost:${PORT}"
 if [ -n "$TUNNEL_URL" ]; then
-    echo "📱 PUBLIC URL (Tailscale Funnel): $TUNNEL_URL"
+    echo "PRIVATE TAILNET URL: $TUNNEL_URL"
     echo "   PIN: ${PIN:-set in .env}"
     echo ""
-    echo "⚠️  This tunnel URL changes every few hours. For permanent access:"
-    echo ""
-    echo "📌 SETUP PERMANENT TUNNEL (5 min):"
-    echo ""
-    echo "   1. Install cloudflared:"
-    if [ "$OS_TYPE" = "macos" ]; then
-        echo "      brew install cloudflared"
-    else
-        echo "      sudo apt install cloudflared  # or: sudo dnf install cloudflared"
-    fi
-    echo ""
-    echo "   2. Create a free Cloudflare account & tunnel:"
-    echo "      cloudflared tunnel login"
-    echo "      cloudflared tunnel create decloud"
-    echo ""
-    echo "   3. Point a domain (yours or free subdomain):"
-    echo "      cloudflared tunnel route dns decloud mydomain.com"
-    echo ""
-    echo "   4. Run the tunnel:"
-    echo "      cloudflared tunnel run decloud"
-    echo ""
-    echo "   Result: https://decloud.mydomain.com (permanent, never changes)"
-    echo ""
-    echo "🔐 ALTERNATIVE (Private-only access):"
-    echo "   Use Tailscale for permanent HTTPS from your own devices:"
-    echo "      sudo tailscale serve https / http://localhost:${PORT}"
+    echo "   Connect your phone to the same Tailscale tailnet to open this URL."
     echo ""
 fi
 echo ""
 
 # Print PIN
 if [ -n "$PIN" ]; then
-    echo "🔐 Your access PIN: $PIN"
+    echo "Your access PIN: $PIN"
     echo "   It unlocks a shell on this machine — don't share it."
     echo "   (Change it: nano ${APP_DIR}/.env)"
     echo ""
@@ -370,7 +383,7 @@ fi
 
 # QR code
 if [ -n "$TUNNEL_URL" ] && command -v qrencode &>/dev/null; then
-    echo "📱 Scan this QR code with your phone camera:"
+    echo "Scan this QR code with your phone camera:"
     echo ""
     qrencode -t ANSIUTF8 "$TUNNEL_URL" 2>/dev/null || qrencode -t ANSI "$TUNNEL_URL" 2>/dev/null
     echo ""
@@ -381,15 +394,14 @@ if [ -n "$TUNNEL_URL" ] && command -v qrencode &>/dev/null; then
     echo "   • iPhone: Safari → Share → Add to Home Screen"
     echo "   • Android: Chrome → ⋮ → Add to Home screen"
 elif [ -n "$TUNNEL_URL" ]; then
-    echo "📱 Open on your phone: $TUNNEL_URL"
+    echo "Open on your phone: $TUNNEL_URL"
     echo "   PIN: $PIN"
     echo ""
     echo "   Add to Home Screen for a native app experience:"
     echo "   • iPhone: Safari → Share → Add to Home Screen"
     echo "   • Android: Chrome → ⋮ → Add to Home screen"
 else
-    echo "📱 Install cloudflared for phone access:"
-    echo "   https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/"
+    echo "Install and connect Tailscale on this computer and your phone, then run ./decloud start."
 fi
 
 echo ""

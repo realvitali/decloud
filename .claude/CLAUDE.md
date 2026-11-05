@@ -14,6 +14,12 @@ for agents that only read CLAUDE.md.
 3. **Every push bumps the version + changelog:**
    `.venv/bin/python scripts/bump_version.py patch -m "summary" -c "bullet;bullet"`
    CI auto-creates the git tag + GitHub release. Never tag manually.
+   The changelog is the update log users read in Settings → About: list every
+   user-visible addition, change and fix since the last release, one plain-words
+   bullet each (`-c "…;…"`), not just a one-line summary.
+   Release signing is OFF while `lab_report.RELEASE_SIGNERS` is empty (the
+   default) — then skip it. Once a key is pinned, the maintainer signs each
+   release with `scripts/sign_release.py sign`; agents never sign.
 4. **Never commit secrets/runtime files** (`.env`, `settings.json`, `*.pid`,
    `tunnel.url`, `sessions.json`, `voice_*` files).
 
@@ -32,17 +38,20 @@ Boot check: `curl -s http://localhost:8899/ -o /dev/null -w "%{http_code}\n"` �
 ## Map
 
 - `routes/*.py` — Flask blueprints (one per feature)
-- `static/js/modules/*.js` — vanilla JS; inline `onclick`s in
-  `templates/index.html` call GLOBAL functions (add a function before using it)
+- `static/js/modules/*.js` — vanilla JS; handlers in `static/js/handlers.js`
+  call GLOBAL functions (add a function before using it)
 - `shared.py` — auth/sessions/config/LLM helpers
 - `scripts/decloud_update.py` + `scripts/decloud_tui.py` — terminal updater + TUI
 - `routes/version.py` — `VERSION` + `CHANGELOG[0]` (single source of truth)
 
 ## Frontend rule
 
-Escape every string from user input/files/LLM with `escapeHtml` (core.js), and
-use `data-*` attributes + `this.dataset.x` instead of interpolating values into
-inline `onclick` handlers.
+Escape every string from user input/files/LLM with `escapeHtml` (core.js).
+**No inline handlers or `<script>` blocks** — the CSP is `script-src 'self'`.
+Write `data-onclick="<key>"` (or data-onchange/onkeydown/…) in markup and add
+`<key>: function (event) { … }` to `static/js/handlers.js` (`this` = element), or
+use `addEventListener`. Pass values via `data-*` + `this.dataset.x`. A test fails
+on any `onclick="…"`.
 
 ## Known debt (do NOT touch mid-feature)
 

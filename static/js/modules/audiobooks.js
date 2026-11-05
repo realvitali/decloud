@@ -1,9 +1,18 @@
 // ===== Module: audiobooks =====
 // ─── Books: Library ────────────────────────────────────────
+let libraryBooks = [];
+let bookSort = localStorage.getItem('decloud_book_sort') || 'title';
+
+function sortBooks(mode) {
+  bookSort = mode;
+  localStorage.setItem('decloud_book_sort', mode);
+  renderBooks();
+}
+
 async function loadBooks() {
   try {
-    document.getElementById('book-list').innerHTML = Array(5).fill(
-      '<div class="skeleton-book"><div style="flex:1"><div class="shimmer-block skeleton-title"></div><div class="shimmer-block skeleton-meta"></div></div></div>'
+    document.getElementById('book-list').innerHTML = Array(6).fill(
+      '<div class="skeleton-book skeleton-book-tile"><div class="shimmer-block skeleton-cover"></div><div class="shimmer-block skeleton-titlename"></div></div>'
     ).join('');
     const r = await fetch('/api/books');
     const books = await r.json();
@@ -11,42 +20,47 @@ async function loadBooks() {
     if (!books || books.length === 0) {
       document.getElementById('book-list').innerHTML = `
         <div class="empty-state">
-          <div class="empty-icon">📚</div>
+          <div class="empty-icon">${ICONS.book}</div>
           <h3>No books yet</h3>
           <p>Put PDF or plain-text (.txt) files in your books folder to get started.</p>
           <p class="empty-hint">To choose a different folder, go to Settings → Paths.</p>
         </div>`;
       return;
     }
-    document.getElementById('book-list').innerHTML = books.map(b => {
-      const statusClass = b.status === 'ready' ? 'ready' : b.status === 'generating' ? 'generating' : 'new';
-      const done = b.chapters_done || 0;
-      const total = b.total_chapters;
-      const statusText = b.status === 'ready' ? (total ? `${total} chapters` : `${done} chapters`) :
-                         b.status === 'generating' ? (total ? `${done}/${total} chapters` : `${done} chapters done`) :
-                         total ? `${done}/${total} chapters` : 'Not generated';
-      return `
-        <div class="book-item" data-id="${escapeHtml(b.id)}" data-title="${escapeHtml(b.title)}" onclick="openBook(this.dataset.id, this.dataset.title)">
-          <div class="book-item-info">
-            <div class="book-item-name">${escapeHtml(b.title)}</div>
-            <div class="book-item-meta">${escapeHtml(b.size_mb)} MB &nbsp;•&nbsp; ${escapeHtml(b.voice || 'no voice')}</div>
-          </div>
-          <div class="book-item-right">
-            <div class="book-status ${statusClass}">${statusText}</div>
-            <button class="settings-btn" data-id="${escapeHtml(b.id)}" onclick="event.stopPropagation(); openSettingsForBook(this.dataset.id)" title="Settings">&#9881;</button>
-          </div>
-        </div>
-      `;
-    }).join('');
+    libraryBooks = books;
+    const sort = document.getElementById('books-sort');
+    if (sort) sort.value = bookSort;
+    renderBooks();
   } catch (e) {
     document.getElementById('book-list').innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">📚</div>
+        <div class="empty-icon">${ICONS.book}</div>
         <h3>Couldn't load your books</h3>
         <p>${escapeHtml(friendlyError(e))}</p>
-        <button class="settings-btn" onclick="loadBooks()">Retry</button>
+        <button class="settings-btn" data-onclick="cb8eb6c3">Retry</button>
       </div>`;
   }
+}
+
+function renderBooks() {
+    const books = libraryBooks.slice().sort((a, b) => {
+      const title = () => a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true });
+      if (bookSort === 'author') return (a.author ? 0 : 1) - (b.author ? 0 : 1) || (a.author || '').localeCompare(b.author || '', undefined, { sensitivity: 'base' }) || title();
+      if (bookSort === 'length') return (a.length_pages == null ? 1 : 0) - (b.length_pages == null ? 1 : 0) || (a.length_pages || 0) - (b.length_pages || 0) || title();
+      if (bookSort === 'recent') return (b.last_opened || 0) - (a.last_opened || 0) || title();
+      return title();
+    });
+    document.getElementById('book-list').innerHTML = books.map(b => {
+      return `
+        <div class="book-tile" role="button" tabindex="0" aria-label="Open ${escapeHtml(b.title)}" title="${escapeHtml(b.title)}" data-id="${escapeHtml(b.id)}" data-title="${escapeHtml(b.title)}" data-author="${escapeHtml(b.author || '')}" data-onclick="c8d6b216" data-onkeydown="k56b336e">
+          <div class="book-tile-cover">
+            <img src="/api/audio/${encodeURIComponent(b.id)}/cover" alt="" loading="lazy" data-onload="l31e1587" data-onerror="e53397a9">
+            <button class="settings-btn book-tile-gear" data-id="${escapeHtml(b.id)}" data-onclick="cf95be22" title="Settings">&#9881;</button>
+          </div>
+          <div class="book-tile-name">${escapeHtml(b.title)}</div>
+        </div>
+      `;
+    }).join('');
 }
 
 // ─── Book State ────────────────────────────────────────────
@@ -58,6 +72,13 @@ let readerChapterIdx = 0;
 let readerText = '';
 let bookmarks = [];
 let fontSizeLevel = 1;
+let readerPage = 0;
+let readerPageCount = 1;
+let readerOpenAtEnd = false;
+let readerPageCounts = [];
+let readerLayoutKey = '';
+let readerPaginationToken = 0;
+const READER_PAGE_GAP = 40;
 let bookmarkPanelOpen = false;
 
 // ─── Server position sync (cross-device resume) ───────────────
@@ -81,13 +102,25 @@ let player = null;
 let audioChapterIdx = 0;
 let transcriptWords = [];
 let pollInterval = null;
+let pollBookId = null;
 let isGenerating = false;
 
 // ─── Open Book ────────────────────────────────────────────
-async function openBook(bookId, title) {
+async function openBook(bookId, title, author = '') {
+  if (player) player.pause();
   currentBook = bookId;
+  readerText = '';
+  readerLayoutKey = '';
+  readerPageCounts = [];
+  readerPaginationToken++;
   loadBookmarks();
   document.getElementById('reader-title').textContent = title;
+  document.getElementById('reader-author').textContent = author;
+  fetch(`/api/book/${encodeURIComponent(bookId)}/position`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ opened: true }) }).catch(() => {});
+  try {
+    const settings = await (await fetch(`/api/book/${encodeURIComponent(bookId)}/settings`)).json();
+    fontSizeLevel = Number.isInteger(settings.font_size) ? settings.font_size : 1;
+  } catch { fontSizeLevel = 1; }
 
   // Fetch reader chapters from PDF text API
   try {
@@ -130,12 +163,12 @@ async function openBook(bookId, title) {
         document.getElementById('audio-mode-btn').disabled = false;
         hasAudio = true;
       } else {
-        document.getElementById('audio-mode-btn').disabled = true;
+        document.getElementById('audio-mode-btn').disabled = false;
       }
     }
   } catch {
     audioData = null;
-    document.getElementById('audio-mode-btn').disabled = true;
+    document.getElementById('audio-mode-btn').disabled = false;
   }
 
   // ── Auto-resume: restore last position by default ──
@@ -211,7 +244,7 @@ async function loadChapterText(idx) {
   if (idx < 0 || idx >= readerChapters.length) return;
 
   const ch = readerChapters[idx];
-  document.getElementById('chapter-label').textContent = ch.title || `Ch ${idx + 1}`;
+  document.getElementById('chapter-label').textContent = '…';
   document.getElementById('reader-text').innerHTML = '<div class="pixel-loader-wrap"><div class="pixel-loader"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>';
   document.getElementById('prev-ch-btn').disabled = idx <= 0;
   document.getElementById('next-ch-btn').disabled = idx >= readerChapters.length - 1;
@@ -240,18 +273,93 @@ function renderReaderText() {
   const words = readerText.split(/(\s+)/);
   el.innerHTML = words.map((w, i) => {
     if (/^\s+$/.test(w)) return w;
-    return `<span class="reader-word" data-idx="${i}" onclick="handleWordTap(this, ${i})">${escapeHtml(w)}</span>`;
+    return `<span class="reader-word" data-idx="${i}" data-onclick="c996e1c8">${escapeHtml(w)}</span>`;
   }).join('');
 
   el.style.fontSize = fs + 'px';
-
-  // Restore scroll position
-  const saved = bookmarks.find(b => b.chapter === readerChapterIdx && b.isResume);
-  if (saved) {
-    setTimeout(() => {
+  el.style.columnWidth = el.clientWidth + 'px';
+  requestAnimationFrame(() => {
+    // Column edges may round by fractions of a pixel; rounding avoids a
+    // phantom extra page when scrollWidth is a few pixels above the total.
+    readerPageCount = Math.max(1, Math.round((el.scrollWidth + READER_PAGE_GAP) / (el.clientWidth + READER_PAGE_GAP)));
+    const layoutKey = `${currentBook}:${el.clientWidth}:${el.clientHeight}:${fs}`;
+    const newLayout = layoutKey !== readerLayoutKey;
+    if (newLayout) {
+      readerLayoutKey = layoutKey;
+      readerPageCounts = Array(readerChapters.length).fill(null);
+      readerPaginationToken++;
+    }
+    readerPageCounts[readerChapterIdx] = readerPageCount;
+    const openingAtEnd = readerOpenAtEnd;
+    readerPage = readerOpenAtEnd ? readerPageCount - 1 : 0;
+    readerOpenAtEnd = false;
+    const saved = bookmarks.find(b => b.chapter === readerChapterIdx && b.isResume);
+    if (saved && !openingAtEnd) {
       const span = el.querySelector(`[data-idx="${saved.wordIndex}"]`);
-      if (span) { span.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-    }, 100);
+      if (span) readerPage = Math.max(0, Math.min(readerPageCount - 1, Math.floor((span.getBoundingClientRect().left - el.getBoundingClientRect().left + el.scrollLeft) / (el.clientWidth + READER_PAGE_GAP))));
+    }
+    updateReaderPage();
+    if (newLayout && readerChapters.length > 1) countBookPages(el, readerPaginationToken, currentBook);
+  });
+
+}
+
+function updateReaderPage() {
+  const el = document.getElementById('reader-text');
+  el.scrollLeft = readerPage * (el.clientWidth + READER_PAGE_GAP);
+  const complete = readerPageCounts.length === readerChapters.length && readerPageCounts.every(n => Number.isInteger(n));
+  const page = complete ? readerPageCounts.slice(0, readerChapterIdx).reduce((a, b) => a + b, 0) + readerPage + 1 : readerPage + 1;
+  const total = complete ? readerPageCounts.reduce((a, b) => a + b, 0) : readerPageCount;
+  const label = document.getElementById('chapter-label');
+  label.textContent = complete || readerChapters.length <= 1 ? `${page} / ${total}` : `Chapter ${readerChapterIdx + 1} · ${page} / ${total}`;
+  label.title = complete ? 'Page in this book' : 'Page in this chapter; calculating book total';
+  document.getElementById('prev-ch-btn').disabled = readerPage === 0 && readerChapterIdx === 0;
+  document.getElementById('next-ch-btn').disabled = readerPage >= readerPageCount - 1 && readerChapterIdx >= readerChapters.length - 1;
+}
+
+async function countBookPages(reference, token, bookId) {
+  const style = getComputedStyle(reference);
+  const measure = document.createElement('div');
+  Object.assign(measure.style, {
+    position: 'fixed', left: '-10000px', top: '0', visibility: 'hidden', overflow: 'hidden',
+    width: reference.clientWidth + 'px', height: reference.clientHeight + 'px',
+    columnWidth: reference.clientWidth + 'px', columnGap: READER_PAGE_GAP + 'px', columnFill: 'auto',
+    fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight,
+    lineHeight: style.lineHeight, letterSpacing: style.letterSpacing, whiteSpace: 'pre-wrap', wordBreak: 'break-word'
+  });
+  document.body.appendChild(measure);
+  try {
+    for (let i = 0; i < readerChapters.length; i++) {
+      if (token !== readerPaginationToken || bookId !== currentBook) return;
+      if (readerPageCounts[i] !== null) continue;
+      const response = await fetch(`/api/books/text?book=${encodeURIComponent(bookId)}&chapter=${i}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      if (token !== readerPaginationToken || bookId !== currentBook) return;
+      // Match the reader's inline word elements so line breaks and column
+      // counts are the same as the visible page, including long words.
+      measure.innerHTML = (data.text || '').split(/(\s+)/).map(w =>
+        /^\s+$/.test(w) ? w : `<span class="reader-word">${escapeHtml(w)}</span>`).join('');
+      readerPageCounts[i] = Math.max(1, Math.round((measure.scrollWidth + READER_PAGE_GAP) / (measure.clientWidth + READER_PAGE_GAP)));
+      updateReaderPage();
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+  } catch { /* Keep the clearly labeled chapter page count if counting fails. */ }
+  finally { measure.remove(); }
+}
+
+function turnReaderPage(direction) {
+  if (direction < 0 && readerPage === 0 && readerChapterIdx > 0) {
+    readerOpenAtEnd = true;
+    readerChapterIdx--;
+    loadChapterText(readerChapterIdx);
+  } else if (direction > 0 && readerPage >= readerPageCount - 1 && readerChapterIdx < readerChapters.length - 1) {
+    readerChapterIdx++;
+    loadChapterText(readerChapterIdx);
+  } else {
+    readerPage = Math.max(0, Math.min(readerPageCount - 1, readerPage + direction));
+    updateReaderPage();
+    saveReaderPosition();
   }
 }
 
@@ -273,7 +381,7 @@ function saveReaderPosition() {
   var wordIndex = 0;
   for (var i = 0; i < spans.length; i++) {
     var sr = spans[i].getBoundingClientRect();
-    if (sr.top >= rect.top + 20 && sr.top <= rect.top + 100) {
+    if (sr.top >= rect.top && sr.top <= rect.top + 100 && sr.left >= rect.left && sr.left < rect.right) {
       wordIndex = parseInt(spans[i].dataset.idx || 0);
       break;
     }
@@ -315,15 +423,33 @@ function handleWordTap(span, wordIndex) {
   updateBookmarkCount();
 }
 
-function changeFontSize(delta) {
-  fontSizeLevel = Math.max(-2, Math.min(2, fontSizeLevel + delta));
-  document.getElementById('font-size-label').textContent = ['S', 'M', 'L', 'X', 'XX'][fontSizeLevel + 2];
-  renderReaderText();
+async function setBookFontSize(value) {
+  const size = Number(value);
+  if (!settingsBookId || !Number.isInteger(size) || size < -2 || size > 2) return;
+  const bookId = settingsBookId;
+  try {
+    const r = await fetch(`/api/book/${encodeURIComponent(bookId)}/settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ font_size: size }) });
+    if (!r.ok) throw new Error('save failed');
+    if (bookId === currentBook) {
+      fontSizeLevel = size;
+      if (document.getElementById('reader-screen').classList.contains('active')) renderReaderText();
+    }
+  } catch { showToast('Could not save text size'); }
+}
+
+function toggleBookAudio() {
+  if (document.getElementById('audio-pane').style.display !== 'none') {
+    setReaderMode('reader');
+    if (!readerText) loadChapterText(readerChapterIdx);
+    return;
+  }
+  if (!audioData?.has_audio) return openSettingsForBook(currentBook);
+  setReaderMode('audio');
 }
 
 function setReaderMode(mode) {
   const isReader = mode === 'reader';
-  document.getElementById('reader-pane').style.display = isReader ? 'block' : 'none';
+  document.getElementById('reader-pane').style.display = isReader ? 'flex' : 'none';
   document.getElementById('audio-pane').style.display = isReader ? 'none' : 'block';
   document.getElementById('reader-mode-btn').classList.toggle('active', isReader);
   document.getElementById('audio-mode-btn').classList.toggle('active', !isReader);
@@ -339,9 +465,7 @@ function setReaderMode(mode) {
     selectAudioChapter(audioChapterIdx);
   } else if (isReader) {
     // Switching to reader mode — update chapter label
-    if (readerChapters.length > 0) {
-      document.getElementById('chapter-label').textContent = readerChapters[readerChapterIdx]?.title || `Ch ${readerChapterIdx + 1}`;
-    }
+    if (readerChapters.length > 0) requestAnimationFrame(updateReaderPage);
   }
 }
 
@@ -375,8 +499,15 @@ function saveBookmarks() {
 function updateBookmarkCount() {
   const count = bookmarks.filter(b => !b.isResume).length;
   const el = document.getElementById('bookmark-count');
-  if (el) el.textContent = count;
+  if (el) el.textContent = count || '';
 }
+
+let readerResizeTimer;
+window.addEventListener('resize', () => {
+  if (!currentBook || !readerText || !document.getElementById('reader-screen')?.classList.contains('active') || document.getElementById('reader-pane').style.display === 'none') return;
+  clearTimeout(readerResizeTimer);
+  readerResizeTimer = setTimeout(() => { saveReaderPosition(); renderReaderText(); }, 200);
+});
 
 function toggleBookmarkList() {
   bookmarkPanelOpen = !bookmarkPanelOpen;
@@ -398,8 +529,8 @@ function renderBookmarkList() {
     <div class="bookmark-row">
       <span class="bookmark-word">"${escapeHtml(b.word)}"</span>
       <span class="bookmark-ch">Ch ${b.chapter + 1}</span>
-      <button class="bookmark-goto" onclick="gotoBookmark(${i})">Go</button>
-      <button class="bookmark-del" onclick="deleteBookmark(${i})">✕</button>
+      <button class="bookmark-goto" data-i="${i}" data-onclick="c8363924">Go</button>
+      <button class="bookmark-del" data-i="${i}" data-onclick="ca57cb34">✕</button>
     </div>
   `).join('');
 }
@@ -676,81 +807,73 @@ function setupPlayer() {
   document.getElementById('audio-mode-btn').disabled = false;
 }
 
-function showGenBanner(progress) {
-  const banner = document.getElementById('gen-banner');
-  banner.style.display = 'block';
-  document.getElementById('gen-progress-fill').style.width = progress + '%';
-  document.getElementById('gen-banner-sub').textContent = progress + '%';
-}
-function hideGenBanner() {
-  document.getElementById('gen-banner').style.display = 'none';
-}
-function updateGenBanner(progress) {
-  document.getElementById('gen-progress-fill').style.width = progress + '%';
-  document.getElementById('gen-banner-sub').textContent = progress + '%';
+function renderAudioGeneration(status, bookId) {
+  if (settingsBookId !== bookId || document.getElementById('settings-modal').style.display === 'none') return;
+  const pct = Math.max(0, Math.min(100, Number(status.progress) || 0));
+  const progress = document.getElementById('book-gen-progress');
+  progress.setAttribute('aria-valuenow', pct);
+  document.getElementById('book-gen-progress-fill').style.width = pct + '%';
+  const message = document.getElementById('gen-status');
+  const controls = document.getElementById('gen-controls');
+  if (status.status === 'converting') {
+    const seconds = status.eta_seconds;
+    let eta = 'estimating time remaining';
+    if (Number.isFinite(seconds) && seconds >= 0) {
+      const minutes = Math.ceil(seconds / 60);
+      eta = minutes < 1 ? 'less than a minute left' : minutes < 60 ? `about ${minutes} min left` : `about ${Math.floor(minutes / 60)} hr ${minutes % 60} min left`;
+    }
+    message.textContent = `${pct}% audio generated · ${eta}`;
+    controls.innerHTML = '<button class="gen-btn stop" data-onclick="c630dcea">Stop</button>';
+  } else if (status.status === 'ready') {
+    message.textContent = '100% audio generated';
+    controls.innerHTML = '<button class="gen-btn" data-onclick="cdd807b4">Regenerate audio</button>';
+  } else {
+    message.textContent = status.status === 'error' ? 'Audio generation stopped or failed' : '0% audio generated';
+    controls.innerHTML = '<button class="gen-btn" data-onclick="cdd807b4">Generate audio</button>';
+  }
 }
 
 async function startPolling(bookId) {
   if (pollInterval) clearInterval(pollInterval);
+  pollBookId = bookId;
   isGenerating = true;
 
-  pollInterval = setInterval(async () => {
+  const tick = async () => {
     let d;
     try {
       const r = await fetch(`/api/tts/status/${encodeURIComponent(bookId)}`);
       d = await r.json();
     } catch (e) { return; }  // transient — try again next tick
 
+    if (pollBookId !== bookId) return;
+    renderAudioGeneration(d, bookId);
     if (d.status === 'ready') {
       clearInterval(pollInterval);
       isGenerating = false;
       pollInterval = null;
-      hideGenBanner();
-      const audioRes = await fetch(`/api/audio/${bookId}`);
-      audioData = await audioRes.json();
+      pollBookId = null;
       loadBooks();
-      if (audioData?.has_audio) {
-        setupPlayer();
-        buildChapterDropdown(audioChapterIdx);
+      if (currentBook === bookId) {
+        const audioRes = await fetch(`/api/audio/${encodeURIComponent(bookId)}`);
+        audioData = await audioRes.json();
+        if (audioData?.has_audio) {
+          setupPlayer();
+          buildChapterDropdown(audioChapterIdx);
+        }
       }
-    } else if (d.status === 'converting') {
-      const pct = d.progress || '0';
-      updateGenBanner(pct);
-      // Update banner sub-text with ETA + chapter count
-      const sub = document.getElementById('gen-banner-sub');
-      if (sub) {
-        let txt = `${pct}%`;
-        if (d.done_chapters && d.total_chapters) {
-          txt += ` · ${d.done_chapters}/${d.total_chapters} chapters`;
-        }
-        if (d.eta) {
-          txt += ` · ~${d.eta} left`;
-        }
-        sub.textContent = txt;
-      }
-      // Also update settings modal if open
-      const genStatus = document.getElementById('gen-status');
-      if (genStatus && genStatus.style.display !== 'none') {
-        let txt = `Generating... ${pct}%`;
-        if (d.done_chapters && d.total_chapters) {
-          txt += ` (${d.done_chapters}/${d.total_chapters})`;
-        }
-        if (d.eta) {
-          txt += ` ~${d.eta} left`;
-        }
-        genStatus.textContent = txt;
-      }
-    } else {
+    } else if (d.status !== 'converting') {
       clearInterval(pollInterval);
       isGenerating = false;
       pollInterval = null;
-      hideGenBanner();
+      pollBookId = null;
       if (d.status === 'error') {
         showToast("Audio generation stopped: " + (d.error || 'something went wrong — try again'));
         loadBooks();
       }
     }
-  }, 4000);
+  };
+  pollInterval = setInterval(tick, 4000);
+  tick();
 }
 
 // ─── Settings Modal ─────────────────────────────────────
@@ -762,27 +885,27 @@ async function openSettingsForBook(bookId) {
   modal.style.display = 'flex';
 
   // Load voices
-  const [voicesRes, settingsRes, chaptersRes, statusRes] = await Promise.all([
+  const [voicesRes, settingsRes, statusRes] = await Promise.all([
     fetch('/api/voices'),
     fetch(`/api/book/${bookId}/settings`),
-    fetch(`/api/book/${bookId}/chapters`),
     fetch(`/api/tts/status/${bookId}`)
   ]);
 
-  const [voices, settings, chapters, status] = await Promise.all([
-    voicesRes.json(), settingsRes.json(), chaptersRes.json(), statusRes.json()
+  const [voices, settings, status] = await Promise.all([
+    voicesRes.json(), settingsRes.json(), statusRes.json()
   ]);
 
-  const doneCount = chapters.filter(c => c.status === 'done').length;
+  if (settingsBookId !== bookId) return;
   const bookTitle = bookId.replace(/_/g, ' ');
   document.getElementById('settings-book-title').textContent = bookTitle;
+  document.getElementById('book-font-size').value = Number.isInteger(settings.font_size) ? settings.font_size : 1;
 
   // ── Voice Grid ──
   const voiceGrid = document.getElementById('voice-grid');
   voiceGrid.innerHTML = voices.map(v => {
     const isActive = settings.voice === v.id;
     return `
-      <div class="voice-card ${isActive ? 'selected' : ''}" data-id="${escapeHtml(v.id)}" onclick="selectVoice(this.dataset.id)" id="voice-${escapeHtml(v.id)}">
+      <div class="voice-card ${isActive ? 'selected' : ''}" data-id="${escapeHtml(v.id)}" data-onclick="cfddb0ac" id="voice-${escapeHtml(v.id)}">
         <div class="voice-icon">${v.gender === 'male' ? '♂' : '♀'}</div>
         <div class="voice-name">${escapeHtml(v.name)}</div>
         ${isActive ? '<div class="voice-active-badge">Active</div>' : ''}
@@ -790,41 +913,8 @@ async function openSettingsForBook(bookId) {
     `;
   }).join('');
 
-  // ── Chapter Status ──
-  const chapterList = document.getElementById('chapter-status-list');
-  if (doneCount === 0) {
-    chapterList.innerHTML = '<div class="chapter-none">No chapters generated yet</div>';
-  } else {
-    chapterList.innerHTML = chapters.map(c => {
-      if (c.status === 'pending') return '';
-      return `
-        <div class="chapter-row done">
-          <span class="chapter-row-num">${c.index + 1}</span>
-          <span class="chapter-row-name">${escapeHtml(getChapterName(c.index))}</span>
-          <span class="chapter-row-size">${c.size_kb ? Math.round(c.size_kb/1024)+'MB' : ''}</span>
-        </div>
-      `;
-    }).join('');
-  }
-
-  // ── Generate Controls ──
-  const genControls = document.getElementById('gen-controls');
-  const genStatus = document.getElementById('gen-status');
-
-  if (status.status === 'converting') {
-    genControls.innerHTML = `<button class="gen-btn stop" onclick="stopGeneration()">Stop Generation</button>`;
-    genStatus.style.display = 'block';
-    genStatus.innerHTML = `Generating... ${status.progress || '0'}%`;
-  } else if (status.status === 'ready' || doneCount > 0) {
-    genStatus.style.display = 'block';
-    genStatus.innerHTML = `${doneCount}/${chapters.length} chapters ready`;
-    genControls.innerHTML = `
-      <button class="gen-btn" onclick="startGeneration()">Regenerate All</button>
-    `;
-  } else {
-    genStatus.style.display = 'none';
-    genControls.innerHTML = `<button class="gen-btn" onclick="startGeneration()">Generate Audio</button>`;
-  }
+  renderAudioGeneration(status, bookId);
+  if (status.status === 'converting' && pollBookId !== bookId) startPolling(bookId);
 
   // ── Preview ──
   document.getElementById('settings-preview-voice').textContent =
@@ -860,48 +950,46 @@ function closeSettings() {
 
 async function startGeneration() {
   if (!settingsBookId) return;
+  const bookId = settingsBookId;
+  const button = document.querySelector('#gen-controls button');
+  if (button) button.disabled = true;
   let r, d;
   try {
-    r = await fetch(`/api/tts/start/${encodeURIComponent(settingsBookId)}`, { method: 'POST' });
+    r = await fetch(`/api/tts/start/${encodeURIComponent(bookId)}`, { method: 'POST' });
     d = await r.json();
-  } catch (e) { showToast(friendlyError(e)); return; }
-  if (!r.ok || d.error) { showToast(d.error || 'Could not start audio generation'); return; }
+  } catch (e) { if (button) button.disabled = false; showToast(friendlyError(e)); return; }
+  if (!r.ok || d.error) { if (button) button.disabled = false; showToast(d.error || 'Could not start audio generation'); return; }
   if (d.status === 'started') {
-    document.getElementById('gen-controls').innerHTML =
-      `<button class="gen-btn stop" onclick="stopGeneration()">Stop Generation</button>`;
-    document.getElementById('gen-status').style.display = 'block';
-    document.getElementById('gen-status').textContent = 'Starting...';
-
-    if (currentBook === settingsBookId) {
-      showGenBanner('0');
-      startPolling(settingsBookId);
-    }
+    renderAudioGeneration({ status: 'converting', progress: 0, eta_seconds: null }, bookId);
+    startPolling(bookId);
     loadBooks();
-    closeSettings();
   }
 }
 
 async function stopGeneration() {
   if (!settingsBookId) return;
-  await fetch(`/api/tts/stop/${settingsBookId}`, { method: 'POST' });
-  if (pollInterval) { clearInterval(pollInterval); isGenerating = false; pollInterval = null; }
-  if (currentBook === settingsBookId) hideGenBanner();
-  loadBooks();
-  closeSettings();
+  const bookId = settingsBookId;
+  try {
+    const response = await fetch(`/api/tts/stop/${encodeURIComponent(bookId)}`, { method: 'POST' });
+    if (!response.ok) throw new Error('Could not stop audio generation');
+    if (pollBookId === bookId && pollInterval) { clearInterval(pollInterval); isGenerating = false; pollInterval = null; pollBookId = null; }
+    renderAudioGeneration({ status: 'error', progress: 0 }, bookId);
+    loadBooks();
+  } catch (e) { showToast(friendlyError(e)); }
 }
 
 async function previewVoice() {
   if (!settingsBookId) return;
   const chaptersRes = await fetch(`/api/book/${settingsBookId}/chapters`);
   const chapters = await chaptersRes.json();
-  const chapter0Done = chapters.find(c => c.index === 0 && c.status === 'done');
-  if (chapter0Done) {
+  const firstAudio = chapters.find(c => c.status === 'done');
+  if (firstAudio) {
     const player = document.getElementById('preview-player');
-    player.src = `/api/audio/${settingsBookId}/stream/0`;
+    player.src = `/api/audio/${encodeURIComponent(settingsBookId)}/stream/${firstAudio.index}`;
     player.play();
   } else {
     document.getElementById('settings-preview-voice').textContent =
-      'Generate chapter 1 first to preview';
+      'Generate audio first to preview';
   }
 }
 

@@ -100,6 +100,8 @@ def toggle_job(job_id, action):
     if not HERMES_HOME:
         return _not_configured()
     profile = request.args.get('profile', 'default')
+    if profile != 'default' and profile not in _discover_profiles():
+        return jsonify({'error': 'Unknown profile'}), 400
     # Validate job_id (alphanumeric + dash/underscore only, no shell metachars)
     if not re.match(r'^[a-zA-Z0-9_-]+$', job_id):
         return jsonify({'error': 'Invalid job ID'}), 400

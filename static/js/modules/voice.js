@@ -73,6 +73,7 @@ async function requestMicPermission() {
 }
 
 function openVoice() {
+  if (!experimentalApps) return;   // Voice is experimental: only with the Settings toggle on
   unlockAudio();
   voiceOpen = true;
   document.getElementById('voice-overlay').classList.add('active');
@@ -93,7 +94,7 @@ function closeVoice() {
   document.getElementById('voice-overlay').classList.remove('active');
   // Restore orb only if we're on the home screen
   const homeActive = document.getElementById('home-screen')?.classList.contains('active');
-  document.getElementById('voice-orb').style.display = homeActive ? '' : 'none';
+  document.getElementById('voice-orb').style.display = homeActive && experimentalApps ? '' : 'none';
   stopListening();
   setVoiceState('idle');
   hidePermissionButton();

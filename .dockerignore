@@ -22,6 +22,15 @@ app.log
 voice_hermes_session.txt
 voice_history.json
 .update_meta.json
+sessions.json
+sessions.json.*
+*.tmp
+lab-state/
+data/
+secrets/
+auth.json
+credentials.json
+.node-venv
 
 # Caches / generated
 .venv

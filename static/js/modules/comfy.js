@@ -8,8 +8,8 @@ async function loadComfyStatus() {
     const bar = document.getElementById('comfy-status-bar');
     if (!d.online) {
       bar.innerHTML = 'ComfyUI offline ' +
-        '<button class="models-get-btn" style="margin-left:10px" onclick="comfyStart()">Start ComfyUI</button>' +
-        '<button class="models-get-btn" style="margin-left:6px;background:var(--glass);color:var(--text);border:1px solid var(--glass-border)" onclick="loadComfyStatus()">Check again</button>';
+        '<button class="models-get-btn" style="margin-left:10px" data-onclick="cb570769">Start ComfyUI</button>' +
+        '<button class="models-get-btn" style="margin-left:6px;background:var(--glass);color:var(--text);border:1px solid var(--glass-border)" data-onclick="c4067256">Check again</button>';
       bar.className = 'comfy-status-bar offline';
       document.getElementById('comfy-generate-btn').disabled = true;
       const hint = document.getElementById('comfy-offline-hint');
@@ -50,14 +50,14 @@ async function loadComfyGallery() {
     }
     const gallery = document.getElementById('comfy-gallery');
     gallery.innerHTML = d.images.slice(0, 20).map(img => 
-      `<div class="comfy-gallery-item" data-url="${escapeHtml(img.url)}" onclick="openComfyImage(this.dataset.url)"><img src="${escapeHtml(img.url)}&amp;preview=1" loading="lazy" alt="" /></div>`
+      `<div class="comfy-gallery-item" data-url="${escapeHtml(img.url)}" data-onclick="c2c5d75b"><img src="${escapeHtml(img.url)}&amp;preview=1" loading="lazy" alt="" /></div>`
     ).join('');
   } catch {}
 }
 
 function openComfyImage(url) {
   // Open in new tab for full quality
-  window.open(url, '_blank');
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 async function comfyGenerate() {
@@ -120,7 +120,7 @@ async function comfyGenerate() {
           if (pd.images && pd.images.length > 0) {
             result.style.display = 'block';
             result.innerHTML = pd.images.map(img => 
-              `<img src="${escapeHtml(img.url)}" alt="" data-url="${escapeHtml(img.url)}" onclick="openComfyImage(this.dataset.url)" style="width:100%;border-radius:12px;cursor:pointer" />`
+              `<img src="${escapeHtml(img.url)}" alt="" data-url="${escapeHtml(img.url)}" data-onclick="c2c5d75b" style="width:100%;border-radius:12px;cursor:pointer" />`
             ).join('');
           }
           btn.disabled = false;
@@ -198,7 +198,7 @@ async function comfyShowLog() {
     const hint = document.getElementById('comfy-offline-hint');
     if (!hint || !d.log || !d.log.length) return;
     hint.style.display = '';
-    hint.innerHTML = '<div class="empty-icon">🖥️</div>' +
+    hint.innerHTML = ICONS.image +
       '<h3>ComfyUI is starting (or failed to start)</h3>' +
       '<p class="empty-hint">Last lines from its log:</p>' +
       '<pre class="musicgen-song-lyrics" style="text-align:left;max-height:140px;overflow:auto">' +

@@ -1,12 +1,8 @@
-"""Devices route — real device list from Tailscale + active connections."""
+"""Devices route: this computer and the devices added in the Lab."""
 from flask import Blueprint, jsonify
-import json, subprocess, time
-import psutil
+import json, subprocess
 
 bp = Blueprint('devices', __name__)
-
-APP_PORT = int(__import__('os').environ.get('DECLOUD_PORT', '8899'))
-
 
 def _tailscale_status():
     """Return parsed `tailscale status --json` or {} if unavailable."""
@@ -26,79 +22,32 @@ def _is_ipv4(ip):
 
 @bp.route('/api/devices')
 def devices():
-    """Return this machine + tailnet peers with real names, OS and status."""
-    out = []
-
+    """This computer plus the devices added in the Lab (computers and phones),
+    with live status. Not every Tailscale peer: that list includes shared-in
+    nodes and hundreds of Mullvad exit servers."""
+    from shared import load_settings
+    import routes.lab as lab
     ts = _tailscale_status()
-
-    # 1. This machine (Self node)
-    self_node = ts.get('Self') or {}
-    self_ip = ''
-    for ip in (self_node.get('TailscaleIPs') or []):
-        if _is_ipv4(ip):
-            self_ip = ip
-            break
-    out.append({
-        'ip': self_ip,
-        'name': self_node.get('HostName') or 'this machine',
-        'dns': (self_node.get('DNSName') or '').rstrip('.'),
-        'os': self_node.get('OS') or '',
-        'online': True,
-        'is_local': True,
-        'last_seen': '',
-    })
-
-    # 2. Tailnet peers
-    for peer_id, peer in (ts.get('Peer') or {}).items():
-        # Skip infrastructure nodes (not real devices)
-        if peer.get('HostName') == 'funnel-ingress-node':
-            continue
-        ip = ''
-        for candidate in (peer.get('TailscaleIPs') or []):
-            if _is_ipv4(candidate):
-                ip = candidate
-                break
-        if not ip:
-            continue
-        host = peer.get('HostName') or ''
-        dns = (peer.get('DNSName') or '').rstrip('.')
-        # Tailscale's default hostname is 'localhost' — prefer the DNS
-        # machine name (e.g. 'my-phone.tailxxxx.ts.net').
-        dns_short = dns.split('.')[0] if dns else ''
-        if host and host.lower() not in ('localhost', 'unknown'):
-            name = host
-        else:
-            name = dns_short or host or ip
-        out.append({
-            'ip': ip,
-            'name': name,
-            'dns': dns,
-            'os': peer.get('OS') or '',
-            'online': bool(peer.get('Online')),
-            'is_local': False,
-            'last_seen': peer.get('LastHandshake') or peer.get('LastSeen') or '',
-        })
-
-    # 3. Active connections to the app that aren't tailnet peers
-    #    (LAN clients, localhost browser sessions) — merge by IP.
-    known_ips = {d['ip'] for d in out if d['ip']}
-    try:
-        for c in psutil.net_connections(kind='inet'):
-            if c.laddr and c.laddr.port == APP_PORT and c.raddr:
-                ip = c.raddr.ip
-                if ip in known_ips or ':' in ip:
-                    continue
-                known_ips.add(ip)
-                out.append({
-                    'ip': ip,
-                    'name': '',
-                    'dns': '',
-                    'os': '',
-                    'online': True,
-                    'is_local': False,
-                    'last_seen': time.strftime('%Y-%m-%dT%H:%M:%S'),
-                })
-    except (psutil.AccessDenied, PermissionError):
-        pass
-
+    by_ip = {ip: p for p in (ts.get('Peer') or {}).values() for ip in (p.get('TailscaleIPs') or [])}
+    settings = load_settings()
+    me = ts.get('Self') or {}
+    out = [{
+        'ip': next((ip for ip in (me.get('TailscaleIPs') or []) if _is_ipv4(ip)), ''),
+        'name': lab._prefs(settings)['device_name'],
+        'dns': (me.get('DNSName') or '').rstrip('.'),
+        'os': me.get('OS') or '',
+        'online': True, 'is_local': True, 'last_seen': '', 'kind': 'computer',
+    }]
+    for d in settings.get('lab_devices', []):
+        ip = lab._addr(d)
+        peer = by_ip.get(ip, {})
+        report = lab.cached_report(d.get('id'), max_age=120)
+        out.append({'ip': ip, 'name': str(d.get('name', ''))[:40], 'dns': (peer.get('DNSName') or '').rstrip('.'),
+                    'os': peer.get('OS') or '', 'online': bool(report and not report.get('error')) if report else bool(peer.get('Online')),
+                    'is_local': False, 'last_seen': peer.get('LastSeen') or '', 'kind': 'computer'})
+    for ph in settings.get('lab_phones', []):
+        peer = by_ip.get(ph.get('ip'), {})
+        out.append({'ip': ph.get('ip', ''), 'name': str(ph.get('name', ''))[:40], 'dns': (peer.get('DNSName') or '').rstrip('.'),
+                    'os': peer.get('OS') or ph.get('os', ''), 'online': bool(peer.get('Online')),
+                    'is_local': False, 'last_seen': peer.get('LastSeen') or '', 'kind': 'phone'})
     return jsonify(out)

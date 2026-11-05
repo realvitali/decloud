@@ -41,19 +41,20 @@ uv pip install -r requirements-tui.txt      # textual (for `decloud tui`)
 | Entrypoint / boot | `app.py` | binds 127.0.0.1, update rollback safety net |
 | Shared state + helpers | `shared.py` | auth/sessions, .env, paths, LLM, caches |
 | API routes | `routes/*.py` | one file per feature (books, lego, music, voice, …) |
-| Frontend | `static/js/modules/*.js` | vanilla JS, no build step; inline `onclick`s in `templates/index.html` call GLOBAL functions |
+| Frontend | `static/js/modules/*.js` | vanilla JS, no build step; `data-on<event>` keys in markup run functions in `static/js/handlers.js`, which call GLOBAL functions |
 | HTML | `templates/index.html` | single page |
 | CSS | `static/css/app.css` | theme vars in `:root` / `[data-theme]` |
 | CLI + TUI | `scripts/decloud_*.py` + `decloud` | update CLI, TUI dashboard |
 | Tests | `tests/` | auth, CSRF, WS, allowlist, traversal |
 | Version truth | `routes/version.py` | `VERSION` + `CHANGELOG[0]` |
 
-Frontend rule of thumb: if you add an inline `onclick="fn(...)"` in
-`index.html`, the function must already exist globally; if you remove a
-function, remove its calls. Use `escapeHtml` (core.js) for ANY string that
-originates from user input, filesystem names, or the LLM — and use
-`data-*` attributes + `this.dataset.x` instead of interpolating values into
-inline handlers.
+Frontend rule of thumb: there are NO inline handlers (`onclick="…"`) or inline
+`<script>`s — the CSP is `script-src 'self'`, so they would simply not run. Put
+`data-onclick="<key>"` in the markup and `<key>: function (event) { fn(this.dataset.x) }`
+in `static/js/handlers.js`, or attach listeners with `addEventListener`. If you
+remove a function, remove its calls. Use `escapeHtml` (core.js) for ANY string
+that originates from user input, filesystem names, or the LLM, and pass values
+through `data-*` attributes, never by building handler code.
 
 ## Testing (run these before every commit)
 
@@ -134,7 +135,7 @@ uvx pip-audit -r requirements.txt        # CVE scan — must come back clean
 - [ ] `pytest` green; changed JS passes `node --check`
 - [ ] App boots (`curl /` → 200) after your change
 - [ ] `pip-audit` clean if deps changed
-- [ ] Version bumped via `scripts/bump_version.py`, changelog written
+- [ ] Version bumped via `scripts/bump_version.py`; the changelog (shown in Settings → About) lists every user-visible addition, change and fix as its own bullet
 - [ ] Security-sensitive change has a regression test
 - [ ] No secrets/runtime files staged (`git status` reviewed)
 - [ ] CI green on push (ubuntu + macos + windows + version check)

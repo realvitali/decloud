@@ -36,7 +36,7 @@ function showUniverseEmpty() {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
     empty.innerHTML = `
-      <div class="empty-icon">🌌</div>
+      <div class="empty-icon">${ICONS.universe}</div>
       <h3>Your Universe is empty</h3>
       <p>Universe finds the people and organizations mentioned in your files and shows how they connect.</p>
       <p class="empty-hint">Add a name below to start, or tap Rescan to look through your files again.</p>

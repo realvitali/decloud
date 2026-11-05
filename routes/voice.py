@@ -27,41 +27,26 @@ def voice_stt():
 
         model_name = request.form.get('model', 'base')
 
-        # Save to temp wav file
-        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False, dir=tempfile.gettempdir()) as tmp:
-            audio_file.save(tmp.name)
-            tmp_path = tmp.name
-
-        # Convert to wav 16kHz mono if needed (whisper handles webm but wav is safer)
-        wav_path = tmp_path.rsplit('.', 1)[0] + '.wav'
-        proc = subprocess.run(
-            ['ffmpeg', '-y', '-i', tmp_path, '-ar', '16000', '-ac', '1', '-f', 'wav', wav_path],
-            capture_output=True, timeout=30
-        )
-        if proc.returncode != 0:
-            try:
-                os.unlink(tmp_path)
-                if os.path.exists(wav_path):
-                    os.unlink(wav_path)
-            except OSError:
-                pass
-            return jsonify({'error': 'Audio decode failed: ' + (proc.stderr.decode() or 'unknown')}), 400
-
-        model = get_whisper_model(STT_ENGINES.get(model_name, STT_ENGINES['whisper-base'])['model'])
-        segments, info = model.transcribe(wav_path, beam_size=1, language='en')
-
-        text = ' '.join(seg.text.strip() for seg in segments).strip()
-
-        # Cleanup
-        os.unlink(tmp_path)
-        if os.path.exists(wav_path):
-            os.unlink(wav_path)
+        with tempfile.TemporaryDirectory(prefix='decloud-stt-') as d:   # private dir: no races, always removed
+            tmp_path, wav_path = os.path.join(d, 'in.webm'), os.path.join(d, 'in.wav')
+            audio_file.save(tmp_path)
+            # Convert to wav 16kHz mono (whisper handles webm but wav is safer)
+            proc = subprocess.run(
+                ['ffmpeg', '-y', '-i', tmp_path, '-ar', '16000', '-ac', '1', '-f', 'wav', wav_path],
+                capture_output=True, timeout=30
+            )
+            if proc.returncode != 0:
+                app.logger.warning('[STT] ffmpeg failed: %s', proc.stderr.decode(errors='replace')[-500:])
+                return jsonify({'error': 'Could not decode that audio.'}), 400
+            model = get_whisper_model(STT_ENGINES.get(model_name, STT_ENGINES['whisper-base'])['model'])
+            segments, info = model.transcribe(wav_path, beam_size=1, language='en')
+            text = ' '.join(seg.text.strip() for seg in segments).strip()
 
         app.logger.info(f'[STT] model={model_name} duration={info.duration:.1f}s text="{text}"')
         return jsonify({'text': text, 'language': info.language, 'duration': info.duration})
     except Exception as e:
         app.logger.error(f'[STT] error: {e}')
-        return jsonify({'error': 'Speech-to-text failed: ' + str(e), 'code': 'STT_ERROR'}), 500
+        return jsonify({'error': 'Speech-to-text failed. Check the server log.', 'code': 'STT_ERROR'}), 500
 
 @bp.route('/api/voice/tts', methods=['POST'])
 def voice_tts():
@@ -211,125 +196,6 @@ def voice_reset():
     except Exception:
         pass
     return jsonify({'ok': True})
-
-@bp.route('/api/voice/run_command', methods=['POST'])
-@limiter.limit("20 per minute")
-def voice_run_command():
-    """Execute a shell command and return output. Used after user confirmation.
-
-    Command access is tiered by the voice_access setting:
-      - 'talk'  — read-only commands only (view system state, never change it)
-      - 'basic' — non-destructive commands (create files, move/copy, git, etc.)
-      - 'full'  — unrestricted (still confirmed per-command in the UI)
-    """
-    # Read-only commands: can inspect but never modify the system.
-    # Note: commands like systemctl/tailscale/ip have mutating subcommands, so
-    # they are NOT in the read-only set — they'd let 'talk' mode change state.
-    READ_ONLY_COMMANDS = {
-        'ls', 'pwd', 'cat', 'head', 'tail', 'wc', 'find', 'grep', 'which',
-        'date', 'cal', 'uptime', 'whoami', 'hostname', 'uname',
-        'free', 'df', 'du', 'ps', 'top', 'nvidia-smi',
-        'ss', 'ping', 'journalctl',
-    }
-    # Non-destructive commands: create/change things but reversible.
-    # These are best-effort guardrails, NOT a hard security boundary — the
-    # Terminal app already gives the owner full shell access. They exist so a
-    # voice-initiated command can't trivially destroy data without the user
-    # switching to Full access.
-    NON_DESTRUCTIVE_COMMANDS = READ_ONLY_COMMANDS | {
-        'touch', 'mkdir', 'cp', 'mv', 'ln', 'tar', 'zip', 'unzip',
-        'rsync', 'scp', 'ssh', 'curl', 'wget', 'echo', 'printf',
-        'git', 'gh', 'pip', 'uv', 'python3', 'python', 'npm',
-        'ollama', 'systemctl', 'tailscale', 'ip',
-    }
-    # Catastrophic patterns blocked in 'talk' and 'basic' modes.
-    DANGEROUS_PATTERNS = [
-        r'rm\s', r'mv\s.*\s/', r'cp\s.*\s/',
-        r'>\s*/dev/sd', r'mkfs', r'dd\s+if=', r'shutdown', r'reboot',
-        r'chmod\s+777', r'chown\s+',
-        r':\(\)\s*\{', r'fork\s*bomb',
-        r'curl.*\|\s*sh', r'wget.*\|\s*sh',
-        r'eval\s', r'exec\s',
-        r'python3?\s+-c', r'python3?\s*-c',  # inline python can delete data
-    ]
-    # Per-command flags that turn a "safe" command into arbitrary execution
-    # or deletion. Prefix-matched against each argument (talk/basic only).
-    DANGEROUS_ARGS = {
-        'find': ('-delete', '-fprint', '-fls', '-exec', '-ok'),  # -execdir/-okdir/-fprintf too
-        'git': ('-c', '--config-env', '--exec-path', '--upload-pack', '--receive-pack'),
-        'tar': ('--to-command', '--checkpoint-action', '--use-compress-program',
-                '-I', '--info-script', '-F', '--new-volume-script', '--rsh-command', '--rmt-command'),
-    }
-    # Interpreters: only version checks, never a script/module to run.
-    INTERPRETERS = {'python', 'python3'}
-
-    try:
-        data = request.get_json(silent=True) or {}
-        command = data.get('command', '').strip()
-
-        if not command:
-            return jsonify({'error': 'No command provided'}), 400
-
-        import shlex
-        cmd_list = shlex.split(command)
-        if not cmd_list:
-            return jsonify({'error': 'No command provided'}), 400
-        # Base command = basename of the first token, same token we execute
-        base_cmd = cmd_list[0].split('/')[-1]
-
-        access = shared.get_voice_config().get('voice_access', 'basic')
-
-        if access == 'talk':
-            if base_cmd not in READ_ONLY_COMMANDS:
-                return jsonify({
-                    'error': f'"{base_cmd}" can change the system, which is not allowed in Talk mode.',
-                    'code': 'ACCESS_DENIED',
-                    'hint': 'Switch the voice agent to Basic or Full access in Settings → Voice to run it.',
-                }), 403
-        elif access == 'basic':
-            if base_cmd not in NON_DESTRUCTIVE_COMMANDS:
-                return jsonify({
-                    'error': f'"{base_cmd}" is destructive, which is not allowed in Basic mode.',
-                    'code': 'ACCESS_DENIED',
-                    'hint': 'Switch the voice agent to Full access in Settings → Voice to run it.',
-                }), 403
-
-        # Catastrophic safety net for talk/basic (full mode is unrestricted).
-        if access != 'full':
-            for pat in DANGEROUS_PATTERNS:
-                if re.search(pat, command):
-                    return jsonify({'error': 'Blocked: command matches a dangerous pattern'}), 403
-            bad = DANGEROUS_ARGS.get(base_cmd, ())
-            if bad and any(a.startswith(bad) for a in cmd_list[1:]):
-                return jsonify({'error': f'Blocked: that "{base_cmd}" option needs Full access'}), 403
-            if base_cmd in INTERPRETERS and any(a not in ('-V', '--version') for a in cmd_list[1:]):
-                return jsonify({'error': 'Blocked: running scripts needs Full access'}), 403
-
-        # Run with timeout — no shell=True, use list form
-        proc = subprocess.run(
-            cmd_list,
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-
-        output = proc.stdout
-        if proc.returncode != 0 and proc.stderr:
-            output = output + '\n' + proc.stderr if output else proc.stderr
-
-        return jsonify({
-            'command': command,
-            'output': output[:5000],
-            'exit_code': proc.returncode,
-        })
-    except subprocess.TimeoutExpired:
-        return jsonify({'error': 'Command timed out (30s limit)'}), 504
-    except FileNotFoundError:
-        return jsonify({'error': 'Command not found'}), 404
-    except Exception:
-        app.logger.exception('[VOICE] run_command failed')
-        return jsonify({'error': 'Command failed to run — check the server log'}), 500
-
 
 # ─── Hermes-native voice brain (persistent session) ──────────────
 
@@ -584,8 +450,6 @@ def voice_config():
         updates['stt'] = data['stt']
     if 'tts' in data and data['tts'] in TTS_ENGINES:
         updates['tts'] = data['tts']
-    if 'voice_access' in data and data['voice_access'] in ('talk', 'basic', 'full'):
-        updates['voice_access'] = data['voice_access']
     if 'llm_backend' in data and data['llm_backend'] in ('local', 'cloud'):
         updates['llm_backend'] = data['llm_backend']
     if 'llm_local_model' in data and isinstance(data['llm_local_model'], str):
@@ -642,7 +506,8 @@ def _run_ollama_install(job_id):
         return
     _set_job(job_id, 'running', 'Downloading the Ollama installer…')
     try:
-        script_path = os.path.join(tempfile.gettempdir(), 'decloud_ollama_install.sh')
+        tmpdir = tempfile.mkdtemp(prefix='decloud-ollama-')   # private (0700), unpredictable name
+        script_path = os.path.join(tmpdir, 'install.sh')
         # Best-effort one-click install: downloads the official installer over
         # HTTPS (TLS provides transport integrity). There is no pinned hash —
         # this is the same trust model as the official `curl | sh` docs and is
@@ -665,6 +530,9 @@ def _run_ollama_install(job_id):
             _set_job(job_id, 'error', 'Install failed:\n' + tail)
     except Exception as e:
         _set_job(job_id, 'error', 'Install failed: ' + str(e))
+    finally:
+        if 'tmpdir' in locals():
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def _run_ollama_pull(job_id, model):

@@ -41,7 +41,7 @@ function toggleLegosAddSpread() {
     var dx = Math.cos(angle) * r;
     var dy = Math.sin(angle) * r;
     var hex = '#' + opt.color.toString(16).padStart(6, '0');
-    return '<div class="ai-spread-item" style="left:' + (cx - itemSize/2) + 'px;top:' + (cy - itemSize/2) + 'px;--tx:' + dx + 'px;--ty:' + dy + 'px;--delay:' + (i * 0.05) + 's" onclick="addBrickFromSpread(' + opt.rows + ',' + opt.cols + ',' + opt.color + ')">' +
+    return '<div class="ai-spread-item" style="left:' + (cx - itemSize/2) + 'px;top:' + (cy - itemSize/2) + 'px;--tx:' + dx + 'px;--ty:' + dy + 'px;--delay:' + (i * 0.05) + 's" data-rows="' + Number(opt.rows) + '" data-cols="' + Number(opt.cols) + '" data-color="' + Number(opt.color) + '" data-onclick="ce6cf49c">' +
       '<div class="ai-spread-item-visual" style="color:' + hex + '">' +
       '<div style="width:24px;height:14px;background:' + hex + ';border-radius:3px;box-shadow:0 1px 0 rgba(0,0,0,0.15)"></div>' +
       '</div>' +

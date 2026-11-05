@@ -1,6 +1,7 @@
 """ComfyUI image generation routes."""
 from flask import Blueprint, jsonify, request
-import json, os, shlex, shutil, signal, subprocess, time
+import json, os, shlex, shutil, signal, subprocess, threading, time
+import psutil
 from pathlib import Path
 from shared import _requests, COMFY_URL, COMFY_OUTPUT, BASE_DIR
 
@@ -74,9 +75,36 @@ def comfy_models():
     except Exception as e:
         return jsonify({'error': str(e)}), 503
 
+_start_lock = threading.Lock()
+
+
+def _our_pid():
+    """The ComfyUI process DeCloud started, if it is still that same process
+    (the PID file holds pid:start-time, so a reused PID is never touched)."""
+    try:
+        pid_s, _, born = COMFY_PID_FILE.read_text().strip().partition(':')
+        proc = psutil.Process(int(pid_s))
+        if born and abs(proc.create_time() - float(born)) > 1:
+            return None
+        return proc.pid
+    except (OSError, ValueError, psutil.Error):
+        return None
+
+
 @bp.route('/api/comfy/start', methods=['POST'])
 def comfy_start():
     """Start ComfyUI with whatever launcher this machine has."""
+    if not _start_lock.acquire(blocking=False):
+        return jsonify({'ok': True, 'message': 'ComfyUI is already starting'})
+    try:
+        return _comfy_start()
+    finally:
+        _start_lock.release()
+
+
+def _comfy_start():
+    if _our_pid():
+        return jsonify({'ok': True, 'message': 'ComfyUI is already starting'})
     if _comfy_online():
         return jsonify({'ok': True, 'message': 'ComfyUI is already running'})
 
@@ -103,7 +131,7 @@ def comfy_start():
                 stdout=log_f, stderr=subprocess.STDOUT,
                 stdin=subprocess.DEVNULL,
             )
-            COMFY_PID_FILE.write_text(str(proc.pid))
+            COMFY_PID_FILE.write_text(f'{proc.pid}:{psutil.Process(proc.pid).create_time()}')
     except OSError as e:
         return jsonify({'error': f'could not start ComfyUI: {e}'}), 500
 
@@ -123,7 +151,10 @@ def comfy_stop():
 
     if COMFY_PID_FILE.exists():
         try:
-            pid = int(COMFY_PID_FILE.read_text().strip())
+            pid = _our_pid()
+            if not pid:   # gone, or the PID now belongs to something else: never signal it
+                COMFY_PID_FILE.unlink(missing_ok=True)
+                return jsonify({'ok': True, 'message': 'ComfyUI is not running'})
             os.kill(pid, signal.SIGTERM)
             time.sleep(2)
             try:

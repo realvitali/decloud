@@ -3,7 +3,7 @@
 // with one-tap downloads into the right app folders.
 
 const MODEL_TIERS = {
-  'runs-well': { label: 'Runs well', cls: 'models-tier-good' },
+  'runs-well': { label: 'Likely fits GPU', cls: 'models-tier-good' },
   'tight':     { label: 'Tight — may offload', cls: 'models-tier-tight' },
   'cpu-only':  { label: 'CPU only (slow)', cls: 'models-tier-cpu' },
   'too-big':   { label: 'Too big for this machine', cls: 'models-tier-bad' },
@@ -11,37 +11,41 @@ const MODEL_TIERS = {
 
 let modelsPollTimer = null;
 
-function loadModels() {
+function loadModels(category) {
+  const section = document.querySelector(`.models-picker[data-category="${category}"]`);
+  if (!section) return;
+  section.querySelector('.models-catalog').textContent = 'Checking available models…';
   fetch('/api/models/catalog')
-    .then((r) => r.json())
-    .then(renderModelsData)
+    .then((r) => { if (!r.ok) throw new Error('catalog unavailable'); return r.json(); })
+    .then((d) => { renderModelsData(d, category); modelsPoll(); })
     .catch(() => {
-      document.getElementById('models-specs').textContent = 'Could not load hardware info.';
+      section.querySelector('.models-catalog').textContent = 'Could not load recommendations. Check your internet connection and try reopening this section.';
     });
 }
 
-function renderModelsData(d) {
+function renderModelsData(d, category) {
+  const section = document.querySelector(`.models-picker[data-category="${category}"]`);
+  if (!section) return;
   const specs = d.specs || {};
   const gpus = specs.gpus || [];
   const gpuText = gpus.length
     ? gpus.map((g) => `${g.name} · ${g.vram_total_gb}GB VRAM (${g.vram_free_gb}GB free)`).join(' + ')
     : 'No GPU detected';
-  document.getElementById('models-specs').innerHTML =
+  section.querySelector('.models-specs').innerHTML =
     `<strong>${escapeHtml(specs.cpu || '?')} cores</strong> · ${escapeHtml((specs.ram_total_gb || 0).toFixed(0))}GB RAM · ` +
-    `${escapeHtml(gpuText)} · ${escapeHtml((specs.disk_free_gb || 0).toFixed(0))}GB disk free`;
+    `${escapeHtml(gpuText)} · ${escapeHtml((specs.disk_free_gb || 0).toFixed(0))}GB disk free` +
+    '<br>Fit is an estimate based on model size and total memory, not a speed guarantee. Other running apps also use memory. Models come from Hugging Face.';
 
   const groups = {};
   (d.catalog || []).forEach((item) => {
     (groups[item.category] = groups[item.category] || []).push(item);
   });
-  const order = ['chat', 'image', 'video', 'music'];
-  document.getElementById('models-catalog').innerHTML = order.map((cat) => {
-    if (!groups[cat]) return '';
-    return `<div class="models-group">
-      <div class="models-group-title">${cat[0].toUpperCase() + cat.slice(1)} models</div>
-      ${groups[cat].map(renderModelCard).join('')}
-    </div>`;
-  }).join('');
+  const rank = { 'runs-well': 0, 'tight': 1, 'cpu-only': 2, 'too-big': 3 };
+  const score = item => Math.min(4, ...(item.files || []).map(f => rank[f.tier] ?? 4));
+  const items = (groups[category] || []).slice().sort((a, b) => score(a) - score(b));
+  section.querySelector('.models-catalog').innerHTML = items.length
+    ? `<div class="models-group"><div class="models-group-title">Recommended for this machine</div>${items.map(renderModelCard).join('')}</div>`
+    : '<p>No recommendations are available for this app right now.</p>';
 }
 
 // Repo → analysis, so Get buttons can resolve split parts safely
@@ -51,7 +55,8 @@ function renderModelCard(item) {
   modelsKnown[item.repo] = { category: item.category, files: item.files || [] };
   const files = item.files || [];
   const err = item.error ? `<div class="models-error">${escapeHtml(item.error)}</div>` : '';
-  const fileRows = files.slice(0, 5).map((f) => {
+  const rank = { 'runs-well': 0, 'tight': 1, 'cpu-only': 2, 'too-big': 3 };
+  const fileRows = files.slice().sort((a, b) => (rank[a.tier] ?? 4) - (rank[b.tier] ?? 4)).slice(0, 5).map((f) => {
     const t = MODEL_TIERS[f.tier] || MODEL_TIERS['too-big'];
     const canDownload = f.tier !== 'too-big';
     const partsNote = f.parts && f.parts.length > 1
@@ -60,7 +65,7 @@ function renderModelCard(item) {
       <div class="models-file-name" title="${escapeHtml(f.file)}">${escapeHtml(f.file)}${partsNote}</div>
       <div class="models-file-size">${escapeHtml(f.size_gb)} GB</div>
       <span class="models-tier ${t.cls}">${escapeHtml(t.label)}</span>
-      ${canDownload ? `<button class="models-get-btn" data-repo="${escapeHtml(item.repo)}" data-file="${escapeHtml(f.file)}" onclick="modelsDownload(this.dataset.repo, this.dataset.file)">Get</button>` : ''}
+      ${canDownload ? `<button class="models-get-btn" data-repo="${escapeHtml(item.repo)}" data-file="${escapeHtml(f.file)}" data-onclick="cce8b14e">Download</button>` : ''}
     </div>`;
   }).join('');
   const more = files.length > 5 ? `<div class="models-more">+${files.length - 5} more files</div>` : '';
@@ -70,7 +75,7 @@ function renderModelCard(item) {
       <div class="models-card-total">${escapeHtml(item.total_gb)} GB total</div>
     </div>
     <div class="models-card-note">${escapeHtml(item.note || '')}</div>
-    ${err}${fileRows}${more}
+    ${err}${fileRows || (!item.error ? '<div class="models-card-note">No downloadable model files found.</div>' : '')}${more}
   </div>`;
 }
 
@@ -136,12 +141,13 @@ async function modelsPoll() {
       const r = await fetch('/api/models/downloads');
       const d = await r.json();
       const list = d.downloads || [];
-      const el = document.getElementById('models-downloads');
-      el.innerHTML = list.map((dl) => {
+      document.querySelectorAll('.models-picker').forEach(section => {
+      const el = section.querySelector('.models-downloads');
+      el.innerHTML = list.filter(dl => dl.category === section.dataset.category).map((dl) => {
         const total = dl.total_bytes || 0;
         const pct = total > 0 ? Math.min(100, Math.round((dl.done_bytes / total) * 100)) : 0;
         const status = dl.state === 'done'
-          ? (dl.ollama ? `Ready in AI Chat (${dl.ollama})` : 'Downloaded — restart ComfyUI if needed')
+          ? (dl.ollama ? `Ready in AI Chat (${dl.ollama})` : dl.category === 'chat' ? `Downloaded, but import failed: ${dl.ollama_error || 'check Ollama'}` : 'Downloaded — a compatible workflow and additional files may still be needed')
           : dl.state === 'error' ? `Error: ${dl.error || ''}`
           : dl.state === 'cancelled' ? 'Cancelled'
           : dl.state;
@@ -150,13 +156,14 @@ async function modelsPoll() {
           <div class="models-dl-status">${escapeHtml(status)}</div>
           ${(dl.state === 'downloading' || dl.state === 'queued') ? `
             <div class="comfy-progress-bar"><div class="comfy-progress-fill" style="width:${pct}%"></div></div>
-            <button class="settings-export-btn" data-id="${escapeHtml(dl.id)}" onclick="modelsCancel(this.dataset.id)">Cancel</button>` : ''}
+            <button class="settings-export-btn" data-id="${escapeHtml(dl.id)}" data-onclick="c060108d">Cancel</button>` : ''}
         </div>`;
       }).join('');
+      });
       const active = list.some((x) => ['queued', 'downloading', 'importing'].includes(x.state));
       if (!active) {
         clearInterval(modelsPollTimer);
-        if (list.some((x) => x.state === 'done')) loadModels();
+        if (list.some(x => x.state === 'done' && x.category === 'chat' && x.ollama) && typeof loadOllamaModels === 'function') loadOllamaModels();
       }
     } catch (e) { /* transient */ }
   };
@@ -173,5 +180,3 @@ window.loadModels = loadModels;
 window.modelsAnalyzeCustom = modelsAnalyzeCustom;
 window.modelsDownload = modelsDownload;
 window.modelsCancel = modelsCancel;
-
-loadModels();

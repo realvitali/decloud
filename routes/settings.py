@@ -37,7 +37,7 @@ def _update_env_file(updates):
         if field in updates and field not in written:
             out.append(f'{key}={updates[field]}')
     try:
-        env_path.write_text('\n'.join(out) + '\n')
+        shared._write_private(env_path, '\n'.join(out) + '\n')
         return True
     except Exception:
         return False

@@ -1,8 +1,8 @@
 # Permanent Tunnel Setup
 
-DeCloud uses **Tailscale Funnel** for permanent remote access. This gives you a URL like `https://your-machine.tail1234.ts.net` that never changes.
+DeCloud uses **Tailscale Serve** by default. This gives devices on your tailnet a URL like `https://your-machine.tail1234.ts.net`.
 
-> ⚠️ **Funnel makes DeCloud public.** Anyone on the internet can open the URL, and the only thing between them and your machine is the passcode. **The passcode unlocks a shell on this machine** (terminal, files, updates). Never share it. If only your own devices need access, use [Private-Only Mode](#private-only-mode-no-public-url) (Tailscale Serve) instead.
+> **Funnel makes DeCloud public.** Anyone on the internet can open the URL, and the only thing between them and your machine is the passcode. **The passcode unlocks a shell on this machine** (terminal, files, updates). Never share it. If only your own devices need access, use [Private-Only Mode](#private-only-mode-no-public-url) (Tailscale Serve) instead.
 
 ## Quick Setup
 
@@ -16,15 +16,14 @@ DeCloud uses **Tailscale Funnel** for permanent remote access. This gives you a 
    sudo tailscale up
    ```
 
-3. **Start DeCloud** — it auto-detects Tailscale and starts a **public** Funnel
-   (it refuses to if no passcode is set):
+3. **Start DeCloud** — it starts private Serve for your tailnet:
    ```bash
    ./decloud start
    ```
 
 Your URL: `https://your-machine-name.tail1234.ts.net`
 
-## Why Tailscale Funnel?
+## Why Tailscale Serve?
 
 - **Permanent URL** — never changes, bookmark it
 - **End-to-end encrypted** — WireGuard + TLS 1.3
@@ -77,21 +76,19 @@ The same warning applies: this is public, and the passcode is a shell.
 Recommended if only your own devices need DeCloud. Tailscale Serve gives
 HTTPS on your tailnet only — nothing is reachable from the internet:
 
-1. Don't run `./decloud start` (it starts the public Funnel); the service
-   installed by `install.sh` runs the app. If a Funnel is on, turn it off:
-   `sudo tailscale funnel --https=443 off`
-2. Serve it to your tailnet:
+1. Install and connect Tailscale on the host and phone.
+2. Start DeCloud and private Serve:
    ```bash
-   sudo tailscale serve --bg http://localhost:8899
+   ./decloud start
    ```
 3. Open `https://your-machine.tail1234.ts.net` from any device signed in to
    your tailnet.
 
 ## Troubleshooting
 
-**"Funnel failed"**
+**"Serve failed"**
 - Check Tailscale is running: `tailscale status`
-- Check funnel is enabled: `tailscale funnel status`
+- Check Serve is enabled and tailnet-only: `tailscale serve status`
 - Restart: `./decloud restart`
 
 **"URL not working"**
@@ -102,4 +99,4 @@ HTTPS on your tailnet only — nothing is reachable from the internet:
 **"Can't open it from my phone"**
 - Make sure you use the full URL (including `https://`)
 - Check your passcode is correct
-- Verify funnel is on: `tailscale funnel status`
+- Connect your phone to the same tailnet and check `tailscale serve status`.

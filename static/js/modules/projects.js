@@ -1,3 +1,7 @@
+// Project fields come from config: escape them like any other data, and only
+// accept a real #hex color inside style attributes.
+const projColor = (p) => /^#[0-9a-fA-F]{3,8}$/.test(p.color || '') ? p.color : '#6b7280';
+
 // ===== Module: projects =====
 // ─── Projects: Home Cards + Detail ────────────────────────
 const projectCache = {};  // id -> { github, vercel, ts }
@@ -8,7 +12,7 @@ function buildProjectsSection() {
   if (PROJECTS.length === 0) {
     container.innerHTML = `
       <div class="empty-state projects-empty">
-        <div class="empty-icon">🗂️</div>
+        <div class="empty-icon">${ICONS.layers}</div>
         <h3>No projects yet</h3>
         <p>Projects gives you live cards for your repos — commits, PRs, issues, deploys.</p>
         <p class="empty-hint">Add a project in static/js/modules/core.js (PROJECTS array)</p>
@@ -19,20 +23,20 @@ function buildProjectsSection() {
     return;
   }
   container.innerHTML = PROJECTS.map(p => {
-    const stackBadges = p.stack.slice(0, 4).map(s => `<span class="tech-badge">${s}</span>`).join('');
+    const stackBadges = p.stack.slice(0, 4).map(s => `<span class="tech-badge">${escapeHtml(s)}</span>`).join('');
     const extraCount = p.stack.length > 4 ? `<span class="tech-badge">+${p.stack.length - 4}</span>` : '';
     return `
-      <div class="project-card" onclick="openProject('${p.id}')">
+      <div class="project-card" data-id="${escapeHtml(p.id)}" data-onclick="c8536e80">
         <div class="project-card-header">
-          <div class="project-card-icon" style="color:${p.color};background:${hexToRgba(p.color, 0.1)}">${ICONS.layers}</div>
+          <div class="project-card-icon" style="color:${projColor(p)};background:${hexToRgba(projColor(p), 0.1)}">${ICONS.layers}</div>
           <div class="project-card-title">
-            <div class="project-card-name">${p.name}</div>
-            <a class="project-card-domain" href="https://${p.domain}" target="_blank" onclick="event.stopPropagation()">${p.domain}</a>
+            <div class="project-card-name">${escapeHtml(p.name)}</div>
+            <a class="project-card-domain" href="https://${escapeHtml(p.domain)}" target="_blank" rel="noopener noreferrer" data-onclick="c6d55428">${escapeHtml(p.domain)}</a>
           </div>
-          <div class="project-card-status loading" id="pcard-status-${p.id}">${ICONS.refresh}</div>
+          <div class="project-card-status loading" id="pcard-status-${escapeHtml(p.id)}">${ICONS.refresh}</div>
         </div>
         <div class="project-card-stack">${stackBadges}${extraCount}</div>
-        <div class="project-card-footer" id="pcard-footer-${p.id}">
+        <div class="project-card-footer" id="pcard-footer-${escapeHtml(p.id)}">
           ${ICONS.clock}<span class="project-card-commit-msg">Loading...</span>
         </div>
       </div>
@@ -52,8 +56,8 @@ async function refreshProjectCards() {
   for (const p of PROJECTS) {
     try {
       const [gh, vercel] = await Promise.allSettled([
-        fetch(`/api/projects/${p.id}/github`).then(r => r.json()),
-        fetch(`/api/projects/${p.id}/vercel`).then(r => r.json()),
+        fetch(`/api/projects/${encodeURIComponent(p.id)}/github`).then(r => r.json()),
+        fetch(`/api/projects/${encodeURIComponent(p.id)}/vercel`).then(r => r.json()),
       ]);
       const ghData = gh.status === 'fulfilled' ? gh.value : null;
       const vercelData = vercel.status === 'fulfilled' ? vercel.value : null;
@@ -113,15 +117,15 @@ function openProjectList() {
     const c = document.getElementById('project-detail-content');
     c.innerHTML = `<div class="project-section-title">Select a project</div>` +
       PROJECTS.map(p => `
-        <div class="project-card" onclick="openProject('${p.id}')">
+        <div class="project-card" data-id="${escapeHtml(p.id)}" data-onclick="c8536e80">
           <div class="project-card-header">
-            <div class="project-card-icon" style="color:${p.color};background:${hexToRgba(p.color, 0.1)}">${ICONS.layers}</div>
+            <div class="project-card-icon" style="color:${projColor(p)};background:${hexToRgba(projColor(p), 0.1)}">${ICONS.layers}</div>
             <div class="project-card-title">
-              <div class="project-card-name">${p.name}</div>
-              <span class="project-card-domain" style="cursor:pointer">${p.domain}</span>
+              <div class="project-card-name">${escapeHtml(p.name)}</div>
+              <span class="project-card-domain" style="cursor:pointer">${escapeHtml(p.domain)}</span>
             </div>
           </div>
-          <div class="project-card-stack">${p.stack.slice(0, 4).map(s => `<span class="tech-badge">${s}</span>`).join('')}</div>
+          <div class="project-card-stack">${p.stack.slice(0, 4).map(s => `<span class="tech-badge">${escapeHtml(s)}</span>`).join('')}</div>
         </div>
       `).join('');
     showScreen('project-screen');
@@ -134,16 +138,16 @@ async function renderProjectDetail(p) {
     titleEl.innerHTML = `<span class="screen-title-icon">${ICONS.layers}</span> ${escapeHtml(p.name)}`;
   }
   const c = document.getElementById('project-detail-content');
-  const stackBadges = p.stack.map(s => `<span class="tech-badge">${s}</span>`).join('');
+  const stackBadges = p.stack.map(s => `<span class="tech-badge">${escapeHtml(s)}</span>`).join('');
 
   c.innerHTML = `
     <div class="project-detail-header">
       <div class="project-detail-title-row">
-        <div class="project-detail-icon" style="color:${p.color};background:${hexToRgba(p.color, 0.1)}">${ICONS.layers}</div>
+        <div class="project-detail-icon" style="color:${projColor(p)};background:${hexToRgba(projColor(p), 0.1)}">${ICONS.layers}</div>
         <div>
           <div class="project-detail-name">${escapeHtml(p.name)}</div>
           ${p.label ? `<div style="font-size:12px;color:var(--text-dim);margin-bottom:2px">${escapeHtml(p.label)}</div>` : ''}
-          <a class="project-detail-domain" href="https://${p.domain}" target="_blank">${p.domain}</a>
+          <a class="project-detail-domain" href="https://${escapeHtml(p.domain)}" target="_blank" rel="noopener noreferrer">${escapeHtml(p.domain)}</a>
         </div>
       </div>
       <div class="project-detail-stats">
@@ -153,8 +157,8 @@ async function renderProjectDetail(p) {
       </div>
       <div class="project-card-stack">${stackBadges}</div>
       <div class="project-detail-links">
-        <a class="project-link-btn" href="https://github.com/${p.repo}" target="_blank">${ICONS.gitHub} GitHub</a>
-        <a class="project-link-btn" href="https://${p.domain}" target="_blank">${ICONS.server} Live Site</a>
+        <a class="project-link-btn" href="https://github.com/${escapeHtml(p.repo)}" target="_blank" rel="noopener noreferrer">${ICONS.gitHub} GitHub</a>
+        <a class="project-link-btn" href="https://${escapeHtml(p.domain)}" target="_blank" rel="noopener noreferrer">${ICONS.server} Live Site</a>
       </div>
     </div>
     <div class="project-section-title">Recent Commits</div>
@@ -167,7 +171,7 @@ async function renderProjectDetail(p) {
 
 async function loadProjectDetail(p) {
   try {
-    const res = await fetch(`/api/projects/${p.id}/github`);
+    const res = await fetch(`/api/projects/${encodeURIComponent(p.id)}/github`);
     const data = await res.json();
     if (data.error) {
       document.getElementById('project-commits').innerHTML = `<div class="project-empty">${escapeHtml(data.error)}</div>`;
