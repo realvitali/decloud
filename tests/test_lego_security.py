@@ -2,6 +2,8 @@
 import os
 import pathlib
 
+import sys
+
 import pytest
 
 
@@ -70,9 +72,13 @@ class TestFileActions:
         assert client.post('/api/files/rename', json={'path': 'note.txt', 'name': 'renamed.txt'}, headers=auth_headers).status_code == 200
         assert (populated / 'renamed.txt').read_text() == 'hello'
         r = client.post('/api/files/delete', json={'paths': ['renamed.txt', 'sub/New']}, headers=auth_headers)
+        if sys.platform == 'win32':          # no trash to move to: the app asks before deleting for good
+            assert r.status_code == 409 and r.get_json()['code'] == 'NO_TRASH'
+            return
         assert r.status_code == 200 and r.get_json()['deleted'] == 2
-        assert not (populated / 'renamed.txt').exists() and (trash / 'files' / 'renamed.txt').exists()
-        assert (trash / 'info' / 'renamed.txt.trashinfo').exists()
+        assert not (populated / 'renamed.txt').exists()
+        if sys.platform == 'linux':          # freedesktop trash, restorable from the desktop
+            assert (trash / 'files' / 'renamed.txt').exists() and (trash / 'info' / 'renamed.txt.trashinfo').exists()
 
     def test_upload_never_overwrites(self, client, auth_headers, populated):
         import io
