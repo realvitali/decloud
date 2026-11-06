@@ -78,7 +78,7 @@ def sign(tag):
     tag = tag or latest_tag()
     if not re.fullmatch(r'v\d+\.\d+\.\d+', tag):
         sys.exit(f'Not a release tag: {tag!r}')
-    git('fetch', '--tags', 'origin')
+    git('fetch', '--tags', '--force', 'origin')
     body = manifest(tag)
     with tempfile.TemporaryDirectory() as d:
         mf = Path(d, 'release-manifest.json')

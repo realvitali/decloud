@@ -7,9 +7,17 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint('version', __name__)
 
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 
 CHANGELOG = [
+    {
+        "version": "0.6.1",
+        "date": "2026-11-06",
+        "changes": [
+            "Updates keep working when release tags move",
+            "Updates: fetching new releases no longer fails if a release tag was moved on GitHub",
+        ]
+    },
     {
         "version": "0.6.0",
         "date": "2026-11-04",

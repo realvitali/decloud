@@ -96,7 +96,10 @@ def _on_main(sha: str) -> bool:
     return ok
 
 def _fetch_tags(timeout=90) -> bool:
-    ok, _ = _git('fetch', '--tags', 'origin', timeout=timeout)
+    # --force: a tag moved on GitHub (e.g. after a history rewrite) replaces the local one instead of
+    # failing every fetch. Safe: a release is still only installed when its signed manifest names the
+    # exact commit and that commit is on origin/main.
+    ok, _ = _git('fetch', '--tags', '--force', 'origin', timeout=timeout)
     return ok
 
 def _checkout(sha: str, timeout=60) -> bool:
